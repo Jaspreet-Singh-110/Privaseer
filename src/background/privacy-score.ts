@@ -4,6 +4,7 @@ import { backgroundEvents } from './event-emitter';
 import { toError } from '../utils/type-guards';
 import { BADGE, TIME, PRIVACY_SCORE } from '../utils/constants';
 import { shouldPenalizeTracker } from '../utils/consent-validator';
+import { calculateDecayedPenalty, calculateDecayFactor } from '../utils/penalty-decay';
 
 export class PrivacyScoreManager {
   private static listenersSetup = false;
@@ -85,10 +86,23 @@ export class PrivacyScoreManager {
         return await this.getCurrentScore();
       }
 
-      logger.debug('PrivacyScore', 'Applying penalty', {
+      // Get domain occurrence count and increment it
+      const pageDomain = pageUrl ? new URL(pageUrl).hostname : domain;
+      const occurrenceCount = await Storage.getDomainOccurrence(pageDomain);
+      await Storage.incrementDomainOccurrence(pageDomain);
+
+      // Calculate decay factor based on occurrence count
+      const decayFactor = calculateDecayFactor(occurrenceCount);
+      const decayedPenalty = calculateDecayedPenalty(riskWeight, occurrenceCount);
+
+      logger.debug('PrivacyScore', 'Applying time-decayed penalty', {
         domain,
+        pageDomain,
         reason: validationResult.reason,
         riskWeight,
+        occurrenceCount,
+        decayFactor: decayFactor.toFixed(3),
+        decayedPenalty: decayedPenalty.toFixed(3),
       });
 
       // Apply penalty and remember
@@ -98,15 +112,15 @@ export class PrivacyScoreManager {
 
       const data = await Storage.get();
       const oldScore = data.privacyScore.current;
-      // Apply risk-weighted penalty (e.g., fingerprinting = -5, analytics = -1)
-      const penalty = this.TRACKER_PENALTY * riskWeight;
+      // Apply time-decayed risk-weighted penalty
+      const penalty = this.TRACKER_PENALTY * decayedPenalty;
       const newScore = oldScore + penalty;
 
       // Emit score update event
       backgroundEvents.emit('SCORE_UPDATED', {
         oldScore,
         newScore,
-        reason: `Tracker blocked: ${domain} (weight: ${riskWeight})`,
+        reason: `Tracker blocked: ${domain} (weight: ${riskWeight.toFixed(2)}, decay: ${(decayFactor * 100).toFixed(0)}%)`,
       });
 
       // Cleanup old entries periodically (every 100 penalties)
