@@ -31,12 +31,45 @@ export interface TrackerData {
   lastBlocked: number;
 }
 
+export interface DeceptivePatternRule {
+  id: string;
+  name: string;
+  description: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  penalty: number;
+}
+
+export interface DeceptivePatternViolation {
+  id: string;
+  name: string;
+  description: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  penalty: number;
+}
+
+export interface PrivacyRules {
+  version: string;
+  cookieBannerSelectors: string[];
+  rejectButtonPatterns: string[];
+  acceptButtonPatterns: string[];
+  complianceChecks: {
+    rejectButtonRequired: boolean;
+    rejectButtonVisibleWithoutScroll: boolean;
+    equalProminence: boolean;
+    noPreCheckedBoxes: boolean;
+    explicitConsent: boolean;
+  };
+  deceptivePatterns: DeceptivePatternRule[];
+}
+
 export interface ConsentScanResult {
   url: string;
   hasBanner: boolean;
   hasRejectButton: boolean;
   isCompliant: boolean;
   deceptivePatterns: string[];
+  violations?: DeceptivePatternViolation[];
+  complianceScore?: number;
   timestamp: number;
   cmpDetection?: CMPDetectionResult;
   hasPersistedConsent?: boolean;

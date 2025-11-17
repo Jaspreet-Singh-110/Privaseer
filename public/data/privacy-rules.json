@@ -50,22 +50,46 @@
   },
   "deceptivePatterns": [
     {
-      "name": "Hidden Reject",
-      "description": "Reject button hidden or hard to find",
+      "id": "hiddenRejectButton",
+      "name": "Hidden Reject Button",
+      "description": "Reject button is hidden, hard to find, or requires additional clicks to access",
       "severity": "high",
-      "penalty": 5
+      "penalty": 40
     },
     {
-      "name": "Dark Pattern",
-      "description": "Accept button more prominent than reject",
+      "id": "acceptButtonProminence",
+      "name": "Accept Button Prominence",
+      "description": "Accept button is significantly more prominent than reject button through color, size, or position",
       "severity": "medium",
-      "penalty": 3
+      "penalty": 25
     },
     {
+      "id": "preCheckedBoxes",
+      "name": "Pre-checked Consent Boxes",
+      "description": "Consent options are pre-selected, violating explicit consent requirements",
+      "severity": "medium",
+      "penalty": 30
+    },
+    {
+      "id": "forcedConsent",
       "name": "Forced Consent",
-      "description": "No reject option available",
+      "description": "No reject option available, forcing users to accept tracking",
       "severity": "critical",
-      "penalty": 10
+      "penalty": 50
+    },
+    {
+      "id": "confusingLanguage",
+      "name": "Confusing Language",
+      "description": "Deliberately unclear or misleading language about data collection",
+      "severity": "low",
+      "penalty": 15
+    },
+    {
+      "id": "obstaclePattern",
+      "name": "Obstacle Pattern",
+      "description": "Rejecting consent requires significantly more effort than accepting",
+      "severity": "medium",
+      "penalty": 25
     }
   ]
 }

@@ -1,4 +1,4 @@
-import type { ConsentScanResult, PrivacyRules, CMPDetectionResult } from '../types';
+import type { ConsentScanResult, PrivacyRules, CMPDetectionResult, DeceptivePatternViolation } from '../types';
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
 import { sanitizeUrl } from '../utils/sanitizer';
@@ -98,6 +98,8 @@ class ConsentScanner {
       const hasRejectButton = this.findRejectButton(banner);
       const isCompliant = this.checkCompliance(banner, hasRejectButton);
       const deceptivePatterns = this.detectDeceptivePatterns(banner, hasRejectButton);
+      const violations = this.getViolationDetails(deceptivePatterns);
+      const complianceScore = this.calculateComplianceScore(violations);
 
       const result: ConsentScanResult = {
         url: sanitizeUrl(window.location.href) || '',
@@ -105,6 +107,8 @@ class ConsentScanner {
         hasRejectButton,
         isCompliant,
         deceptivePatterns,
+        violations,
+        complianceScore,
         timestamp: Date.now(),
         cmpDetection,
         hasPersistedConsent: false,
@@ -120,7 +124,18 @@ class ConsentScanner {
           logger.warn('ConsentScanner', 'Non-compliant cookie banner detected', {
             url: sanitizeUrl(window.location.href),
             hasRejectButton: result.hasRejectButton,
-            deceptivePatterns: result.deceptivePatterns,
+            complianceScore: result.complianceScore,
+            violations: result.violations?.map(v => ({
+              id: v.id,
+              severity: v.severity,
+              penalty: v.penalty,
+            })),
+            cmpType: cmpDetection.cmpType,
+          });
+        } else {
+          logger.info('ConsentScanner', 'Compliant cookie banner detected', {
+            url: sanitizeUrl(window.location.href),
+            complianceScore: result.complianceScore,
             cmpType: cmpDetection.cmpType,
           });
         }
@@ -212,7 +227,7 @@ class ConsentScanner {
     const patterns: string[] = [];
 
     if (!hasRejectButton) {
-      patterns.push('Forced Consent');
+      patterns.push('forcedConsent');
       return patterns;
     }
 
@@ -225,20 +240,61 @@ class ConsentScanner {
 
       const acceptStyle = window.getComputedStyle(acceptButton);
       const rejectStyle = window.getComputedStyle(rejectButton);
-
-      if (parseFloat(acceptStyle.fontSize) > parseFloat(rejectStyle.fontSize) * CONSENT_BANNER.FONT_SIZE_PROMINENCE_THRESHOLD) {
-        patterns.push('Dark Pattern');
-      }
-
       const acceptRect = acceptButton.getBoundingClientRect();
       const rejectRect = rejectButton.getBoundingClientRect();
 
       if (rejectRect.bottom > window.innerHeight) {
-        patterns.push('Hidden Reject');
+        patterns.push('hiddenRejectButton');
+      }
+
+      const acceptArea = acceptRect.width * acceptRect.height;
+      const rejectArea = rejectRect.width * rejectRect.height;
+
+      if (
+        parseFloat(acceptStyle.fontSize) > parseFloat(rejectStyle.fontSize) * CONSENT_BANNER.FONT_SIZE_PROMINENCE_THRESHOLD ||
+        acceptArea > rejectArea * CONSENT_BANNER.BUTTON_SIZE_PROMINENCE_THRESHOLD
+      ) {
+        patterns.push('acceptButtonProminence');
+      }
+    }
+
+    const checkboxes = banner.querySelectorAll('input[type="checkbox"]');
+    for (const checkbox of checkboxes) {
+      if ((checkbox as HTMLInputElement).checked) {
+        patterns.push('preCheckedBoxes');
+        break;
       }
     }
 
     return patterns;
+  }
+
+  private getViolationDetails(patternIds: string[]): DeceptivePatternViolation[] {
+    if (!this.rules) return [];
+
+    const violations: DeceptivePatternViolation[] = [];
+    const patternMap = new Map(this.rules.deceptivePatterns.map(p => [p.id, p]));
+
+    for (const id of patternIds) {
+      const rule = patternMap.get(id);
+      if (rule) {
+        violations.push({
+          id: rule.id,
+          name: rule.name,
+          description: rule.description,
+          severity: rule.severity,
+          penalty: rule.penalty,
+        });
+      }
+    }
+
+    return violations;
+  }
+
+  private calculateComplianceScore(violations: DeceptivePatternViolation[]): number {
+    const totalPenalty = violations.reduce((sum, v) => sum + v.penalty, 0);
+    const score = Math.max(0, 100 - totalPenalty);
+    return score;
   }
 
   private findAcceptButtons(banner: Element): Element[] {
