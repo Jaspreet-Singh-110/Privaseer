@@ -3,6 +3,7 @@ import { logger } from '../utils/logger';
 import { backgroundEvents } from './event-emitter';
 import { toError } from '../utils/type-guards';
 import { BADGE, TIME, PRIVACY_SCORE } from '../utils/constants';
+import { shouldPenalizeTracker } from '../utils/consent-validator';
 
 export class PrivacyScoreManager {
   private static listenersSetup = false;
@@ -32,7 +33,13 @@ export class PrivacyScoreManager {
   private static setupEventListeners(): void {
     // Listen to tracker blocked events
     backgroundEvents.on('TRACKER_BLOCKED', async (data) => {
-      await this.handleTrackerBlocked(data.domain, data.riskWeight);
+      await this.handleTrackerBlocked(
+        data.domain,
+        data.riskWeight,
+        data.category,
+        data.isHighRisk,
+        data.url
+      );
     });
 
     // Listen to clean site detected events
@@ -46,7 +53,13 @@ export class PrivacyScoreManager {
     });
   }
 
-  static async handleTrackerBlocked(domain: string, riskWeight: number = 1): Promise<number> {
+  static async handleTrackerBlocked(
+    domain: string,
+    riskWeight: number = 1,
+    category: string = 'unknown',
+    isHighRisk: boolean = false,
+    pageUrl?: string
+  ): Promise<number> {
     try {
       const now = Date.now();
       const lastPenalty = this.penalizedDomains.get(domain);
@@ -55,6 +68,28 @@ export class PrivacyScoreManager {
       if (lastPenalty && (now - lastPenalty) < this.COOLDOWN_MS) {
         return await this.getCurrentScore();
       }
+
+      // Validate if tracker should be penalized based on consent
+      const validationResult = await shouldPenalizeTracker(
+        pageUrl || domain,
+        category,
+        isHighRisk
+      );
+
+      if (!validationResult.shouldPenalize) {
+        logger.info('PrivacyScore', 'Skipping penalty due to consent', {
+          domain,
+          reason: validationResult.reason,
+          consentStatus: validationResult.consentState?.consentStatus,
+        });
+        return await this.getCurrentScore();
+      }
+
+      logger.debug('PrivacyScore', 'Applying penalty', {
+        domain,
+        reason: validationResult.reason,
+        riskWeight,
+      });
 
       // Apply penalty and remember
       this.penalizedDomains.set(domain, now);
