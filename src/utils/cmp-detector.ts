@@ -28,15 +28,27 @@ const CMP_CONFIGS: Record<string, CMPConfig> = {
   },
   cookiebot: {
     name: 'Cookiebot',
-    cookiePatterns: ['CookieConsent', 'CookieConsentBulkSetting'],
+    cookiePatterns: ['CookieConsent', 'CookiebotConsent', 'CookieConsentBulkSetting'],
     apiDetectors: [detectCookiebotAPI],
     bannerSelectors: ['#CybotCookiebotDialog', '[data-cookieconsent]'],
   },
   termly: {
     name: 'Termly',
-    cookiePatterns: ['t_privacy_consent', 't_cookie_consent'],
+    cookiePatterns: ['termly-consent', 't_privacy_consent', 't_cookie_consent'],
     apiDetectors: [detectTermlyAPI],
     bannerSelectors: ['[data-termly]', '#termly-code-snippet-support'],
+  },
+  gdprcompliant: {
+    name: 'GDPRCompliant',
+    cookiePatterns: ['gdpr_consent', 'gdpr-consent'],
+    apiDetectors: [],
+    bannerSelectors: ['[data-gdpr]', '.gdpr-banner'],
+  },
+  custom: {
+    name: 'Custom',
+    cookiePatterns: ['cookie_consent', 'consent_status', 'user_consent'],
+    apiDetectors: [],
+    bannerSelectors: [],
   },
   cookiecontrol: {
     name: 'CookieControl',
@@ -203,6 +215,89 @@ function getCookiesByPattern(patterns: string[]): string[] {
   return matchedCookies;
 }
 
+function getCookieValue(name: string): string | null {
+  const cookies = document.cookie.split(';');
+  for (const cookie of cookies) {
+    const [cookieName, cookieValue] = cookie.trim().split('=');
+    if (cookieName === name) {
+      return decodeURIComponent(cookieValue);
+    }
+  }
+  return null;
+}
+
+function parseOneTrustConsent(cookieValue: string): 'accepted' | 'rejected' | 'partial' | 'unknown' {
+  try {
+    if (cookieValue.includes('groups=')) {
+      const groupsMatch = cookieValue.match(/groups=([^&]+)/);
+      if (groupsMatch) {
+        const groups = groupsMatch[1];
+        const activeGroups = groups.split('%2C').filter(g => g.includes('%3A1'));
+
+        if (activeGroups.length === 0) {
+          return 'rejected';
+        }
+
+        if (groups.includes('%3A1')) {
+          return groups.includes('%3A0') ? 'partial' : 'accepted';
+        }
+      }
+    }
+
+    if (cookieValue.includes('isIABGlobal=false')) {
+      return 'rejected';
+    }
+
+    return 'unknown';
+  } catch (error) {
+    return 'unknown';
+  }
+}
+
+function parseCookiebotConsent(cookieValue: string): 'accepted' | 'rejected' | 'partial' | 'unknown' {
+  try {
+    const decoded = decodeURIComponent(cookieValue);
+
+    if (decoded.includes('necessary:true') && decoded.includes('preferences:false') && decoded.includes('statistics:false') && decoded.includes('marketing:false')) {
+      return 'rejected';
+    }
+
+    if (decoded.includes('necessary:true') && decoded.includes('preferences:true') && decoded.includes('statistics:true') && decoded.includes('marketing:true')) {
+      return 'accepted';
+    }
+
+    if (decoded.includes('necessary:true')) {
+      return 'partial';
+    }
+
+    return 'unknown';
+  } catch (error) {
+    return 'unknown';
+  }
+}
+
+function parseGenericConsent(cookieValue: string): 'accepted' | 'rejected' | 'partial' | 'unknown' {
+  try {
+    const lower = cookieValue.toLowerCase();
+
+    if (lower === 'true' || lower === '1' || lower === 'yes' || lower === 'accepted' || lower === 'accept') {
+      return 'accepted';
+    }
+
+    if (lower === 'false' || lower === '0' || lower === 'no' || lower === 'rejected' || lower === 'reject' || lower === 'declined') {
+      return 'rejected';
+    }
+
+    if (lower.includes('partial') || lower.includes('necessary')) {
+      return 'partial';
+    }
+
+    return 'unknown';
+  } catch (error) {
+    return 'unknown';
+  }
+}
+
 function detectCMPByBanner(cmpType: string, config: CMPConfig): CMPDetectionResult | null {
   for (const selector of config.bannerSelectors) {
     try {
@@ -228,12 +323,30 @@ function detectCMPByCookie(cmpType: string, config: CMPConfig): CMPDetectionResu
   const matchedCookies = getCookiesByPattern(config.cookiePatterns);
 
   if (matchedCookies.length > 0) {
+    let consentStatus: 'accepted' | 'rejected' | 'partial' | 'unknown' = 'unknown';
+
+    for (const cookieName of matchedCookies) {
+      const cookieValue = getCookieValue(cookieName);
+      if (!cookieValue) continue;
+
+      if (cmpType === 'onetrust' && (cookieName.includes('OptanonConsent') || cookieName.includes('OptanonAlertBoxClosed'))) {
+        consentStatus = parseOneTrustConsent(cookieValue);
+        if (consentStatus !== 'unknown') break;
+      } else if (cmpType === 'cookiebot' && cookieName.includes('Cookie')) {
+        consentStatus = parseCookiebotConsent(cookieValue);
+        if (consentStatus !== 'unknown') break;
+      } else if (cmpType === 'termly' || cmpType === 'gdprcompliant' || cmpType === 'custom') {
+        consentStatus = parseGenericConsent(cookieValue);
+        if (consentStatus !== 'unknown') break;
+      }
+    }
+
     return {
       detected: true,
       cmpType,
       detectionMethod: 'cookie',
-      confidenceScore: 0.8,
-      consentStatus: 'unknown',
+      confidenceScore: consentStatus !== 'unknown' ? 0.9 : 0.7,
+      consentStatus,
       cookieNames: matchedCookies,
     };
   }
