@@ -1,4 +1,4 @@
-import type { StorageData, PrivacyScore, Alert, TrackerData } from '../types';
+import type { StorageData, PrivacyScore, Alert, TrackerData, LocalConsentState } from '../types';
 import { logger } from '../utils/logger';
 import { backgroundEvents } from './event-emitter';
 import { toError } from '../utils/type-guards';
@@ -21,7 +21,9 @@ const DEFAULT_STORAGE_DATA: StorageData = {
     showNotifications: true,
   },
   lastReset: Date.now(),
-  penalizedDomains: {}, // Initialize empty penalty tracking
+  penalizedDomains: {},
+  consentStates: {},
+  domainOccurrences: {},
 };
 
 export class Storage {
@@ -276,5 +278,50 @@ export class Storage {
     await chrome.storage.local.clear();
     this.cache = null;
     await this.initialize();
+  }
+
+  static async getConsentState(domain: string): Promise<LocalConsentState | null> {
+    const data = await this.get();
+    return data.consentStates[domain] || null;
+  }
+
+  static async setConsentState(domain: string, state: LocalConsentState): Promise<void> {
+    const data = await this.get();
+    data.consentStates[domain] = state;
+    this.scheduleSave();
+    logger.info('Storage', 'Consent state saved', { domain, status: state.consentStatus, cmpId: state.cmpId });
+  }
+
+  static async incrementDomainOccurrence(domain: string): Promise<number> {
+    const data = await this.get();
+    const currentCount = data.domainOccurrences[domain] || 0;
+    const newCount = currentCount + 1;
+    data.domainOccurrences[domain] = newCount;
+    this.scheduleSave();
+    return newCount;
+  }
+
+  static async getDomainOccurrence(domain: string): Promise<number> {
+    const data = await this.get();
+    return data.domainOccurrences[domain] || 0;
+  }
+
+  static async clearExpiredConsentStates(): Promise<void> {
+    const data = await this.get();
+    const now = Date.now();
+    let clearedCount = 0;
+
+    Object.keys(data.consentStates).forEach(domain => {
+      const state = data.consentStates[domain];
+      if (state.expiresAt && state.expiresAt < now) {
+        delete data.consentStates[domain];
+        clearedCount++;
+      }
+    });
+
+    if (clearedCount > 0) {
+      await this.save(data);
+      logger.info('Storage', 'Expired consent states cleared', { count: clearedCount });
+    }
   }
 }

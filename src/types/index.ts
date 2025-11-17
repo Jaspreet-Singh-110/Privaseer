@@ -68,6 +68,15 @@ export interface ConsentState {
   createdAt: string;
 }
 
+export interface LocalConsentState {
+  domain: string;
+  consentStatus: 'accepted' | 'rejected' | 'dismissed' | 'unknown';
+  cmpId: string;
+  timestamp: number;
+  choice: 'explicit' | 'implied' | 'none';
+  expiresAt?: number;
+}
+
 export interface StorageData {
   privacyScore: PrivacyScore;
   alerts: Alert[];
@@ -77,7 +86,9 @@ export interface StorageData {
     showNotifications: boolean;
   };
   lastReset: number;
-  penalizedDomains?: Record<string, number>; // Persist penalty cooldowns across service worker restarts
+  penalizedDomains?: Record<string, number>;
+  consentStates: Record<string, LocalConsentState>;
+  domainOccurrences: Record<string, number>;
 }
 
 export type MessageType =
