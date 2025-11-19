@@ -1,6 +1,13 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { sanitizeEmail, generateSanitizationReport, sanitizeSubject } from "./email-sanitizer.ts";
+import {
+  checkRateLimit,
+  detectSpamSpike,
+  generateRateLimitResponse,
+  handleRateLimitViolation,
+  handleSpamSpike,
+} from "./rate-limiter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -305,6 +312,60 @@ Deno.serve(async (req: Request) => {
         }),
         {
           status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const rateLimitCheck = await checkRateLimit(supabase, burnerEmail.id);
+
+    if (!rateLimitCheck.allowed) {
+      console.warn("Rate limit exceeded:", {
+        burnerEmail: payload.recipient,
+        reason: rateLimitCheck.reason,
+      });
+
+      await handleRateLimitViolation(
+        supabase,
+        burnerEmail.id,
+        burnerEmail.email_address,
+        rateLimitCheck
+      );
+
+      return new Response(
+        JSON.stringify({
+          error: "Rate limit exceeded",
+          message: generateRateLimitResponse(rateLimitCheck),
+        }),
+        {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const spamCheck = await detectSpamSpike(supabase, burnerEmail.id);
+
+    if (spamCheck.isSpike) {
+      console.warn("Spam spike detected, auto-pausing:", {
+        burnerEmail: payload.recipient,
+        reason: spamCheck.reason,
+      });
+
+      await handleSpamSpike(
+        supabase,
+        burnerEmail.id,
+        burnerEmail.email_address,
+        spamCheck
+      );
+
+      return new Response(
+        JSON.stringify({
+          error: "Spam spike detected",
+          message: "This burner email has been automatically paused due to suspicious activity.",
+        }),
+        {
+          status: 429,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
