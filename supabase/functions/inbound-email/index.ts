@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { sanitizeEmail, generateSanitizationReport, sanitizeSubject } from "./email-sanitizer.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -91,8 +92,28 @@ async function forwardEmail(
   apiKey: string,
   payload: InboundEmailPayload,
   targetEmail: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; trackersRemoved?: number }> {
   try {
+    const htmlContent = payload.bodyHtml || `<p>${payload.bodyPlain || payload.strippedText}</p>`;
+    const textContent = payload.bodyPlain || payload.strippedText || '';
+
+    const sanitized = sanitizeEmail(htmlContent, textContent);
+
+    const trackersRemoved =
+      sanitized.trackersRemoved.trackingPixels +
+      sanitized.trackersRemoved.remoteImages +
+      sanitized.trackersRemoved.trackingLinks;
+
+    const sanitizationReport = generateSanitizationReport(sanitized);
+    const cleanSubject = sanitizeSubject(payload.subject);
+
+    console.log("Sanitization complete:", {
+      trackingPixels: sanitized.trackersRemoved.trackingPixels,
+      remoteImages: sanitized.trackersRemoved.remoteImages,
+      trackingLinks: sanitized.trackersRemoved.trackingLinks,
+      total: trackersRemoved,
+    });
+
     if (emailProvider === "resend") {
       const response = await fetch("https://api.resend.com/emails", {
         method: "POST",
@@ -103,13 +124,14 @@ async function forwardEmail(
         body: JSON.stringify({
           from: `Privaseer Burner <noreply@burner.privaseer.io>`,
           to: targetEmail,
-          subject: `[Forwarded] ${payload.subject}`,
-          text: payload.bodyPlain || payload.strippedText,
-          html: payload.bodyHtml || `<p>${payload.bodyPlain || payload.strippedText}</p>`,
+          subject: `[Forwarded] ${cleanSubject}`,
+          text: sanitized.text + sanitizationReport,
+          html: sanitized.html + sanitizationReport.replace(/\n/g, '<br>'),
           reply_to: payload.sender,
           headers: {
             "X-Original-From": payload.from,
             "X-Original-To": payload.recipient,
+            "X-Privaseer-Trackers-Removed": trackersRemoved.toString(),
           },
         }),
       });
@@ -120,7 +142,7 @@ async function forwardEmail(
         return { success: false, error: `Resend error: ${response.status}` };
       }
 
-      return { success: true };
+      return { success: true, trackersRemoved };
     } else if (emailProvider === "mailgun") {
       const domain = Deno.env.get("MAILGUN_DOMAIN") || "burner.privaseer.io";
       const response = await fetch(`https://api.mailgun.net/v3/${domain}/messages`, {
@@ -132,12 +154,13 @@ async function forwardEmail(
         body: new URLSearchParams({
           from: `Privaseer Burner <noreply@burner.privaseer.io>`,
           to: targetEmail,
-          subject: `[Forwarded] ${payload.subject}`,
-          text: payload.bodyPlain || payload.strippedText || "",
-          html: payload.bodyHtml || `<p>${payload.bodyPlain || payload.strippedText}</p>`,
+          subject: `[Forwarded] ${cleanSubject}`,
+          text: sanitized.text + sanitizationReport,
+          html: sanitized.html + sanitizationReport.replace(/\n/g, '<br>'),
           "h:Reply-To": payload.sender,
           "h:X-Original-From": payload.from,
           "h:X-Original-To": payload.recipient,
+          "h:X-Privaseer-Trackers-Removed": trackersRemoved.toString(),
         }),
       });
 
@@ -147,7 +170,7 @@ async function forwardEmail(
         return { success: false, error: `Mailgun error: ${response.status}` };
       }
 
-      return { success: true };
+      return { success: true, trackersRemoved };
     }
 
     return { success: false, error: "Unknown email provider" };
@@ -165,6 +188,7 @@ async function logEmail(
   burnerEmailId: string,
   payload: InboundEmailPayload,
   forwarded: boolean,
+  trackersRemoved: number = 0,
   errorMessage?: string
 ): Promise<void> {
   const { error } = await supabase
@@ -177,6 +201,7 @@ async function logEmail(
       forwarded,
       forwarded_at: forwarded ? new Date().toISOString() : null,
       error_message: errorMessage || null,
+      trackers_removed: trackersRemoved,
     });
 
   if (error) {
@@ -299,6 +324,7 @@ Deno.serve(async (req: Request) => {
       burnerEmail.id,
       payload,
       forwardResult.success,
+      forwardResult.trackersRemoved || 0,
       forwardResult.error
     );
 
@@ -309,11 +335,14 @@ Deno.serve(async (req: Request) => {
     );
 
     if (forwardResult.success) {
-      console.log("Email forwarded successfully");
+      console.log("Email forwarded successfully", {
+        trackersRemoved: forwardResult.trackersRemoved || 0,
+      });
       return new Response(
         JSON.stringify({
           success: true,
           message: "Email forwarded successfully",
+          trackersRemoved: forwardResult.trackersRemoved || 0,
         }),
         {
           status: 200,

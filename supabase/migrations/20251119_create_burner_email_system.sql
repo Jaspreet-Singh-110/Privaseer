@@ -216,3 +216,14 @@ BEGIN
   RETURN deleted_count;
 END;
 $$;
+
+-- Add trackers_removed column to email_logs
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'email_logs' AND column_name = 'trackers_removed'
+  ) THEN
+    ALTER TABLE email_logs ADD COLUMN trackers_removed int DEFAULT 0;
+  END IF;
+END $$;
