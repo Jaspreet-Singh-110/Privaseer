@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { validateGenerateEmailRequest, createValidationErrorResponse } from "../shared/input-validation.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -49,17 +50,15 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     if (req.method === "POST") {
-      const body: GenerateEmailRequest = await req.json();
+      const rawBody = await req.json();
 
-      if (!body.installationId || !body.realEmail) {
-        return new Response(
-          JSON.stringify({ error: "Missing required fields: installationId, realEmail" }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
+      const validation = validateGenerateEmailRequest(rawBody);
+      if (!validation.valid) {
+        console.warn("Invalid generate email request:", validation.error);
+        return createValidationErrorResponse(validation.error!);
       }
+
+      const body = validation.sanitized!;
 
       let emailAddress = generateRandomEmail();
       let attempts = 0;

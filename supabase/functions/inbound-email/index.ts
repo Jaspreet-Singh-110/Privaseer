@@ -8,6 +8,7 @@ import {
   handleRateLimitViolation,
   handleSpamSpike,
 } from "./rate-limiter.ts";
+import { validateEmailPayload, createValidationErrorResponse } from "../shared/input-validation.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -283,23 +284,21 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const payload = await parseEmailPayload(req);
+    const rawPayload = await parseEmailPayload(req);
+
+    const validation = validateEmailPayload(rawPayload);
+    if (!validation.valid) {
+      console.warn("Invalid email payload:", validation.error);
+      return createValidationErrorResponse(validation.error!);
+    }
+
+    const payload = validation.sanitized!;
 
     console.log("Inbound email received:", {
       recipient: payload.recipient,
       from: payload.sender || payload.from,
       subject: payload.subject,
     });
-
-    if (!payload.recipient) {
-      return new Response(
-        JSON.stringify({ error: "Missing recipient" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
 
     const burnerEmail = await lookupBurnerEmail(supabase, payload.recipient);
 
