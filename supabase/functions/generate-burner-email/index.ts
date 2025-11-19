@@ -9,17 +9,20 @@ const corsHeaders = {
 
 interface GenerateEmailRequest {
   installationId: string;
-  domain: string;
-  url?: string;
-  label?: string;
+  realEmail: string;
+  description?: string;
+  expiresInDays?: number;
 }
 
 interface BurnerEmail {
   id: string;
-  email: string;
-  domain: string;
-  url?: string;
-  label?: string;
+  email_address: string;
+  real_email: string;
+  description: string;
+  is_active: boolean;
+  expires_at: string | null;
+  emails_received: number;
+  emails_forwarded: number;
   created_at: string;
 }
 
@@ -29,7 +32,7 @@ function generateRandomEmail(): string {
   const randomAdjective = adjectives[Math.floor(Math.random() * adjectives.length)];
   const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
   const randomNum = Math.floor(Math.random() * 9999);
-  return `${randomAdjective}${randomNoun}${randomNum}@privaseer.io`;
+  return `${randomAdjective}${randomNoun}${randomNum}@burner.privaseer.io`;
 }
 
 Deno.serve(async (req: Request) => {
@@ -48,9 +51,9 @@ Deno.serve(async (req: Request) => {
     if (req.method === "POST") {
       const body: GenerateEmailRequest = await req.json();
 
-      if (!body.installationId || !body.domain) {
+      if (!body.installationId || !body.realEmail) {
         return new Response(
-          JSON.stringify({ error: "Missing required fields: installationId, domain" }),
+          JSON.stringify({ error: "Missing required fields: installationId, realEmail" }),
           {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -58,22 +61,22 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      let email = generateRandomEmail();
+      let emailAddress = generateRandomEmail();
       let attempts = 0;
       const maxAttempts = 10;
 
       while (attempts < maxAttempts) {
         const { data: existing } = await supabase
           .from("burner_emails")
-          .select("email")
-          .eq("email", email)
+          .select("email_address")
+          .eq("email_address", emailAddress)
           .maybeSingle();
 
         if (!existing) {
           break;
         }
 
-        email = generateRandomEmail();
+        emailAddress = generateRandomEmail();
         attempts++;
       }
 
@@ -87,16 +90,24 @@ Deno.serve(async (req: Request) => {
         );
       }
 
+      let expiresAt = null;
+      if (body.expiresInDays && body.expiresInDays > 0) {
+        const expirationDate = new Date();
+        expirationDate.setDate(expirationDate.getDate() + body.expiresInDays);
+        expiresAt = expirationDate.toISOString();
+      }
+
       const { data, error } = await supabase
         .from("burner_emails")
         .insert({
           installation_id: body.installationId,
-          email,
-          domain: body.domain,
-          url: body.url || null,
-          label: body.label || null,
+          email_address: emailAddress,
+          real_email: body.realEmail,
+          description: body.description || '',
           is_active: true,
-          times_used: 0,
+          expires_at: expiresAt,
+          emails_received: 0,
+          emails_forwarded: 0,
         })
         .select()
         .single();
