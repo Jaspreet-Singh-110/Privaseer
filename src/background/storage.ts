@@ -1,4 +1,4 @@
-import type { StorageData, PrivacyScore, Alert, TrackerData, LocalConsentState } from '../types';
+import type { StorageData, PrivacyScore, Alert, TrackerData, LocalConsentState, DailyMetricsSnapshot } from '../types';
 import { logger } from '../utils/logger';
 import { backgroundEvents } from './event-emitter';
 import { toError } from '../utils/type-guards';
@@ -24,6 +24,12 @@ const DEFAULT_STORAGE_DATA: StorageData = {
   penalizedDomains: {},
   consentStates: {},
   domainOccurrences: {},
+  dailySnapshots: [],
+  burnerEmailStats: {
+    generated: 0,
+    forwarded: 0,
+  },
+  complianceScores: [],
 };
 
 export class Storage {
@@ -248,6 +254,9 @@ export class Storage {
         data.privacyScore.history = data.privacyScore.history.slice(0, 30);
       }
 
+      // Create daily metrics snapshot before reset
+      await this.createDailySnapshot(data);
+
       // Daily Recovery Mechanism: Reward clean browsing days
       // If user had a good day (fewer than threshold trackers), give recovery points
       // This encourages long-term engagement and allows recovery from bad days
@@ -268,9 +277,55 @@ export class Storage {
         cleanSitesVisited: 0,
         nonCompliantSites: 0,
       };
+      data.burnerEmailStats = {
+        generated: 0,
+        forwarded: 0,
+      };
+      data.complianceScores = [];
       data.lastReset = now;
 
       await this.save(data);
+    }
+  }
+
+  private static async createDailySnapshot(data: StorageData): Promise<void> {
+    try {
+      const trackersByCategory: Record<string, number> = {};
+
+      for (const tracker of Object.values(data.trackers)) {
+        trackersByCategory[tracker.category] = (trackersByCategory[tracker.category] || 0) + tracker.blockedCount;
+      }
+
+      const snapshot: DailyMetricsSnapshot = {
+        date: new Date(data.lastReset).toISOString().split('T')[0],
+        privacyScore: data.privacyScore.current,
+        trackersBlocked: data.privacyScore.daily.trackersBlocked,
+        trackersByCategory,
+        cleanSitesVisited: data.privacyScore.daily.cleanSitesVisited,
+        nonCompliantSites: data.privacyScore.daily.nonCompliantSites,
+        complianceScores: data.complianceScores || [],
+        burnerEmailsGenerated: data.burnerEmailStats?.generated || 0,
+        burnerEmailsForwarded: data.burnerEmailStats?.forwarded || 0,
+      };
+
+      if (!data.dailySnapshots) {
+        data.dailySnapshots = [];
+      }
+
+      data.dailySnapshots.unshift(snapshot);
+
+      // Keep last 30 days
+      if (data.dailySnapshots.length > 30) {
+        data.dailySnapshots = data.dailySnapshots.slice(0, 30);
+      }
+
+      logger.info('Storage', 'Daily metrics snapshot created', {
+        date: snapshot.date,
+        trackersBlocked: snapshot.trackersBlocked,
+        privacyScore: snapshot.privacyScore,
+      });
+    } catch (error) {
+      logger.error('Storage', 'Failed to create daily snapshot', toError(error));
     }
   }
 
@@ -323,5 +378,43 @@ export class Storage {
       await this.save(data);
       logger.info('Storage', 'Expired consent states cleared', { count: clearedCount });
     }
+  }
+
+  static async recordComplianceScore(score: number): Promise<void> {
+    const data = await this.get();
+    if (!data.complianceScores) {
+      data.complianceScores = [];
+    }
+    data.complianceScores.push(score);
+    this.scheduleSave();
+  }
+
+  static async recordBurnerEmailGenerated(): Promise<void> {
+    const data = await this.get();
+    if (!data.burnerEmailStats) {
+      data.burnerEmailStats = { generated: 0, forwarded: 0 };
+    }
+    data.burnerEmailStats.generated++;
+    this.scheduleSave();
+    logger.info('Storage', 'Burner email generated recorded', {
+      total: data.burnerEmailStats.generated,
+    });
+  }
+
+  static async recordBurnerEmailForwarded(): Promise<void> {
+    const data = await this.get();
+    if (!data.burnerEmailStats) {
+      data.burnerEmailStats = { generated: 0, forwarded: 0 };
+    }
+    data.burnerEmailStats.forwarded++;
+    this.scheduleSave();
+    logger.info('Storage', 'Burner email forwarded recorded', {
+      total: data.burnerEmailStats.forwarded,
+    });
+  }
+
+  static async getDailySnapshots(days: number = 7): Promise<DailyMetricsSnapshot[]> {
+    const data = await this.get();
+    return (data.dailySnapshots || []).slice(0, days);
   }
 }

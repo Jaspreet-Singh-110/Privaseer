@@ -114,10 +114,15 @@ class ConsentScanner {
         hasPersistedConsent: false,
       };
 
-      try {
+      try{
         await chrome.runtime.sendMessage({
           type: 'CONSENT_SCAN_RESULT',
           data: result,
+        });
+
+        await chrome.runtime.sendMessage({
+          type: 'RECORD_COMPLIANCE_SCORE',
+          data: { score: complianceScore },
         });
 
         if (!result.isCompliant) {

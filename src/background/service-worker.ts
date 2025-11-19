@@ -235,6 +235,17 @@ function setupMessageHandlers(): void {
       return { success: false, error: 'Failed to track event' };
     }
   });
+
+  messageBus.on('RECORD_COMPLIANCE_SCORE', async (data: unknown) => {
+    try {
+      const { score } = data as { score: number };
+      await Storage.recordComplianceScore(score);
+      return { success: true };
+    } catch (error) {
+      logger.error('ServiceWorker', 'Failed to record compliance score', toError(error));
+      return { success: false, error: 'Failed to record compliance score' };
+    }
+  });
 }
 
 function setupTabEventHandlers(): void {

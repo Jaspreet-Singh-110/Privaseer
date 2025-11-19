@@ -110,6 +110,40 @@ export interface LocalConsentState {
   expiresAt?: number;
 }
 
+export interface DailyMetricsSnapshot {
+  date: string;
+  privacyScore: number;
+  trackersBlocked: number;
+  trackersByCategory: Record<string, number>;
+  cleanSitesVisited: number;
+  nonCompliantSites: number;
+  complianceScores: number[];
+  burnerEmailsGenerated: number;
+  burnerEmailsForwarded: number;
+}
+
+export interface MetricsAggregation {
+  period: 'week' | 'month' | 'all-time';
+  totalTrackersBlocked: number;
+  trackersByCategory: Record<string, number>;
+  averagePrivacyScore: number;
+  averageComplianceScore: number;
+  cleanSitesVisited: number;
+  nonCompliantSites: number;
+  burnerEmailsGenerated: number;
+  burnerEmailsForwarded: number;
+  topBlockedDomains: Array<{ domain: string; count: number }>;
+}
+
+export interface TelemetryReport {
+  installationId: string;
+  reportDate: string;
+  dailyMetrics: DailyMetricsSnapshot;
+  weeklyAggregation: MetricsAggregation;
+  extensionVersion: string;
+  privacyScoreTrend: Array<{ date: string; score: number }>;
+}
+
 export interface StorageData {
   privacyScore: PrivacyScore;
   alerts: Alert[];
@@ -122,6 +156,12 @@ export interface StorageData {
   penalizedDomains?: Record<string, number>;
   consentStates: Record<string, LocalConsentState>;
   domainOccurrences: Record<string, number>;
+  dailySnapshots?: DailyMetricsSnapshot[];
+  burnerEmailStats?: {
+    generated: number;
+    forwarded: number;
+  };
+  complianceScores?: number[];
 }
 
 export type MessageType =
@@ -140,7 +180,10 @@ export type MessageType =
   | 'GET_BURNER_EMAILS'
   | 'DELETE_BURNER_EMAIL'
   | 'SUBMIT_FEEDBACK'
-  | 'TRACK_EVENT';
+  | 'TRACK_EVENT'
+  | 'RECORD_COMPLIANCE_SCORE'
+  | 'GET_METRICS_AGGREGATION'
+  | 'GET_PRIVACY_SCORE_TREND';
 
 // Message data types for type-safe messaging
 export interface GetTrackerInfoData {
