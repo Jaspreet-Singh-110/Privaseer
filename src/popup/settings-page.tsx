@@ -21,9 +21,12 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
   const [selectedTheme, setSelectedTheme] = useState<ThemeOption>('system');
   const [isNavigatingForward, setIsNavigatingForward] = useState(true);
   const [isApplyingTheme, setIsApplyingTheme] = useState(false);
+  const [isBurnerEmailEnabled, setIsBurnerEmailEnabled] = useState(true);
+  const [isTogglingBurnerEmail, setIsTogglingBurnerEmail] = useState(false);
 
   useEffect(() => {
     loadCurrentTheme();
+    loadBurnerEmailSetting();
   }, []);
 
   const loadCurrentTheme = async () => {
@@ -34,6 +37,44 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
       }
     } catch (error) {
       logger.error('Settings', 'Failed to load current theme', toError(error));
+    }
+  };
+
+  const loadBurnerEmailSetting = async () => {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'GET_BURNER_EMAIL_SETTING' });
+      if (response.success) {
+        setIsBurnerEmailEnabled(response.enabled);
+      }
+    } catch (error) {
+      logger.error('Settings', 'Failed to load burner email setting', toError(error));
+    }
+  };
+
+  const handleBurnerEmailToggle = async () => {
+    if (isTogglingBurnerEmail) return;
+
+    setIsTogglingBurnerEmail(true);
+    const newValue = !isBurnerEmailEnabled;
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'SET_BURNER_EMAIL_SETTING',
+        data: { enabled: newValue }
+      });
+
+      if (response.success) {
+        setIsBurnerEmailEnabled(newValue);
+        logger.info('Settings', 'Burner email setting updated', { enabled: newValue });
+      } else {
+        logger.error('Settings', 'Failed to update burner email setting', new Error(response.error || 'Unknown error'));
+        await loadBurnerEmailSetting();
+      }
+    } catch (error) {
+      logger.error('Settings', 'Failed to toggle burner email setting', toError(error));
+      await loadBurnerEmailSetting();
+    } finally {
+      setIsTogglingBurnerEmail(false);
     }
   };
 
@@ -157,6 +198,34 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
         <div className="p-6 max-h-96 overflow-y-auto">
           {activeSection === 'menu' && (
             <div className="space-y-3 animate-slide-in-left">
+              <div
+                className="w-full flex items-center justify-between p-4 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg transition-colors">
+                    <Mail className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Burner Email Protection</h3>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Generate disposable emails for untrusted sites</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleBurnerEmailToggle}
+                  disabled={isTogglingBurnerEmail}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${
+                    isBurnerEmailEnabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
+                  } ${isTogglingBurnerEmail ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  aria-label="Toggle burner email protection"
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      isBurnerEmailEnabled ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
               <button
                 onClick={() => navigateToSection('theme')}
                 className="w-full flex items-center justify-between p-4 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg hover:border-blue-300 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-gray-600 transition-all group"
