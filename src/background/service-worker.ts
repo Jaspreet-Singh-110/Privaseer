@@ -178,6 +178,13 @@ function setupMessageHandlers(): void {
 
   messageBus.on('GENERATE_BURNER_EMAIL', async (data: unknown) => {
     try {
+      const isEnabled = await Storage.getBurnerEmailEnabled();
+
+      if (!isEnabled) {
+        logger.info('ServiceWorker', 'Burner email generation blocked - feature is disabled');
+        return { success: false, error: 'Burner email feature is disabled' };
+      }
+
       const { domain, url, label } = data as { domain: string; url?: string; label?: string };
       const email = await burnerEmailService.generateEmail(domain, url, label);
       logger.debug('ServiceWorker', 'Email generated successfully', { email });
