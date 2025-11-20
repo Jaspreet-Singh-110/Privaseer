@@ -185,7 +185,9 @@ export type MessageType =
   | 'RECORD_COMPLIANCE_SCORE'
   | 'GET_METRICS_AGGREGATION'
   | 'GET_PRIVACY_SCORE_TREND'
-  | 'SET_THEME';
+  | 'SET_THEME'
+  | 'GET_THEME'
+  | 'THEME_CHANGED';
 
 // Message data types for type-safe messaging
 export interface GetTrackerInfoData {

@@ -232,10 +232,27 @@ function setupMessageHandlers(): void {
         return { success: false, error: 'Invalid theme value' };
       }
       await Storage.setTheme(theme);
+
+      chrome.runtime.sendMessage({
+        type: 'THEME_CHANGED',
+        data: { theme }
+      }).catch(() => {});
+
       return { success: true, theme };
     } catch (error) {
       logger.error('ServiceWorker', 'Failed to set theme', toError(error));
       return { success: false, error: 'Failed to set theme' };
+    }
+  });
+
+  messageBus.on('GET_THEME', async () => {
+    try {
+      const data = await Storage.get();
+      const theme = data.settings.theme;
+      return { success: true, theme };
+    } catch (error) {
+      logger.error('ServiceWorker', 'Failed to get theme', toError(error));
+      return { success: false, error: 'Failed to get theme' };
     }
   });
 

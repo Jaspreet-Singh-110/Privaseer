@@ -135,6 +135,11 @@ function Popup() {
     const listener = (message: Message) => {
       if (message.type === 'STATE_UPDATE') {
         loadData();
+      } else if (message.type === 'THEME_CHANGED') {
+        const { theme } = message.data as { theme: 'light' | 'dark' | 'system' };
+        if (theme) {
+          ThemeManager.updatePreference(theme);
+        }
       }
     };
 
@@ -162,9 +167,9 @@ function Popup() {
 
   const initializeTheme = async () => {
     try {
-      const response = await chrome.runtime.sendMessage({ type: 'GET_STATE' });
-      if (response.success && response.data?.settings?.theme) {
-        ThemeManager.initialize(response.data.settings.theme);
+      const response = await chrome.runtime.sendMessage({ type: 'GET_THEME' });
+      if (response.success && response.theme) {
+        ThemeManager.initialize(response.theme);
       } else {
         ThemeManager.initialize('system');
       }

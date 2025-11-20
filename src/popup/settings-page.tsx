@@ -28,9 +28,9 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
 
   const loadCurrentTheme = async () => {
     try {
-      const response = await chrome.runtime.sendMessage({ type: 'GET_STATE' });
-      if (response.success && response.data?.settings?.theme) {
-        setSelectedTheme(response.data.settings.theme);
+      const response = await chrome.runtime.sendMessage({ type: 'GET_THEME' });
+      if (response.success && response.theme) {
+        setSelectedTheme(response.theme);
       }
     } catch (error) {
       logger.error('Settings', 'Failed to load current theme', toError(error));
