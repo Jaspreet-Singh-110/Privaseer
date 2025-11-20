@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, MessageSquare, Send, Info, Palette, Mail, ChevronRight, ArrowLeft, Sun, Moon, Monitor } from 'lucide-react';
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
+import { ThemeManager } from '../utils/theme-manager';
 
 type SettingsSection = 'menu' | 'feedback' | 'theme' | 'burner-services' | 'about';
 type ThemeOption = 'light' | 'dark' | 'system';
@@ -19,6 +20,49 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedTheme, setSelectedTheme] = useState<ThemeOption>('system');
   const [isNavigatingForward, setIsNavigatingForward] = useState(true);
+  const [isApplyingTheme, setIsApplyingTheme] = useState(false);
+
+  useEffect(() => {
+    loadCurrentTheme();
+  }, []);
+
+  const loadCurrentTheme = async () => {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'GET_STATE' });
+      if (response.success && response.data?.settings?.theme) {
+        setSelectedTheme(response.data.settings.theme);
+      }
+    } catch (error) {
+      logger.error('Settings', 'Failed to load current theme', toError(error));
+    }
+  };
+
+  const handleThemeChange = async (theme: ThemeOption) => {
+    if (isApplyingTheme) return;
+
+    setIsApplyingTheme(true);
+    setSelectedTheme(theme);
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'SET_THEME',
+        data: { theme }
+      });
+
+      if (response.success) {
+        ThemeManager.updatePreference(theme);
+        logger.info('Settings', 'Theme updated successfully', { theme });
+      } else {
+        logger.error('Settings', 'Failed to set theme', new Error(response.error || 'Unknown error'));
+        await loadCurrentTheme();
+      }
+    } catch (error) {
+      logger.error('Settings', 'Failed to apply theme', toError(error));
+      await loadCurrentTheme();
+    } finally {
+      setIsApplyingTheme(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -208,12 +252,13 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
               </p>
               <div className="space-y-3">
                 <button
-                  onClick={() => setSelectedTheme('light')}
+                  onClick={() => handleThemeChange('light')}
+                  disabled={isApplyingTheme}
                   className={`w-full flex items-center justify-between p-4 border-2 rounded-lg transition-all ${
                     selectedTheme === 'light'
                       ? 'border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
                       : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'
-                  }`}
+                  } ${isApplyingTheme ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <div className="flex items-center gap-3">
                     <div className={`p-2 rounded-lg ${
@@ -240,12 +285,13 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
                 </button>
 
                 <button
-                  onClick={() => setSelectedTheme('dark')}
+                  onClick={() => handleThemeChange('dark')}
+                  disabled={isApplyingTheme}
                   className={`w-full flex items-center justify-between p-4 border-2 rounded-lg transition-all ${
                     selectedTheme === 'dark'
                       ? 'border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
                       : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'
-                  }`}
+                  } ${isApplyingTheme ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <div className="flex items-center gap-3">
                     <div className={`p-2 rounded-lg ${
@@ -272,12 +318,13 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
                 </button>
 
                 <button
-                  onClick={() => setSelectedTheme('system')}
+                  onClick={() => handleThemeChange('system')}
+                  disabled={isApplyingTheme}
                   className={`w-full flex items-center justify-between p-4 border-2 rounded-lg transition-all ${
                     selectedTheme === 'system'
                       ? 'border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
                       : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'
-                  }`}
+                  } ${isApplyingTheme ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <div className="flex items-center gap-3">
                     <div className={`p-2 rounded-lg ${

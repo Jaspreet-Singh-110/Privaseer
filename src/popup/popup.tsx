@@ -6,6 +6,7 @@ import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
 import { BurnerEmailsSection } from './burner-emails-section';
 import { SettingsPage } from './settings-page';
+import { ThemeManager } from '../utils/theme-manager';
 import '../index.css';
 
 function PrivacyScoreMeter({ score }: { score: number }) {
@@ -130,6 +131,7 @@ function Popup() {
   useEffect(() => {
     checkCurrentTab();
     loadData();
+    initializeTheme();
 
     const listener = (message: Message) => {
       if (message.type === 'STATE_UPDATE') {
@@ -148,8 +150,23 @@ function Popup() {
     return () => {
       chrome.runtime.onMessage.removeListener(listener);
       clearInterval(interval);
+      ThemeManager.cleanup();
     };
   }, [data]);
+
+  const initializeTheme = async () => {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'GET_STATE' });
+      if (response.success && response.data?.settings?.theme) {
+        ThemeManager.initialize(response.data.settings.theme);
+      } else {
+        ThemeManager.initialize('system');
+      }
+    } catch (error) {
+      logger.error('Popup', 'Failed to initialize theme', toError(error));
+      ThemeManager.initialize('system');
+    }
+  };
 
   const checkCurrentTab = async () => {
     try {

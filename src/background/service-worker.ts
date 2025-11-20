@@ -225,6 +225,20 @@ function setupMessageHandlers(): void {
     }
   });
 
+  messageBus.on('SET_THEME', async (data: unknown) => {
+    try {
+      const { theme } = data as { theme: 'light' | 'dark' | 'system' };
+      if (!theme || !['light', 'dark', 'system'].includes(theme)) {
+        return { success: false, error: 'Invalid theme value' };
+      }
+      await Storage.setTheme(theme);
+      return { success: true, theme };
+    } catch (error) {
+      logger.error('ServiceWorker', 'Failed to set theme', toError(error));
+      return { success: false, error: 'Failed to set theme' };
+    }
+  });
+
   messageBus.on('TRACK_EVENT', async (data: unknown) => {
     try {
       const { eventType, eventData } = data as { eventType: string; eventData?: Record<string, unknown> };
