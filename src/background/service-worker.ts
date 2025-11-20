@@ -225,6 +225,27 @@ function setupMessageHandlers(): void {
     }
   });
 
+  messageBus.on('SET_BURNER_EMAIL_SETTING', async (data: unknown) => {
+    try {
+      const { enabled } = data as { enabled: boolean };
+      if (typeof enabled !== 'boolean') {
+        return { success: false, error: 'Invalid enabled value' };
+      }
+      await Storage.setBurnerEmailEnabled(enabled);
+
+      chrome.runtime.sendMessage({
+        type: 'BURNER_EMAIL_SETTING_CHANGED',
+        data: { enabled }
+      }).catch(() => {});
+
+      logger.info('ServiceWorker', 'Burner email setting updated and broadcasted', { enabled });
+      return { success: true, enabled };
+    } catch (error) {
+      logger.error('ServiceWorker', 'Failed to set burner email setting', toError(error));
+      return { success: false, error: 'Failed to set burner email setting' };
+    }
+  });
+
   messageBus.on('SET_THEME', async (data: unknown) => {
     try {
       const { theme } = data as { theme: 'light' | 'dark' | 'system' };
@@ -242,6 +263,16 @@ function setupMessageHandlers(): void {
     } catch (error) {
       logger.error('ServiceWorker', 'Failed to set theme', toError(error));
       return { success: false, error: 'Failed to set theme' };
+    }
+  });
+
+  messageBus.on('GET_BURNER_EMAIL_SETTING', async () => {
+    try {
+      const enabled = await Storage.getBurnerEmailEnabled();
+      return { success: true, enabled };
+    } catch (error) {
+      logger.error('ServiceWorker', 'Failed to get burner email setting', toError(error));
+      return { success: false, error: 'Failed to get burner email setting' };
     }
   });
 
