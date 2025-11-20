@@ -3,6 +3,8 @@ import { X, MessageSquare, Send, Info } from 'lucide-react';
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
 
+type SettingsSection = 'menu' | 'feedback' | 'theme' | 'burner-services';
+
 interface SettingsPageProps {
   isOpen: boolean;
   onClose: () => void;
@@ -11,6 +13,7 @@ interface SettingsPageProps {
 }
 
 export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }: SettingsPageProps) {
+  const [activeSection, setActiveSection] = useState<SettingsSection>('menu');
   const [feedbackText, setFeedbackText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
