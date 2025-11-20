@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Copy, Trash2, Plus, ExternalLink } from 'lucide-react';
+import { Mail, Copy, Trash2, Plus, ExternalLink, Settings } from 'lucide-react';
 import type { BurnerEmail } from '../types';
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
@@ -8,10 +8,35 @@ export function BurnerEmailsSection() {
   const [emails, setEmails] = useState<BurnerEmail[]>([]);
   const [loading, setLoading] = useState(true);
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
+  const [isFeatureEnabled, setIsFeatureEnabled] = useState(true);
 
   useEffect(() => {
+    loadFeatureState();
     loadEmails();
+
+    const messageListener = (message: any) => {
+      if (message.type === 'STATE_UPDATE') {
+        loadFeatureState();
+      }
+    };
+
+    chrome.runtime.onMessage.addListener(messageListener);
+
+    return () => {
+      chrome.runtime.onMessage.removeListener(messageListener);
+    };
   }, []);
+
+  const loadFeatureState = async () => {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'GET_BURNER_EMAIL_SETTING' });
+      if (response.success) {
+        setIsFeatureEnabled(response.enabled);
+      }
+    } catch (error) {
+      logger.error('BurnerEmails', 'Failed to load feature state', toError(error));
+    }
+  };
 
   const loadEmails = async () => {
     try {
@@ -91,7 +116,28 @@ export function BurnerEmailsSection() {
         </div>
       </div>
 
-      {emails.length === 0 ? (
+      {!isFeatureEnabled && (
+        <div className="text-center py-8 px-4 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800/50 dark:to-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-700">
+          <div className="w-12 h-12 mx-auto bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center mb-3">
+            <Mail className="w-6 h-6 text-gray-400 dark:text-gray-500" />
+          </div>
+          <p className="text-sm font-medium text-gray-900 dark:text-white mb-1">Feature Disabled</p>
+          <p className="text-xs text-gray-600 dark:text-gray-400 mb-4">
+            Burner email generation is currently turned off
+          </p>
+          <div className="flex items-center justify-center gap-2 text-xs text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded-lg inline-flex">
+            <Settings className="w-4 h-4" />
+            <span>Enable it in Settings to generate new emails</span>
+          </div>
+          {emails.length > 0 && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
+              Your existing {emails.length} email{emails.length > 1 ? 's' : ''} {emails.length > 1 ? 'are' : 'is'} still accessible below
+            </p>
+          )}
+        </div>
+      )}
+
+      {isFeatureEnabled && emails.length === 0 && (
         <div className="text-center py-8 px-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-100 dark:border-blue-800">
           <Mail className="w-12 h-12 mx-auto text-blue-400 dark:text-blue-500 mb-3" />
           <p className="text-sm font-medium text-gray-900 dark:text-white mb-1">No burner emails yet</p>
@@ -103,7 +149,9 @@ export function BurnerEmailsSection() {
             <span>Click "Generate Burner Email" when you see it</span>
           </div>
         </div>
-      ) : (
+      )}
+
+      {emails.length > 0 && (
         <div className="space-y-2">
           {emails.map((email) => (
             <div
@@ -159,17 +207,19 @@ export function BurnerEmailsSection() {
         </div>
       )}
 
-      <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
-        <div className="text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
-          <p className="font-medium text-gray-900 dark:text-white mb-1">How it works:</p>
-          <ul className="space-y-1 ml-4 list-disc">
-            <li>Click any email field on a website</li>
-            <li>Click "Generate Burner Email" button</li>
-            <li>Email is automatically filled in</li>
-            <li>Your identity stays protected</li>
-          </ul>
+      {isFeatureEnabled && (
+        <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+          <div className="text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
+            <p className="font-medium text-gray-900 dark:text-white mb-1">How it works:</p>
+            <ul className="space-y-1 ml-4 list-disc">
+              <li>Click any email field on a website</li>
+              <li>Click "Generate Burner Email" button</li>
+              <li>Email is automatically filled in</li>
+              <li>Your identity stays protected</li>
+            </ul>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
