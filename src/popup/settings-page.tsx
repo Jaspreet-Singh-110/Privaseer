@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { X, MessageSquare, Send, Info, Palette, Mail, ChevronRight, ArrowLeft } from 'lucide-react';
+import { X, MessageSquare, Send, Info, Palette, Mail, ChevronRight, ArrowLeft, Sun, Moon, Monitor } from 'lucide-react';
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
 
 type SettingsSection = 'menu' | 'feedback' | 'theme' | 'burner-services';
+type ThemeOption = 'light' | 'dark' | 'system';
 
 interface SettingsPageProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
   const [activeSection, setActiveSection] = useState<SettingsSection>('menu');
   const [feedbackText, setFeedbackText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedTheme, setSelectedTheme] = useState<ThemeOption>('system');
 
   if (!isOpen) return null;
 
@@ -182,6 +184,111 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
                 <Send className="w-4 h-4" />
                 {isSubmitting ? 'Submitting...' : 'Submit Feedback'}
               </button>
+            </div>
+          )}
+
+          {activeSection === 'theme' && (
+            <div>
+              <p className="text-sm text-gray-600 mb-4">
+                Choose your preferred color theme for the extension.
+              </p>
+              <div className="space-y-3">
+                <button
+                  onClick={() => setSelectedTheme('light')}
+                  className={`w-full flex items-center justify-between p-4 border-2 rounded-lg transition-all ${
+                    selectedTheme === 'light'
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-lg ${
+                      selectedTheme === 'light' ? 'bg-blue-100' : 'bg-gray-100'
+                    }`}>
+                      <Sun className={`w-5 h-5 ${
+                        selectedTheme === 'light' ? 'text-blue-600' : 'text-gray-600'
+                      }`} />
+                    </div>
+                    <div className="text-left">
+                      <h3 className="text-sm font-semibold text-gray-900">Light</h3>
+                      <p className="text-xs text-gray-600">Bright and clear appearance</p>
+                    </div>
+                  </div>
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                    selectedTheme === 'light'
+                      ? 'border-blue-500'
+                      : 'border-gray-300'
+                  }`}>
+                    {selectedTheme === 'light' && (
+                      <div className="w-3 h-3 rounded-full bg-blue-500" />
+                    )}
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => setSelectedTheme('dark')}
+                  className={`w-full flex items-center justify-between p-4 border-2 rounded-lg transition-all ${
+                    selectedTheme === 'dark'
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-lg ${
+                      selectedTheme === 'dark' ? 'bg-blue-100' : 'bg-gray-100'
+                    }`}>
+                      <Moon className={`w-5 h-5 ${
+                        selectedTheme === 'dark' ? 'text-blue-600' : 'text-gray-600'
+                      }`} />
+                    </div>
+                    <div className="text-left">
+                      <h3 className="text-sm font-semibold text-gray-900">Dark</h3>
+                      <p className="text-xs text-gray-600">Easy on the eyes at night</p>
+                    </div>
+                  </div>
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                    selectedTheme === 'dark'
+                      ? 'border-blue-500'
+                      : 'border-gray-300'
+                  }`}>
+                    {selectedTheme === 'dark' && (
+                      <div className="w-3 h-3 rounded-full bg-blue-500" />
+                    )}
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => setSelectedTheme('system')}
+                  className={`w-full flex items-center justify-between p-4 border-2 rounded-lg transition-all ${
+                    selectedTheme === 'system'
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-lg ${
+                      selectedTheme === 'system' ? 'bg-blue-100' : 'bg-gray-100'
+                    }`}>
+                      <Monitor className={`w-5 h-5 ${
+                        selectedTheme === 'system' ? 'text-blue-600' : 'text-gray-600'
+                      }`} />
+                    </div>
+                    <div className="text-left">
+                      <h3 className="text-sm font-semibold text-gray-900">System</h3>
+                      <p className="text-xs text-gray-600">Match your system settings</p>
+                    </div>
+                  </div>
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                    selectedTheme === 'system'
+                      ? 'border-blue-500'
+                      : 'border-gray-300'
+                  }`}>
+                    {selectedTheme === 'system' && (
+                      <div className="w-3 h-3 rounded-full bg-blue-500" />
+                    )}
+                  </div>
+                </button>
+              </div>
             </div>
           )}
         </div>
