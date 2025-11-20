@@ -20,6 +20,7 @@ const DEFAULT_STORAGE_DATA: StorageData = {
     protectionEnabled: true,
     showNotifications: true,
     theme: 'system',
+    burnerEmailEnabled: true,
   },
   lastReset: Date.now(),
   penalizedDomains: {},
@@ -422,6 +423,18 @@ export class Storage {
   static async getTheme(): Promise<'light' | 'dark' | 'system'> {
     const data = await this.get();
     return data.settings.theme || 'system';
+  }
+
+  static async getBurnerEmailEnabled(): Promise<boolean> {
+    const data = await this.get();
+    return data.settings.burnerEmailEnabled ?? true;
+  }
+
+  static async setBurnerEmailEnabled(enabled: boolean): Promise<void> {
+    const data = await this.get();
+    data.settings.burnerEmailEnabled = enabled;
+    this.scheduleSave();
+    logger.info('Storage', 'Burner email setting updated', { enabled });
   }
 
   static async setTheme(theme: 'light' | 'dark' | 'system'): Promise<void> {

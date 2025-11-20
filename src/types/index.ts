@@ -152,6 +152,7 @@ export interface StorageData {
     protectionEnabled: boolean;
     showNotifications: boolean;
     theme: 'light' | 'dark' | 'system';
+    burnerEmailEnabled: boolean;
   };
   lastReset: number;
   penalizedDomains?: Record<string, number>;

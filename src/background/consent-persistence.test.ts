@@ -24,7 +24,7 @@ const createMockStorageData = (overrides: Partial<StorageData> = {}): { privacyD
     privacyScore: { current: 100, daily: { trackersBlocked: 0, cleanSitesVisited: 0, nonCompliantSites: 0 }, history: [] },
     alerts: [],
     trackers: {},
-    settings: { protectionEnabled: true, showNotifications: true },
+    settings: { protectionEnabled: true, showNotifications: true, theme: 'system', burnerEmailEnabled: true },
     lastReset: Date.now(),
     penalizedDomains: {},
     consentStates: {},
