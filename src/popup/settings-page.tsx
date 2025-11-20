@@ -18,8 +18,19 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
   const [feedbackText, setFeedbackText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedTheme, setSelectedTheme] = useState<ThemeOption>('system');
+  const [isNavigatingForward, setIsNavigatingForward] = useState(true);
 
   if (!isOpen) return null;
+
+  const navigateToSection = (section: SettingsSection) => {
+    setIsNavigatingForward(section !== 'menu');
+    setActiveSection(section);
+  };
+
+  const navigateBack = () => {
+    setIsNavigatingForward(false);
+    setActiveSection('menu');
+  };
 
   const handleFeedbackSubmit = async () => {
     if (!feedbackText.trim() || isSubmitting) return;
@@ -75,8 +86,9 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
           <div className="flex items-center gap-2">
             {activeSection !== 'menu' && (
               <button
-                onClick={() => setActiveSection('menu')}
-                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+                onClick={navigateBack}
+                className="p-1 hover:bg-gray-100 rounded-lg transition-all hover:scale-110"
+                aria-label="Back to menu"
               >
                 <ArrowLeft className="w-5 h-5 text-gray-600" />
               </button>
@@ -91,7 +103,8 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
           </div>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-1 hover:bg-gray-100 rounded-lg transition-all hover:scale-110"
+            aria-label="Close settings"
           >
             <X className="w-5 h-5 text-gray-500" />
           </button>
@@ -99,9 +112,9 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
 
         <div className="p-6 max-h-96 overflow-y-auto">
           {activeSection === 'menu' && (
-            <div className="space-y-3">
+            <div className="space-y-3 animate-slide-in-left">
               <button
-                onClick={() => setActiveSection('theme')}
+                onClick={() => navigateToSection('theme')}
                 className="w-full flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all group"
               >
                 <div className="flex items-center gap-3">
@@ -117,7 +130,7 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
               </button>
 
               <button
-                onClick={() => setActiveSection('feedback')}
+                onClick={() => navigateToSection('feedback')}
                 className="w-full flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all group"
               >
                 <div className="flex items-center gap-3">
@@ -133,7 +146,7 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
               </button>
 
               <button
-                onClick={() => setActiveSection('burner-services')}
+                onClick={() => navigateToSection('burner-services')}
                 className="w-full flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all group"
               >
                 <div className="flex items-center gap-3">
@@ -149,7 +162,7 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
               </button>
 
               <button
-                onClick={() => setActiveSection('about')}
+                onClick={() => navigateToSection('about')}
                 className="w-full flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all group"
               >
                 <div className="flex items-center gap-3">
@@ -167,7 +180,7 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
           )}
 
           {activeSection === 'feedback' && (
-            <div>
+            <div className={isNavigatingForward ? 'animate-slide-in-right' : 'animate-slide-in-left'}>
               <p className="text-sm text-gray-600 mb-4">
                 Help us improve Privaseer. Share your thoughts, report issues, or suggest features.
               </p>
@@ -189,7 +202,7 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
           )}
 
           {activeSection === 'theme' && (
-            <div>
+            <div className={isNavigatingForward ? 'animate-slide-in-right' : 'animate-slide-in-left'}>
               <p className="text-sm text-gray-600 mb-4">
                 Choose your preferred color theme for the extension.
               </p>
@@ -294,7 +307,7 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
           )}
 
           {activeSection === 'about' && (
-            <div>
+            <div className={isNavigatingForward ? 'animate-slide-in-right' : 'animate-slide-in-left'}>
               <p className="text-sm text-gray-600 mb-6">
                 Privaseer helps you protect your privacy online by blocking trackers and managing cookie consent.
               </p>
@@ -344,7 +357,7 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
 
         <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 rounded-b-xl">
           <button
-            onClick={activeSection === 'menu' ? onClose : () => setActiveSection('menu')}
+            onClick={activeSection === 'menu' ? onClose : navigateBack}
             className="w-full px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
           >
             {activeSection === 'menu' ? 'Close' : 'Back'}
