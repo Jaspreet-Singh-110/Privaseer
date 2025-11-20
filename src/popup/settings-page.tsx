@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, MessageSquare, Send, Info } from 'lucide-react';
+import { X, MessageSquare, Send, Info, Palette, Mail, ChevronRight } from 'lucide-react';
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
 
@@ -80,48 +80,101 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
         </div>
 
         <div className="p-6 max-h-96 overflow-y-auto">
-          <div className="space-y-6">
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <MessageSquare className="w-4 h-4 text-blue-600" />
-                <h3 className="text-sm font-semibold text-gray-900">Feedback</h3>
-              </div>
-              <p className="text-xs text-gray-600 mb-3">
-                Help us improve Privaseer. Share your thoughts, report issues, or suggest features.
-              </p>
-              <textarea
-                value={feedbackText}
-                onChange={(e) => setFeedbackText(e.target.value)}
-                placeholder="Type your feedback here..."
-                className="w-full h-32 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm transition-all"
-              />
+          {activeSection === 'menu' && (
+            <div className="space-y-3">
               <button
-                onClick={handleFeedbackSubmit}
-                disabled={!feedbackText.trim() || isSubmitting}
-                className="mt-3 w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center justify-center gap-2"
+                onClick={() => setActiveSection('theme')}
+                className="w-full flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all group"
               >
-                <Send className="w-4 h-4" />
-                {isSubmitting ? 'Submitting...' : 'Submit Feedback'}
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-lg group-hover:bg-blue-200 transition-colors">
+                    <Palette className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="text-sm font-semibold text-gray-900">Theme</h3>
+                    <p className="text-xs text-gray-600">Customize appearance</p>
+                  </div>
+                </div>
+                <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" />
+              </button>
+
+              <button
+                onClick={() => setActiveSection('feedback')}
+                className="w-full flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-lg group-hover:bg-blue-200 transition-colors">
+                    <MessageSquare className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="text-sm font-semibold text-gray-900">Feedback</h3>
+                    <p className="text-xs text-gray-600">Share your thoughts</p>
+                  </div>
+                </div>
+                <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" />
+              </button>
+
+              <button
+                onClick={() => setActiveSection('burner-services')}
+                className="w-full flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-lg group-hover:bg-blue-200 transition-colors">
+                    <Mail className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="text-sm font-semibold text-gray-900">Burner Email Services</h3>
+                    <p className="text-xs text-gray-600">Manage email settings</p>
+                  </div>
+                </div>
+                <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" />
+              </button>
+
+              <button
+                onClick={() => setActiveSection('menu')}
+                className="w-full flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-lg group-hover:bg-blue-200 transition-colors">
+                    <Info className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="text-sm font-semibold text-gray-900">About</h3>
+                    <p className="text-xs text-gray-600">App information</p>
+                  </div>
+                </div>
+                <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" />
               </button>
             </div>
+          )}
 
-            <div className="pt-4 border-t border-gray-200">
-              <div className="flex items-center gap-2 mb-3">
-                <Info className="w-4 h-4 text-blue-600" />
-                <h3 className="text-sm font-semibold text-gray-900">About</h3>
-              </div>
-              <div className="space-y-2 text-xs text-gray-600">
-                <div className="flex justify-between">
-                  <span>Version</span>
-                  <span className="font-medium text-gray-900">1.0.0</span>
+          {activeSection === 'feedback' && (
+            <div className="space-y-6">
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <MessageSquare className="w-4 h-4 text-blue-600" />
+                  <h3 className="text-sm font-semibold text-gray-900">Feedback</h3>
                 </div>
-                <div className="flex justify-between">
-                  <span>Extension Name</span>
-                  <span className="font-medium text-gray-900">Privaseer</span>
-                </div>
+                <p className="text-xs text-gray-600 mb-3">
+                  Help us improve Privaseer. Share your thoughts, report issues, or suggest features.
+                </p>
+                <textarea
+                  value={feedbackText}
+                  onChange={(e) => setFeedbackText(e.target.value)}
+                  placeholder="Type your feedback here..."
+                  className="w-full h-32 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm transition-all"
+                />
+                <button
+                  onClick={handleFeedbackSubmit}
+                  disabled={!feedbackText.trim() || isSubmitting}
+                  className="mt-3 w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
+                  <Send className="w-4 h-4" />
+                  {isSubmitting ? 'Submitting...' : 'Submit Feedback'}
+                </button>
               </div>
             </div>
-          </div>
+          )}
         </div>
 
         <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 rounded-b-xl">
