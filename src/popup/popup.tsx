@@ -131,7 +131,6 @@ function Popup() {
   useEffect(() => {
     checkCurrentTab();
     loadData();
-    initializeTheme();
 
     const listener = (message: Message) => {
       if (message.type === 'STATE_UPDATE') {
@@ -150,9 +149,16 @@ function Popup() {
     return () => {
       chrome.runtime.onMessage.removeListener(listener);
       clearInterval(interval);
-      ThemeManager.cleanup();
     };
   }, [data]);
+
+  useEffect(() => {
+    initializeTheme();
+
+    return () => {
+      ThemeManager.cleanup();
+    };
+  }, []);
 
   const initializeTheme = async () => {
     try {
