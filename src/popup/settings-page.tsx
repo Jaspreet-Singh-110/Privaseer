@@ -3,7 +3,7 @@ import { X, MessageSquare, Send, Info, Palette, Mail, ChevronRight, ArrowLeft, S
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
 
-type SettingsSection = 'menu' | 'feedback' | 'theme' | 'burner-services';
+type SettingsSection = 'menu' | 'feedback' | 'theme' | 'burner-services' | 'about';
 type ThemeOption = 'light' | 'dark' | 'system';
 
 interface SettingsPageProps {
@@ -86,6 +86,7 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
               {activeSection === 'feedback' && 'Feedback'}
               {activeSection === 'theme' && 'Theme'}
               {activeSection === 'burner-services' && 'Burner Email Services'}
+              {activeSection === 'about' && 'About'}
             </h2>
           </div>
           <button
@@ -148,7 +149,7 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
               </button>
 
               <button
-                onClick={() => setActiveSection('menu')}
+                onClick={() => setActiveSection('about')}
                 className="w-full flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all group"
               >
                 <div className="flex items-center gap-3">
@@ -288,6 +289,54 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
                     )}
                   </div>
                 </button>
+              </div>
+            </div>
+          )}
+
+          {activeSection === 'about' && (
+            <div>
+              <p className="text-sm text-gray-600 mb-6">
+                Privaseer helps you protect your privacy online by blocking trackers and managing cookie consent.
+              </p>
+              <div className="space-y-4">
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs font-medium text-gray-600">Version</span>
+                    <span className="text-sm font-semibold text-gray-900">1.0.0</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-medium text-gray-600">Extension Name</span>
+                    <span className="text-sm font-semibold text-gray-900">Privaseer</span>
+                  </div>
+                </div>
+
+                <div className="border-t border-gray-200 pt-4">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-2">Features</h3>
+                  <ul className="space-y-2 text-xs text-gray-600">
+                    <li className="flex items-start gap-2">
+                      <span className="text-blue-600 mt-0.5">•</span>
+                      <span>Automatic tracker blocking and privacy protection</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-blue-600 mt-0.5">•</span>
+                      <span>Smart cookie consent management</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-blue-600 mt-0.5">•</span>
+                      <span>Burner email services for enhanced privacy</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-blue-600 mt-0.5">•</span>
+                      <span>Real-time privacy score tracking</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="border-t border-gray-200 pt-4">
+                  <p className="text-xs text-gray-500 text-center">
+                    Built with privacy in mind
+                  </p>
+                </div>
               </div>
             </div>
           )}
