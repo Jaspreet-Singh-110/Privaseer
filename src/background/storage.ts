@@ -19,6 +19,7 @@ const DEFAULT_STORAGE_DATA: StorageData = {
   settings: {
     protectionEnabled: true,
     showNotifications: true,
+    theme: 'system',
   },
   lastReset: Date.now(),
   penalizedDomains: {},
@@ -416,5 +417,21 @@ export class Storage {
   static async getDailySnapshots(days: number = 7): Promise<DailyMetricsSnapshot[]> {
     const data = await this.get();
     return (data.dailySnapshots || []).slice(0, days);
+  }
+
+  static async getTheme(): Promise<'light' | 'dark' | 'system'> {
+    const data = await this.get();
+    return data.settings.theme || 'system';
+  }
+
+  static async setTheme(theme: 'light' | 'dark' | 'system'): Promise<void> {
+    const data = await this.get();
+    data.settings.theme = theme;
+    await this.save(data);
+    logger.info('Storage', 'Theme preference updated', { theme });
+  }
+
+  static async updateTheme(theme: 'light' | 'dark' | 'system'): Promise<void> {
+    await this.setTheme(theme);
   }
 }

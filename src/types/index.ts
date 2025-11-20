@@ -151,6 +151,7 @@ export interface StorageData {
   settings: {
     protectionEnabled: boolean;
     showNotifications: boolean;
+    theme: 'light' | 'dark' | 'system';
   };
   lastReset: number;
   penalizedDomains?: Record<string, number>;
