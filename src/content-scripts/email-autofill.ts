@@ -5,47 +5,131 @@ class EmailAutofill {
   private isProcessing: boolean = false;
   private lastFocusedInput: HTMLInputElement | null = null;
   private burnerEmailButton: HTMLElement | null = null;
+  private isEnabled: boolean = false;
+  private focusinHandler: ((event: Event) => void) | null = null;
+  private focusoutHandler: ((event: Event) => void) | null = null;
+  private mutationObserver: MutationObserver | null = null;
 
   async initialize(): Promise<void> {
     try {
-      this.setupInputDetection();
-      logger.debug('EmailAutofill', 'Initialized successfully', { url: window.location.href });
+      const enabled = await this.checkIfEnabled();
+      this.isEnabled = enabled;
+
+      if (this.isEnabled) {
+        this.setupInputDetection();
+      }
+
+      this.setupSettingListener();
+      logger.debug('EmailAutofill', 'Initialized successfully', { url: window.location.href, enabled: this.isEnabled });
     } catch (error) {
       logger.error('EmailAutofill', 'Failed to initialize', toError(error));
     }
   }
 
+  private async checkIfEnabled(): Promise<boolean> {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'GET_BURNER_EMAIL_SETTING' });
+      return response?.success && response?.enabled === true;
+    } catch (error) {
+      logger.error('EmailAutofill', 'Failed to check if enabled', toError(error));
+      return false;
+    }
+  }
+
+  private setupSettingListener(): void {
+    chrome.runtime.onMessage.addListener((message) => {
+      if (message.type === 'BURNER_EMAIL_SETTING_CHANGED') {
+        const enabled = message.data?.enabled === true;
+        logger.debug('EmailAutofill', 'Setting changed', { enabled });
+
+        if (enabled && !this.isEnabled) {
+          this.enable();
+        } else if (!enabled && this.isEnabled) {
+          this.disable();
+        }
+      }
+    });
+  }
+
+  private enable(): void {
+    this.isEnabled = true;
+    this.setupInputDetection();
+    logger.info('EmailAutofill', 'Burner email feature enabled');
+  }
+
+  private disable(): void {
+    this.isEnabled = false;
+    this.cleanup();
+    logger.info('EmailAutofill', 'Burner email feature disabled');
+  }
+
   private setupInputDetection(): void {
-    document.addEventListener('focusin', (event) => {
+    if (this.focusinHandler || this.focusoutHandler) {
+      return;
+    }
+
+    this.focusinHandler = (event: Event) => {
+      if (!this.isEnabled) return;
+
       const target = event.target as HTMLElement;
 
       if (this.isEmailInput(target)) {
         this.lastFocusedInput = target as HTMLInputElement;
         this.showBurnerEmailButton(target as HTMLInputElement);
       }
-    });
+    };
 
-    document.addEventListener('focusout', (event) => {
+    this.focusoutHandler = (event: Event) => {
+      if (!this.isEnabled) return;
+
       const target = event.target as HTMLElement;
 
       if (this.isEmailInput(target)) {
         setTimeout(() => {
-          const clickedElement = event.relatedTarget as HTMLElement;
-          if (clickedElement !== this.burnerEmailButton && !this.burnerEmailButton?.contains(clickedElement)) {
+          const relatedTarget = (event as FocusEvent).relatedTarget as HTMLElement;
+          if (relatedTarget !== this.burnerEmailButton && !this.burnerEmailButton?.contains(relatedTarget)) {
             this.hideBurnerEmailButton();
           }
         }, 200);
       }
+    };
+
+    document.addEventListener('focusin', this.focusinHandler);
+    document.addEventListener('focusout', this.focusoutHandler);
+
+    this.mutationObserver = new MutationObserver(() => {
+      if (this.isEnabled) {
+        this.detectNewEmailInputs();
+      }
     });
 
-    const observer = new MutationObserver(() => {
-      this.detectNewEmailInputs();
-    });
-
-    observer.observe(document.body, {
+    this.mutationObserver.observe(document.body, {
       childList: true,
       subtree: true,
     });
+
+    logger.debug('EmailAutofill', 'Input detection setup complete');
+  }
+
+  private cleanup(): void {
+    if (this.focusinHandler) {
+      document.removeEventListener('focusin', this.focusinHandler);
+      this.focusinHandler = null;
+    }
+
+    if (this.focusoutHandler) {
+      document.removeEventListener('focusout', this.focusoutHandler);
+      this.focusoutHandler = null;
+    }
+
+    if (this.mutationObserver) {
+      this.mutationObserver.disconnect();
+      this.mutationObserver = null;
+    }
+
+    this.hideBurnerEmailButton();
+
+    logger.debug('EmailAutofill', 'Cleanup complete');
   }
 
   private isEmailInput(element: HTMLElement): boolean {
