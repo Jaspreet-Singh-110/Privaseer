@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { Storage } from './storage';
+import { Storage } from '@/background/storage';
 
-vi.mock('../utils/logger', () => ({
+vi.mock('@/utils/logger', () => ({
   logger: {
     info: vi.fn(),
     error: vi.fn(),

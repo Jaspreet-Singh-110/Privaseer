@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-vi.mock('./logger');
+vi.mock('@/utils/logger');
 
 describe('CMP Cookie Detection', () => {
   beforeEach(() => {

@@ -153,6 +153,7 @@ export interface StorageData {
     showNotifications: boolean;
     theme: 'light' | 'dark' | 'system';
     burnerEmailEnabled: boolean;
+    telemetryEnabled: boolean;
   };
   lastReset: number;
   penalizedDomains?: Record<string, number>;
@@ -184,6 +185,9 @@ export type MessageType =
   | 'GET_BURNER_EMAIL_SETTING'
   | 'SET_BURNER_EMAIL_SETTING'
   | 'BURNER_EMAIL_SETTING_CHANGED'
+  | 'GET_TELEMETRY_SETTING'
+  | 'SET_TELEMETRY_SETTING'
+  | 'TELEMETRY_SETTING_CHANGED'
   | 'SUBMIT_FEEDBACK'
   | 'TRACK_EVENT'
   | 'RECORD_COMPLIANCE_SCORE'

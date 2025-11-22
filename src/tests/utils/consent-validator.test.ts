@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { shouldPenalizeTracker, extractDomain, isConsentedTrackerCategory, isHighRiskCategory } from './consent-validator';
-import { Storage } from '../background/storage';
-import type { LocalConsentState } from '../types';
+import { shouldPenalizeTracker, extractDomain, isConsentedTrackerCategory, isHighRiskCategory } from '@/utils/consent-validator';
+import { Storage } from '@/background/storage';
+import type { LocalConsentState } from '@/types';
 
-vi.mock('./logger');
-vi.mock('../background/storage');
+vi.mock('@/utils/logger');
+vi.mock('@/background/storage');
 
 describe('Consent Validator', () => {
   beforeEach(() => {

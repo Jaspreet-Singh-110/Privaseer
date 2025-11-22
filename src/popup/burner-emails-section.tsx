@@ -1,10 +1,39 @@
-import React, { useState, useEffect } from 'react';
-import { Mail, Copy, Trash2, Plus, ExternalLink, Settings } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Mail, Copy, Trash2, Plus, ExternalLink } from 'lucide-react';
 import type { BurnerEmail } from '../types';
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
+import { BurnerEmailDisabled } from './BurnerEmailDisabled';
 
-export function BurnerEmailsSection() {
+interface BurnerEmailsSectionProps {
+  onOpenSettings?: () => void;
+}
+
+/**
+ * BurnerEmailsSection Component
+ * 
+ * Displays a list of burner emails with copy and delete functionality.
+ * The component handles both enabled and disabled feature states.
+ * 
+ * @param props - Component props
+ * @param props.onOpenSettings - Optional callback to open settings page
+ * 
+ * @remarks
+ * When the burner email feature is disabled:
+ * - Only new email generation is blocked
+ * - Existing emails remain fully accessible
+ * - Users can still view, copy, and delete previously created burner emails
+ * - The email list is displayed regardless of feature state
+ * - Copy and delete operations work regardless of feature state
+ * 
+ * @example
+ * ```tsx
+ * <BurnerEmailsSection onOpenSettings={() => setShowSettings(true)} />
+ * ```
+ */
+export function BurnerEmailsSection({ onOpenSettings }: BurnerEmailsSectionProps = {}) {
+  // Emails persist across feature toggles: once fetched they remain in state and storage
+  // so users can resume accessing them even if the feature is later disabled
   const [emails, setEmails] = useState<BurnerEmail[]>([]);
   const [loading, setLoading] = useState(true);
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
@@ -51,16 +80,19 @@ export function BurnerEmailsSection() {
     }
   };
 
+  // Copy functionality works regardless of feature state - users can copy emails even when disabled
   const copyEmail = async (email: string) => {
     try {
       await navigator.clipboard.writeText(email);
       setCopiedEmail(email);
       setTimeout(() => setCopiedEmail(null), 2000);
     } catch (error) {
+      // Catch acts as a lightweight error boundary: we log but don't crash the UI
       logger.error('BurnerEmails', 'Failed to copy email', toError(error));
     }
   };
 
+  // Delete functionality works regardless of feature state - users can delete emails even when disabled
   const deleteEmail = async (emailId: string) => {
     try {
       const response = await chrome.runtime.sendMessage({
@@ -72,6 +104,7 @@ export function BurnerEmailsSection() {
         setEmails(emails.filter(e => e.id !== emailId));
       }
     } catch (error) {
+      // Deletion errors are logged but UI continues to render existing emails safely
       logger.error('BurnerEmails', 'Failed to delete email', toError(error));
     }
   };
@@ -106,56 +139,64 @@ export function BurnerEmailsSection() {
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-            <Mail className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+          <h3 className={`text-lg font-semibold flex items-center gap-2 ${
+            !isFeatureEnabled 
+              ? 'text-gray-400 dark:text-gray-500' 
+              : 'text-gray-900 dark:text-white'
+          }`}>
+            <Mail className={`w-5 h-5 ${
+              !isFeatureEnabled 
+                ? 'text-gray-400 dark:text-gray-500' 
+                : 'text-blue-600 dark:text-blue-400'
+            }`} />
             Burner Emails
           </h3>
-          <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+          <p className={`text-xs mt-1 ${
+            !isFeatureEnabled 
+              ? 'text-gray-400 dark:text-gray-500' 
+              : 'text-gray-600 dark:text-gray-400'
+          }`}>
             Protected disposable emails for untrusted sites
           </p>
         </div>
       </div>
 
       {!isFeatureEnabled && (
-        <div className="text-center py-8 px-4 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800/50 dark:to-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-700">
-          <div className="w-12 h-12 mx-auto bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center mb-3">
-            <Mail className="w-6 h-6 text-gray-400 dark:text-gray-500" />
-          </div>
-          <p className="text-sm font-medium text-gray-900 dark:text-white mb-1">Feature Disabled</p>
-          <p className="text-xs text-gray-600 dark:text-gray-400 mb-4">
-            Burner email generation is currently turned off
+        <BurnerEmailDisabled onOpenSettings={onOpenSettings} />
+      )}
+
+      {emails.length === 0 ? (
+        <div className={`text-center py-8 px-4 rounded-xl border ${
+          isFeatureEnabled
+            ? 'bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-100 dark:border-blue-800'
+            : 'bg-gray-50 dark:bg-gray-800/40 border-gray-200 dark:border-gray-700'
+        }`}>
+          <Mail className={`w-12 h-12 mx-auto mb-3 ${
+            isFeatureEnabled ? 'text-blue-400 dark:text-blue-500' : 'text-gray-400 dark:text-gray-500'
+          }`} />
+          <p className={`text-sm font-medium mb-1 ${
+            isFeatureEnabled ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300'
+          }`}>
+            No burner emails yet
           </p>
-          <div className="flex items-center justify-center gap-2 text-xs text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded-lg inline-flex">
-            <Settings className="w-4 h-4" />
-            <span>Enable it in Settings to generate new emails</span>
-          </div>
-          {emails.length > 0 && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
-              Your existing {emails.length} email{emails.length > 1 ? 's' : ''} {emails.length > 1 ? 'are' : 'is'} still accessible below
-            </p>
+          <p className="text-xs text-gray-600 dark:text-gray-400 mb-4">
+            {isFeatureEnabled
+              ? 'Focus any email field on a website to generate one'
+              : 'Turn the feature back on to generate new burner emails'}
+          </p>
+          {isFeatureEnabled && (
+            <div className="flex items-center justify-center gap-2 text-xs text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/40 px-3 py-2 rounded-lg inline-flex">
+              <Plus className="w-4 h-4" />
+              <span>Click "Generate Burner Email" when you see it</span>
+            </div>
           )}
         </div>
-      )}
-
-      {isFeatureEnabled && emails.length === 0 && (
-        <div className="text-center py-8 px-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-100 dark:border-blue-800">
-          <Mail className="w-12 h-12 mx-auto text-blue-400 dark:text-blue-500 mb-3" />
-          <p className="text-sm font-medium text-gray-900 dark:text-white mb-1">No burner emails yet</p>
-          <p className="text-xs text-gray-600 dark:text-gray-400 mb-4">
-            Focus any email field on a website to generate one
-          </p>
-          <div className="flex items-center justify-center gap-2 text-xs text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/40 px-3 py-2 rounded-lg inline-flex">
-            <Plus className="w-4 h-4" />
-            <span>Click "Generate Burner Email" when you see it</span>
-          </div>
-        </div>
-      )}
-
-      {emails.length > 0 && (
+      ) : (
         <div className="space-y-2">
           {emails.map((email) => (
             <div
               key={email.id}
+              aria-label={`Burner email ${email.email} for ${email.domain}`}
               className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:border-blue-300 dark:hover:border-blue-500 hover:shadow-sm transition-all group"
             >
               <div className="flex items-start justify-between gap-3">
@@ -180,8 +221,10 @@ export function BurnerEmailsSection() {
                 </div>
 
                 <div className="flex items-center gap-1">
+                  {/* Copy button uses native <button> semantics, so it is fully keyboard accessible */}
                   <button
                     onClick={() => copyEmail(email.email)}
+                    aria-label={`Copy email address ${email.email}`}
                     className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/40 rounded-lg transition-colors group/copy"
                     title="Copy email"
                   >
@@ -193,8 +236,10 @@ export function BurnerEmailsSection() {
                       <Copy className="w-4 h-4 text-gray-400 group-hover/copy:text-blue-600 dark:group-hover/copy:text-blue-400" />
                     )}
                   </button>
+                  {/* Delete button also relies on native <button> semantics for keyboard access */}
                   <button
                     onClick={() => deleteEmail(email.id)}
+                    aria-label={`Delete email address ${email.email}`}
                     className="p-2 hover:bg-red-50 dark:hover:bg-red-900/40 rounded-lg transition-colors group/delete"
                     title="Delete email"
                   >

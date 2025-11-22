@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { Storage } from './storage';
-import type { LocalConsentState, StorageData } from '../types';
+import { Storage } from '@/background/storage';
+import type { LocalConsentState, StorageData } from '@/types';
 
-vi.mock('../utils/logger');
+vi.mock('@/utils/logger');
 
 const mockChrome = {
   storage: {

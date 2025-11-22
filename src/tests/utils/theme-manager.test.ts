@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { ThemeManager } from './theme-manager';
+import { ThemeManager } from '@/utils/theme-manager';
 
 describe('ThemeManager', () => {
   let mockMediaQueryList: MediaQueryList;

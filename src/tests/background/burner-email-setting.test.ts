@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { Storage } from './storage';
+import { Storage } from '@/background/storage';
 
-vi.mock('../utils/logger', () => ({
+vi.mock('@/utils/logger', () => ({
   logger: {
     info: vi.fn(),
     error: vi.fn(),
@@ -11,8 +11,11 @@ vi.mock('../utils/logger', () => ({
 }));
 
 describe('Burner Email Setting', () => {
+  let storedPrivacyData: any;
+
   beforeEach(async () => {
     vi.clearAllMocks();
+    storedPrivacyData = null;
     (Storage as any).cache = null;
     (Storage as any).isDirty = false;
     (Storage as any).saveTimer = null;
@@ -21,8 +24,17 @@ describe('Burner Email Setting', () => {
     global.chrome = {
       storage: {
         local: {
-          get: vi.fn().mockResolvedValue({}),
-          set: vi.fn().mockResolvedValue(undefined),
+          get: vi.fn().mockImplementation(async (key: string | string[]) => {
+            if (key === 'privacyData' || (Array.isArray(key) && key.includes('privacyData'))) {
+              return storedPrivacyData ? { privacyData: storedPrivacyData } : {};
+            }
+            return {};
+          }),
+          set: vi.fn().mockImplementation(async (data: Record<string, unknown>) => {
+            if (data && typeof data === 'object' && 'privacyData' in data) {
+              storedPrivacyData = (data as { privacyData: any }).privacyData;
+            }
+          }),
         },
       },
     } as any;
@@ -31,9 +43,9 @@ describe('Burner Email Setting', () => {
   });
 
   describe('getBurnerEmailEnabled', () => {
-    it('should return true by default', async () => {
+    it('should return false by default', async () => {
       const enabled = await Storage.getBurnerEmailEnabled();
-      expect(enabled).toBe(true);
+      expect(enabled).toBe(false);
     });
 
     it('should return the stored value when set to false', async () => {
@@ -49,12 +61,12 @@ describe('Burner Email Setting', () => {
       expect(enabled).toBe(true);
     });
 
-    it('should return true when setting is undefined (backwards compatibility)', async () => {
+    it('should return false when setting is undefined (backwards compatibility)', async () => {
       const data = await Storage.get();
       delete (data.settings as any).burnerEmailEnabled;
 
       const enabled = await Storage.getBurnerEmailEnabled();
-      expect(enabled).toBe(true);
+      expect(enabled).toBe(false);
     });
   });
 
@@ -132,6 +144,30 @@ describe('Burner Email Setting', () => {
       const enabled = await Storage.getBurnerEmailEnabled();
       expect(enabled).toBe(false);
     });
+
+    it('should survive service worker reinitialization', async () => {
+      await Storage.setBurnerEmailEnabled(false);
+
+      (Storage as any).cache = null;
+
+      const enabled = await Storage.getBurnerEmailEnabled();
+      expect(enabled).toBe(false);
+    });
+
+    it('should write the updated value to chrome storage immediately', async () => {
+      const setSpy = chrome.storage.local.set as unknown as ReturnType<typeof vi.fn>;
+      await Storage.setBurnerEmailEnabled(false);
+
+      expect(setSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          privacyData: expect.objectContaining({
+            settings: expect.objectContaining({
+              burnerEmailEnabled: false,
+            }),
+          }),
+        })
+      );
+    });
   });
 
   describe('Default behavior', () => {
@@ -141,10 +177,9 @@ describe('Burner Email Setting', () => {
       expect(typeof data.settings.burnerEmailEnabled).toBe('boolean');
     });
 
-    it('should default to true when not explicitly set', async () => {
+    it('should default to false when not explicitly set', async () => {
       const enabled = await Storage.getBurnerEmailEnabled();
-      expect([true, false]).toContain(enabled);
-      expect(typeof enabled).toBe('boolean');
+      expect(enabled).toBe(false);
     });
   });
 });

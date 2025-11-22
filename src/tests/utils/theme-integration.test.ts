@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ThemeManager } from './theme-manager';
-import { ThemeHelper } from './theme-helper';
+import { ThemeManager } from '@/utils/theme-manager';
+import { ThemeHelper } from '@/utils/theme-helper';
 
 describe('Theme Integration Tests', () => {
   let mockMediaQueryList: {

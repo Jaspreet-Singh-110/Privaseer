@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { JSDOM } from 'jsdom';
 
-vi.mock('../utils/logger', () => ({
+vi.mock('@/utils/logger', () => ({
   logger: {
     info: vi.fn(),
     error: vi.fn(),
@@ -47,7 +47,7 @@ describe('EmailAutofill Toggle Integration', () => {
     it('should check if feature is enabled on initialization', async () => {
       mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
 
-      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const { EmailAutofill } = await import('@/content-scripts/email-autofill-test-helper');
       const autofill = new EmailAutofill();
       await autofill.initialize();
 
@@ -57,7 +57,7 @@ describe('EmailAutofill Toggle Integration', () => {
     it('should setup input detection when enabled', async () => {
       mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
 
-      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const { EmailAutofill } = await import('@/content-scripts/email-autofill-test-helper');
       const autofill = new EmailAutofill();
       await autofill.initialize();
 
@@ -67,7 +67,7 @@ describe('EmailAutofill Toggle Integration', () => {
     it('should not setup input detection when disabled', async () => {
       mockSendMessage.mockResolvedValueOnce({ success: true, enabled: false });
 
-      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const { EmailAutofill } = await import('@/content-scripts/email-autofill-test-helper');
       const autofill = new EmailAutofill();
       await autofill.initialize();
 
@@ -77,7 +77,7 @@ describe('EmailAutofill Toggle Integration', () => {
     it('should setup setting listener regardless of enabled state', async () => {
       mockSendMessage.mockResolvedValueOnce({ success: true, enabled: false });
 
-      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const { EmailAutofill } = await import('@/content-scripts/email-autofill-test-helper');
       const autofill = new EmailAutofill();
       await autofill.initialize();
 
@@ -87,7 +87,7 @@ describe('EmailAutofill Toggle Integration', () => {
     it('should handle errors when checking enabled state', async () => {
       mockSendMessage.mockRejectedValueOnce(new Error('Connection failed'));
 
-      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const { EmailAutofill } = await import('@/content-scripts/email-autofill-test-helper');
       const autofill = new EmailAutofill();
       await autofill.initialize();
 
@@ -99,7 +99,7 @@ describe('EmailAutofill Toggle Integration', () => {
     it('should listen for BURNER_EMAIL_SETTING_CHANGED messages', async () => {
       mockSendMessage.mockResolvedValueOnce({ success: true, enabled: false });
 
-      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const { EmailAutofill } = await import('@/content-scripts/email-autofill-test-helper');
       const autofill = new EmailAutofill();
       await autofill.initialize();
 
@@ -109,7 +109,7 @@ describe('EmailAutofill Toggle Integration', () => {
     it('should enable when receiving enabled=true message', async () => {
       mockSendMessage.mockResolvedValueOnce({ success: true, enabled: false });
 
-      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const { EmailAutofill } = await import('@/content-scripts/email-autofill-test-helper');
       const autofill = new EmailAutofill();
       await autofill.initialize();
 
@@ -124,7 +124,7 @@ describe('EmailAutofill Toggle Integration', () => {
     it('should disable when receiving enabled=false message', async () => {
       mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
 
-      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const { EmailAutofill } = await import('@/content-scripts/email-autofill-test-helper');
       const autofill = new EmailAutofill();
       await autofill.initialize();
 
@@ -139,7 +139,7 @@ describe('EmailAutofill Toggle Integration', () => {
     it('should ignore other message types', async () => {
       mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
 
-      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const { EmailAutofill } = await import('@/content-scripts/email-autofill-test-helper');
       const autofill = new EmailAutofill();
       await autofill.initialize();
 
@@ -156,7 +156,7 @@ describe('EmailAutofill Toggle Integration', () => {
     it('should setup input detection when enabled', async () => {
       mockSendMessage.mockResolvedValueOnce({ success: true, enabled: false });
 
-      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const { EmailAutofill } = await import('@/content-scripts/email-autofill-test-helper');
       const autofill = new EmailAutofill();
       await autofill.initialize();
 
@@ -171,7 +171,7 @@ describe('EmailAutofill Toggle Integration', () => {
     it('should cleanup when disabled', async () => {
       mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
 
-      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const { EmailAutofill } = await import('@/content-scripts/email-autofill-test-helper');
       const autofill = new EmailAutofill();
       await autofill.initialize();
 
@@ -188,7 +188,7 @@ describe('EmailAutofill Toggle Integration', () => {
     it('should remove button when disabled', async () => {
       mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
 
-      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const { EmailAutofill } = await import('@/content-scripts/email-autofill-test-helper');
       const autofill = new EmailAutofill();
       await autofill.initialize();
 
@@ -206,7 +206,7 @@ describe('EmailAutofill Toggle Integration', () => {
     it('should not show button when disabled', async () => {
       mockSendMessage.mockResolvedValueOnce({ success: true, enabled: false });
 
-      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const { EmailAutofill } = await import('@/content-scripts/email-autofill-test-helper');
       const autofill = new EmailAutofill();
       await autofill.initialize();
 
@@ -226,7 +226,7 @@ describe('EmailAutofill Toggle Integration', () => {
     it('should remove all event listeners on cleanup', async () => {
       mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
 
-      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const { EmailAutofill } = await import('@/content-scripts/email-autofill-test-helper');
       const autofill = new EmailAutofill();
       await autofill.initialize();
 
@@ -242,7 +242,7 @@ describe('EmailAutofill Toggle Integration', () => {
     it('should disconnect mutation observer on cleanup', async () => {
       mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
 
-      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const { EmailAutofill } = await import('@/content-scripts/email-autofill-test-helper');
       const autofill = new EmailAutofill();
       await autofill.initialize();
 
@@ -256,7 +256,7 @@ describe('EmailAutofill Toggle Integration', () => {
     it('should hide button on cleanup', async () => {
       mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
 
-      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const { EmailAutofill } = await import('@/content-scripts/email-autofill-test-helper');
       const autofill = new EmailAutofill();
       await autofill.initialize();
 
@@ -276,7 +276,7 @@ describe('EmailAutofill Toggle Integration', () => {
     it('should not setup detection twice when already enabled', async () => {
       mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
 
-      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const { EmailAutofill } = await import('@/content-scripts/email-autofill-test-helper');
       const autofill = new EmailAutofill();
       await autofill.initialize();
 
@@ -290,7 +290,7 @@ describe('EmailAutofill Toggle Integration', () => {
     it('should handle rapid toggle changes', async () => {
       mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
 
-      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const { EmailAutofill } = await import('@/content-scripts/email-autofill-test-helper');
       const autofill = new EmailAutofill();
       await autofill.initialize();
 
@@ -306,7 +306,7 @@ describe('EmailAutofill Toggle Integration', () => {
     it('should handle cleanup when nothing is setup', async () => {
       mockSendMessage.mockResolvedValueOnce({ success: true, enabled: false });
 
-      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const { EmailAutofill } = await import('@/content-scripts/email-autofill-test-helper');
       const autofill = new EmailAutofill();
       await autofill.initialize();
 

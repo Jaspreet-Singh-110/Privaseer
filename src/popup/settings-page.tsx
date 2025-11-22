@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { X, MessageSquare, Send, Info, Palette, Mail, ChevronRight, ArrowLeft, Sun, Moon, Monitor } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, MessageSquare, Send, Info, Palette, Mail, ChevronRight, ArrowLeft, Sun, Moon, Monitor, BarChart2 } from 'lucide-react';
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
 import { ThemeManager } from '../utils/theme-manager';
+import { BurnerEmailsSection } from './burner-emails-section';
 
-type SettingsSection = 'menu' | 'feedback' | 'theme' | 'burner-services' | 'about';
+export type SettingsSection = 'menu' | 'feedback' | 'theme' | 'burner-services' | 'telemetry' | 'about';
 type ThemeOption = 'light' | 'dark' | 'system';
 
 interface SettingsPageProps {
@@ -12,9 +13,20 @@ interface SettingsPageProps {
   onClose: () => void;
   currentTab: chrome.tabs.Tab | null;
   onFeedbackSuccess: () => void;
+  deepLinkSection?: SettingsSection | null;
+  highlightBurnerToggle?: boolean;
+  onBurnerHighlightComplete?: () => void;
 }
 
-export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }: SettingsPageProps) {
+export function SettingsPage({
+  isOpen,
+  onClose,
+  currentTab,
+  onFeedbackSuccess,
+  deepLinkSection,
+  highlightBurnerToggle = false,
+  onBurnerHighlightComplete,
+}: SettingsPageProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>('menu');
   const [feedbackText, setFeedbackText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -23,10 +35,15 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
   const [isApplyingTheme, setIsApplyingTheme] = useState(false);
   const [isBurnerEmailEnabled, setIsBurnerEmailEnabled] = useState(true);
   const [isTogglingBurnerEmail, setIsTogglingBurnerEmail] = useState(false);
+  const [shouldHighlightBurnerToggle, setShouldHighlightBurnerToggle] = useState(false);
+  const [isTelemetryEnabled, setIsTelemetryEnabled] = useState(false);
+  const [isTogglingTelemetry, setIsTogglingTelemetry] = useState(false);
+  const burnerToggleRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     loadCurrentTheme();
     loadBurnerEmailSetting();
+    loadTelemetrySetting();
   }, []);
 
   const loadCurrentTheme = async () => {
@@ -51,11 +68,50 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
     }
   };
 
+  const loadTelemetrySetting = async () => {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'GET_TELEMETRY_SETTING' });
+      if (response.success) {
+        setIsTelemetryEnabled(response.enabled);
+      }
+    } catch (error) {
+      logger.error('Settings', 'Failed to load telemetry setting', toError(error));
+    }
+  };
+
+  /**
+   * Handles toggling the burner email feature on/off.
+   * 
+   * This function manages the toggle state and coordinates with the service worker
+   * to update the burner email setting. It includes race condition protection and
+   * error recovery mechanisms.
+   * 
+   * @remarks
+   * Race Condition Handling:
+   * - Uses `isTogglingBurnerEmail` flag to prevent concurrent toggle operations
+   * - Returns early with a warning log if a toggle is already in progress
+   * - The message bus in the service worker also processes requests sequentially
+   * 
+   * Error Recovery:
+   * - On failure, reloads the current setting from storage to restore accurate state
+   * - Logs detailed error information including attempted and previous values
+   * - Always resets the toggle flag in finally block to prevent stuck state
+   * 
+   * Logging:
+   * - Debug log when toggle starts (with current and new values)
+   * - Info log on successful update (with previous and new values)
+   * - Error logs on failure (with attempted and previous values)
+   * - Warning log when blocked due to concurrent operation
+   */
   const handleBurnerEmailToggle = async () => {
-    if (isTogglingBurnerEmail) return;
+    if (isTogglingBurnerEmail) {
+      logger.warn('Settings', 'Burner email toggle blocked - operation already in progress');
+      return;
+    }
 
     setIsTogglingBurnerEmail(true);
     const newValue = !isBurnerEmailEnabled;
+    logger.debug('Settings', 'Starting burner email toggle', { currentValue: isBurnerEmailEnabled, newValue });
 
     try {
       const response = await chrome.runtime.sendMessage({
@@ -65,16 +121,47 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
 
       if (response.success) {
         setIsBurnerEmailEnabled(newValue);
-        logger.info('Settings', 'Burner email setting updated', { enabled: newValue });
+        logger.info('Settings', 'Burner email setting updated', { previousValue: isBurnerEmailEnabled, newValue });
       } else {
-        logger.error('Settings', 'Failed to update burner email setting', new Error(response.error || 'Unknown error'));
+        logger.error('Settings', 'Failed to update burner email setting', new Error(response.error || 'Unknown error'), { attemptedValue: newValue, previousValue: isBurnerEmailEnabled });
         await loadBurnerEmailSetting();
       }
     } catch (error) {
-      logger.error('Settings', 'Failed to toggle burner email setting', toError(error));
+      logger.error('Settings', 'Failed to toggle burner email setting', toError(error), { attemptedValue: newValue, previousValue: isBurnerEmailEnabled });
       await loadBurnerEmailSetting();
     } finally {
       setIsTogglingBurnerEmail(false);
+    }
+  };
+
+  const handleTelemetryToggle = async () => {
+    if (isTogglingTelemetry) {
+      logger.warn('Settings', 'Telemetry toggle blocked - operation already in progress');
+      return;
+    }
+
+    setIsTogglingTelemetry(true);
+    const newValue = !isTelemetryEnabled;
+    logger.debug('Settings', 'Starting telemetry toggle', { currentValue: isTelemetryEnabled, newValue });
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'SET_TELEMETRY_SETTING',
+        data: { enabled: newValue }
+      });
+
+      if (response.success) {
+        setIsTelemetryEnabled(newValue);
+        logger.info('Settings', 'Telemetry setting updated', { previousValue: isTelemetryEnabled, newValue });
+      } else {
+        logger.error('Settings', 'Failed to update telemetry setting', new Error(response.error || 'Unknown error'), { attemptedValue: newValue, previousValue: isTelemetryEnabled });
+        await loadTelemetrySetting();
+      }
+    } catch (error) {
+      logger.error('Settings', 'Failed to toggle telemetry setting', toError(error), { attemptedValue: newValue, previousValue: isTelemetryEnabled });
+      await loadTelemetrySetting();
+    } finally {
+      setIsTogglingTelemetry(false);
     }
   };
 
@@ -104,6 +191,37 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
       setIsApplyingTheme(false);
     }
   };
+
+  useEffect(() => {
+    if (isOpen && deepLinkSection) {
+      setIsNavigatingForward(deepLinkSection !== 'menu');
+      setActiveSection(deepLinkSection);
+    }
+  }, [deepLinkSection, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !highlightBurnerToggle) return;
+    if (activeSection !== 'burner-services') return;
+    if (!burnerToggleRef.current) return;
+
+    setShouldHighlightBurnerToggle(true);
+    burnerToggleRef.current.focus({ preventScroll: false });
+
+    const timer = window.setTimeout(() => {
+      setShouldHighlightBurnerToggle(false);
+      onBurnerHighlightComplete?.();
+    }, 2500);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [highlightBurnerToggle, activeSection, isOpen, onBurnerHighlightComplete]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setShouldHighlightBurnerToggle(false);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -198,34 +316,6 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
         <div className="p-6 max-h-96 overflow-y-auto">
           {activeSection === 'menu' && (
             <div className="space-y-3 animate-slide-in-left">
-              <div
-                className="w-full flex items-center justify-between p-4 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg transition-colors">
-                    <Mail className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <div className="text-left">
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Burner Email Protection</h3>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">Generate disposable emails for untrusted sites</p>
-                  </div>
-                </div>
-                <button
-                  onClick={handleBurnerEmailToggle}
-                  disabled={isTogglingBurnerEmail}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${
-                    isBurnerEmailEnabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
-                  } ${isTogglingBurnerEmail ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  aria-label="Toggle burner email protection"
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      isBurnerEmailEnabled ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
-
               <button
                 onClick={() => navigateToSection('theme')}
                 className="w-full flex items-center justify-between p-4 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg hover:border-blue-300 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-gray-600 transition-all group"
@@ -269,6 +359,22 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
                   <div className="text-left">
                     <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Burner Email Services</h3>
                     <p className="text-xs text-gray-600 dark:text-gray-400">Manage email settings</p>
+                  </div>
+                </div>
+                <ChevronRight className="w-5 h-5 text-gray-400 dark:text-gray-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
+              </button>
+
+              <button
+                onClick={() => navigateToSection('telemetry')}
+                className="w-full flex items-center justify-between p-4 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg hover:border-blue-300 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-gray-600 transition-all group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg group-hover:bg-blue-200 dark:group-hover:bg-blue-800/60 transition-colors">
+                    <BarChart2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Telemetry & Improvements</h3>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Opt into anonymous insights</p>
                   </div>
                 </div>
                 <ChevronRight className="w-5 h-5 text-gray-400 dark:text-gray-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
@@ -422,6 +528,54 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
             </div>
           )}
 
+          {activeSection === 'burner-services' && (
+            <div className={isNavigatingForward ? 'animate-slide-in-right' : 'animate-slide-in-left'}>
+              <div className="p-4 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg transition-colors">
+                      <Mail className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div className="text-left">
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Burner Email Protection</h3>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">
+                        Control disposable email generation for untrusted sites
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    ref={burnerToggleRef}
+                    onClick={handleBurnerEmailToggle}
+                    disabled={isTogglingBurnerEmail}
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${
+                      isBurnerEmailEnabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
+                    } ${isTogglingBurnerEmail ? 'opacity-50 cursor-not-allowed' : ''} ${
+                      shouldHighlightBurnerToggle ? 'ring-4 ring-blue-300 dark:ring-blue-700 ring-offset-2 dark:ring-offset-gray-800' : ''
+                    }`}
+                    aria-label="Toggle burner email protection"
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        isBurnerEmailEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+                <div
+                  className="sr-only"
+                  aria-live="polite"
+                  aria-atomic="true"
+                >
+                  Burner email protection is {isBurnerEmailEnabled ? 'enabled' : 'disabled'}
+                </div>
+                <p className="mt-4 text-xs text-gray-600 dark:text-gray-400">
+                  Burner email capabilities power the in-page autofill experience and the burner emails tab. Disabling
+                  this feature blocks future email generation but keeps existing addresses accessible.
+                </p>
+              </div>
+            </div>
+          )}
+
           {activeSection === 'about' && (
             <div className={isNavigatingForward ? 'animate-slide-in-right' : 'animate-slide-in-left'}>
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
@@ -466,6 +620,51 @@ export function SettingsPage({ isOpen, onClose, currentTab, onFeedbackSuccess }:
                     Built with privacy in mind
                   </p>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {activeSection === 'telemetry' && (
+            <div className={isNavigatingForward ? 'animate-slide-in-right' : 'animate-slide-in-left'}>
+              <div className="p-4 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg transition-colors">
+                      <BarChart2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div className="text-left">
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Telemetry & Improvements</h3>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">
+                        Share anonymous usage patterns to help Privaseer improve. No personal data is collected.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleTelemetryToggle}
+                    disabled={isTogglingTelemetry}
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${
+                      isTelemetryEnabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
+                    } ${isTogglingTelemetry ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    aria-label="Toggle telemetry collection"
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        isTelemetryEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+                <div
+                  className="sr-only"
+                  aria-live="polite"
+                  aria-atomic="true"
+                >
+                  Telemetry collection is {isTelemetryEnabled ? 'enabled' : 'disabled'}
+                </div>
+                <p className="mt-4 text-xs text-gray-600 dark:text-gray-400">
+                  Telemetry helps us understand which features are useful so we can prioritize improvements. It never
+                  includes page contents, form data, or personally identifiable information.
+                </p>
               </div>
             </div>
           )}

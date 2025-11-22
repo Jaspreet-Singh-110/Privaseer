@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { backgroundEvents } from './event-emitter';
+import { backgroundEvents } from '@/background/event-emitter';
 
 describe('EventEmitter', () => {
   it('should emit and receive events', () => {

@@ -2,6 +2,7 @@ import type { BurnerEmail } from '../types';
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
 import { SUPABASE } from '../utils/constants';
+import { Storage } from './storage';
 
 class BurnerEmailService {
   private installationId: string | null = null;
@@ -35,6 +36,12 @@ class BurnerEmailService {
 
   async generateEmail(domain: string, url?: string, label?: string): Promise<string> {
     try {
+      const isEnabled = await Storage.getBurnerEmailEnabled();
+      if (!isEnabled) {
+        logger.info('BurnerEmailService', 'Generation blocked - feature disabled', { domain });
+        throw new Error('Burner email feature is disabled');
+      }
+
       if (!this.installationId) {
         await this.initialize();
       }

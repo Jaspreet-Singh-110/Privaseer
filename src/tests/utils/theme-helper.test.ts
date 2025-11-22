@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ThemeHelper } from './theme-helper';
-import { ThemeManager } from './theme-manager';
+import { ThemeHelper } from '@/utils/theme-helper';
+import { ThemeManager } from '@/utils/theme-manager';
 
 vi.mock('./logger', () => ({
   logger: {

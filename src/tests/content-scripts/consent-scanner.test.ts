@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { DeceptivePatternViolation, DeceptivePatternRule } from '../types';
+import type { DeceptivePatternViolation, DeceptivePatternRule } from '@/types';
 
 describe('GDPR Compliance Scoring', () => {
   const mockRules: DeceptivePatternRule[] = [

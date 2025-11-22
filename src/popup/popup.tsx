@@ -5,7 +5,7 @@ import type { StorageData, Alert as AlertType, Message } from '../types';
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
 import { BurnerEmailsSection } from './burner-emails-section';
-import { SettingsPage } from './settings-page';
+import { SettingsPage, type SettingsSection } from './settings-page';
 import { ThemeManager } from '../utils/theme-manager';
 import '../index.css';
 
@@ -127,6 +127,8 @@ function Popup() {
   const [protectionToastState, setProtectionToastState] = useState(false);
   const [isTogglingProtection, setIsTogglingProtection] = useState(false);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'burner'>('dashboard');
+  const [settingsDeepLink, setSettingsDeepLink] = useState<SettingsSection | null>(null);
+  const [highlightBurnerToggle, setHighlightBurnerToggle] = useState(false);
 
   useEffect(() => {
     checkCurrentTab();
@@ -206,6 +208,12 @@ function Popup() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const openSettingsToBurner = () => {
+    setSettingsDeepLink('burner-services');
+    setHighlightBurnerToggle(true);
+    setShowSettings(true);
   };
 
   const toggleProtection = async () => {
@@ -405,7 +413,7 @@ function Popup() {
 
       {activeTab === 'burner' ? (
         <div className="flex-1 overflow-y-auto">
-          <BurnerEmailsSection />
+          <BurnerEmailsSection onOpenSettings={openSettingsToBurner} />
         </div>
       ) : (
         <>
@@ -467,12 +475,24 @@ function Popup() {
           )}
         </div>
       </div>
+        </>
+      )}
 
       <SettingsPage
         isOpen={showSettings}
-        onClose={() => setShowSettings(false)}
+        onClose={() => {
+          setShowSettings(false);
+          setSettingsDeepLink(null);
+          setHighlightBurnerToggle(false);
+        }}
         currentTab={currentTab}
         onFeedbackSuccess={handleFeedbackSuccess}
+        deepLinkSection={settingsDeepLink}
+        highlightBurnerToggle={highlightBurnerToggle}
+        onBurnerHighlightComplete={() => {
+          setHighlightBurnerToggle(false);
+          setSettingsDeepLink(null);
+        }}
       />
 
       {showSuccessBanner && (
@@ -503,8 +523,6 @@ function Popup() {
             </div>
           </div>
         </div>
-      )}
-        </>
       )}
     </div>
   );

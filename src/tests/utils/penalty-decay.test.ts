@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateDecayFactor, calculateDecayedPenalty, getDecayPercentage, MAX_DECAY_OCCURRENCES } from './penalty-decay';
+import { calculateDecayFactor, calculateDecayedPenalty, getDecayPercentage, MAX_DECAY_OCCURRENCES } from '@/utils/penalty-decay';
 
 describe('Penalty Decay', () => {
   describe('calculateDecayFactor', () => {

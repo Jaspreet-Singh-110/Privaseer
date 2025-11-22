@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { MetricsAggregationService } from './metrics-aggregation';
-import { Storage } from './storage';
-import type { StorageData, DailyMetricsSnapshot } from '../types';
+import { MetricsAggregationService } from '@/background/metrics-aggregation';
+import { Storage } from '@/background/storage';
+import type { StorageData, DailyMetricsSnapshot } from '@/types';
 
-vi.mock('./storage');
-vi.mock('../utils/logger');
+vi.mock('@/background/storage');
+vi.mock('@/utils/logger');
 
 describe('MetricsAggregationService', () => {
   const createMockSnapshot = (overrides: Partial<DailyMetricsSnapshot> = {}): DailyMetricsSnapshot => ({

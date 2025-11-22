@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { Storage } from './storage';
+import { Storage } from '@/background/storage';
 
-vi.mock('../utils/logger', () => ({
+vi.mock('@/utils/logger', () => ({
   logger: {
     info: vi.fn(),
     error: vi.fn(),
@@ -10,7 +10,7 @@ vi.mock('../utils/logger', () => ({
   },
 }));
 
-vi.mock('./burner-email-service', () => ({
+vi.mock('@/background/burner-email-service', () => ({
   burnerEmailService: {
     generateEmail: vi.fn().mockResolvedValue('test@burner.privaseer.app'),
     getEmails: vi.fn().mockResolvedValue([
@@ -21,7 +21,7 @@ vi.mock('./burner-email-service', () => ({
   },
 }));
 
-vi.mock('./feedback-telemetry-service', () => ({
+vi.mock('@/background/feedback-telemetry-service', () => ({
   feedbackTelemetryService: {
     trackEvent: vi.fn().mockResolvedValue(undefined),
   },

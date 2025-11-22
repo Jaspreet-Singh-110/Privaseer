@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
-import { sanitizeEmail, sanitizeSubject, generateSanitizationReport } from "./email-sanitizer.ts";
+import { sanitizeEmail, sanitizeSubject, generateSanitizationReport } from "../../../../supabase/functions/inbound-email/email-sanitizer.ts";
 
 Deno.test("sanitizeEmail - removes 1x1 tracking pixels", () => {
   const html = `

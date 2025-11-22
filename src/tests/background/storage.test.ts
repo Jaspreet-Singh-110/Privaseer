@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Storage } from './storage';
+import { Storage } from '@/background/storage';
 
 describe('Storage', () => {
   it('should initialize with default data', async () => {
@@ -58,6 +58,17 @@ describe('Storage', () => {
     const initialState = (await Storage.get()).settings.protectionEnabled;
     const newState = await Storage.toggleProtection();
     expect(newState).toBe(!initialState);
+  });
+
+  it('should default telemetry to disabled and allow toggling', async () => {
+    const defaultState = await Storage.getTelemetryEnabled();
+    expect(defaultState).toBe(false);
+
+    await Storage.setTelemetryEnabled(true);
+    expect(await Storage.getTelemetryEnabled()).toBe(true);
+
+    await Storage.setTelemetryEnabled(false);
+    expect(await Storage.getTelemetryEnabled()).toBe(false);
   });
 
   it('should handle storage get operation', async () => {

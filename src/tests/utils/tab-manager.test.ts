@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { tabManager } from './tab-manager';
+import { tabManager } from '@/utils/tab-manager';
 
 describe('tabManager', () => {
   it('should return 0 for unknown tabs', () => {

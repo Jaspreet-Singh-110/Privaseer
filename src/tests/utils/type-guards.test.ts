@@ -7,7 +7,7 @@ import {
   hasProperty,
   isGetTrackerInfoData,
   isConsentScanResult,
-} from './type-guards';
+} from '@/utils/type-guards';
 
 describe('type-guards', () => {
   describe('isError', () => {

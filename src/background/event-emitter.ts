@@ -20,6 +20,7 @@ interface EventMap {
     domain: string;
     url: string;
     deceptivePatterns: string[];
+    severityMultiplier: number;
   };
   SCORE_UPDATED: {
     oldScore: number;
@@ -39,7 +40,7 @@ interface EventMap {
 type EventType = keyof EventMap;
 
 class BackgroundEventEmitter {
-  private handlers = new Map<EventType, Set<EventHandler>>();
+  private handlers = new Map<EventType, Set<EventHandler<any>>>();
   private eventLog: Array<{ type: EventType; timestamp: number }> = [];
   private maxEventLog = 100;
 
@@ -47,13 +48,13 @@ class BackgroundEventEmitter {
     if (!this.handlers.has(event)) {
       this.handlers.set(event, new Set());
     }
-    this.handlers.get(event)!.add(handler);
+    this.handlers.get(event)!.add(handler as EventHandler<any>);
   }
 
   off<T extends EventType>(event: T, handler: EventHandler<EventMap[T]>): void {
     const handlers = this.handlers.get(event);
     if (handlers) {
-      handlers.delete(handler);
+      handlers.delete(handler as EventHandler<any>);
     }
   }
 

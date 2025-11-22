@@ -9,6 +9,7 @@ export default defineConfig({
     webExtension({
       manifest: './src/manifest.json',
       disableAutoLaunch: true,
+      skipManifestValidation: true,
     }),
   ],
   optimizeDeps: {

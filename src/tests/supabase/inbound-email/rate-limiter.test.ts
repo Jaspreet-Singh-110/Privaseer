@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
-import { generateRateLimitResponse, shouldAutoNotify } from "./rate-limiter.ts";
+import { generateRateLimitResponse, shouldAutoNotify } from "../../../../supabase/functions/inbound-email/rate-limiter.ts";
 
 Deno.test("generateRateLimitResponse - paused", () => {
   const result = {

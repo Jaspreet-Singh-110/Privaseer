@@ -1,6 +1,7 @@
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
 import { SUPABASE } from '../utils/constants';
+import { Storage } from './storage';
 
 const FEEDBACK_ENDPOINT = `${SUPABASE.URL}/functions/v1/submit-feedback/feedback`;
 const TELEMETRY_ENDPOINT = `${SUPABASE.URL}/functions/v1/submit-feedback/telemetry`;
@@ -129,6 +130,12 @@ class FeedbackTelemetryService {
 
   async trackEvent(event: TelemetryEvent): Promise<void> {
     try {
+      const telemetryEnabled = await Storage.getTelemetryEnabled();
+      if (!telemetryEnabled) {
+        logger.debug('FeedbackTelemetryService', 'Telemetry disabled, skipping event', { eventType: event.eventType });
+        return;
+      }
+
       if (!this.installationId) {
         await this.initialize();
       }

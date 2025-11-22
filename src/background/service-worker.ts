@@ -3,7 +3,7 @@ import { FirewallEngine } from './firewall-engine';
 import { PrivacyScoreManager } from './privacy-score';
 import { burnerEmailService } from './burner-email-service';
 import { feedbackTelemetryService } from './feedback-telemetry-service';
-import type { MessagePayload, ConsentScanResult } from '../types';
+import type { ConsentScanResult } from '../types';
 import { logger } from '../utils/logger';
 import { messageBus } from '../utils/message-bus';
 import { tabManager } from '../utils/tab-manager';
@@ -92,7 +92,7 @@ function setupMessageHandlers(): void {
     if (!isConsentScanResult(data)) {
       return { success: false, error: 'Invalid consent scan result data' };
     }
-    const result = data;
+    const result = data as ConsentScanResult;
 
     const urlObj = new URL(result.url);
     const domain = urlObj.hostname;
@@ -176,12 +176,17 @@ function setupMessageHandlers(): void {
     return { success: true };
   });
 
+  // Only new email generation is blocked when the feature is disabled.
+  // Existing emails remain fully accessible - users can still view, copy, and delete
+  // their previously generated burner emails even when generation is disabled.
   messageBus.on('GENERATE_BURNER_EMAIL', async (data: unknown) => {
     try {
+      // Guard to ensure only generation is affected by the feature toggle; existing emails remain accessible
       const isEnabled = await Storage.getBurnerEmailEnabled();
 
       if (!isEnabled) {
-        logger.info('ServiceWorker', 'Burner email generation blocked - feature is disabled');
+        const { domain } = data as { domain?: string };
+        logger.info('ServiceWorker', 'Burner email generation blocked - feature is disabled', { domain: domain || 'unknown' });
         return { success: false, error: 'Burner email feature is disabled' };
       }
 
@@ -200,6 +205,8 @@ function setupMessageHandlers(): void {
     }
   });
 
+  // GET_BURNER_EMAILS intentionally has no feature check - existing emails remain accessible
+  // even when generation is disabled, allowing users to view and manage previously created burner emails
   messageBus.on('GET_BURNER_EMAILS', async () => {
     try {
       const emails = await burnerEmailService.getEmails();
@@ -210,6 +217,7 @@ function setupMessageHandlers(): void {
     }
   });
 
+  // DELETE_BURNER_EMAIL works regardless of feature state - users can delete emails even when generation is disabled
   messageBus.on('DELETE_BURNER_EMAIL', async (data: unknown) => {
     try {
       const { emailId } = data as { emailId: string };
@@ -232,20 +240,36 @@ function setupMessageHandlers(): void {
     }
   });
 
+  /**
+   * Handles burner email setting toggles originating from the popup UI.
+   *
+   * Behavior:
+   * - Processes requests sequentially through the message bus, eliminating race conditions
+   *   when multiple toggle requests occur back-to-back.
+   * - Persists the new enabled state and returns the updated value to the caller.
+   *
+   * Validation:
+   * - Ensures the incoming payload includes a boolean `enabled` flag.
+   * - Rejects invalid payloads early with a descriptive error response.
+   *
+   * Broadcast:
+   * - After persisting the new value, broadcasts `STATE_UPDATE` to all extension contexts
+   *   so UI components (popup.tsx, burner-emails-section.tsx) can refresh their state.
+   */
   messageBus.on('SET_BURNER_EMAIL_SETTING', async (data: unknown) => {
     try {
       const { enabled } = data as { enabled: boolean };
+      logger.debug('ServiceWorker', 'SET_BURNER_EMAIL_SETTING request received', { enabled });
       if (typeof enabled !== 'boolean') {
         return { success: false, error: 'Invalid enabled value' };
       }
+      const previousValue = await Storage.getBurnerEmailEnabled();
       await Storage.setBurnerEmailEnabled(enabled);
 
-      chrome.runtime.sendMessage({
-        type: 'BURNER_EMAIL_SETTING_CHANGED',
-        data: { enabled }
-      }).catch(() => {});
+      // Broadcast STATE_UPDATE to notify all UI components to refresh their state
+      messageBus.broadcast('STATE_UPDATE');
 
-      logger.info('ServiceWorker', 'Burner email setting updated and broadcasted', { enabled });
+      logger.info('ServiceWorker', 'Burner email setting updated and broadcasted', { previousValue, newValue: enabled });
       return { success: true, enabled };
     } catch (error) {
       logger.error('ServiceWorker', 'Failed to set burner email setting', toError(error));
@@ -273,13 +297,57 @@ function setupMessageHandlers(): void {
     }
   });
 
+  /**
+   * Responds to burner email setting queries from UI contexts.
+   *
+   * Behavior:
+   * - Reads the latest persisted toggle state from Storage.
+   * - Does not perform additional validation because no payload is expected.
+   *
+   * Returns:
+   * - `{ success: true, enabled: boolean }` when retrieval succeeds.
+   * - `{ success: false, error: string }` when an unexpected error occurs.
+   */
   messageBus.on('GET_BURNER_EMAIL_SETTING', async () => {
     try {
       const enabled = await Storage.getBurnerEmailEnabled();
+      logger.debug('ServiceWorker', 'Burner email setting retrieved', { enabled });
       return { success: true, enabled };
     } catch (error) {
       logger.error('ServiceWorker', 'Failed to get burner email setting', toError(error));
       return { success: false, error: 'Failed to get burner email setting' };
+    }
+  });
+
+  messageBus.on('SET_TELEMETRY_SETTING', async (data: unknown) => {
+    try {
+      const { enabled } = data as { enabled: boolean };
+      logger.debug('ServiceWorker', 'SET_TELEMETRY_SETTING request received', { enabled });
+      if (typeof enabled !== 'boolean') {
+        return { success: false, error: 'Invalid enabled value' };
+      }
+      const previousValue = await Storage.getTelemetryEnabled();
+      await Storage.setTelemetryEnabled(enabled);
+
+      // Broadcast STATE_UPDATE to notify all UI components to refresh their state
+      messageBus.broadcast('STATE_UPDATE');
+
+      logger.info('ServiceWorker', 'Telemetry setting updated and broadcasted', { previousValue, newValue: enabled });
+      return { success: true, enabled };
+    } catch (error) {
+      logger.error('ServiceWorker', 'Failed to set telemetry setting', toError(error));
+      return { success: false, error: 'Failed to set telemetry setting' };
+    }
+  });
+
+  messageBus.on('GET_TELEMETRY_SETTING', async () => {
+    try {
+      const enabled = await Storage.getTelemetryEnabled();
+      logger.debug('ServiceWorker', 'Telemetry setting retrieved', { enabled });
+      return { success: true, enabled };
+    } catch (error) {
+      logger.error('ServiceWorker', 'Failed to get telemetry setting', toError(error));
+      return { success: false, error: 'Failed to get telemetry setting' };
     }
   });
 

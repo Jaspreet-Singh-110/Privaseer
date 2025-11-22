@@ -20,7 +20,8 @@ const DEFAULT_STORAGE_DATA: StorageData = {
     protectionEnabled: true,
     showNotifications: true,
     theme: 'system',
-    burnerEmailEnabled: true,
+    burnerEmailEnabled: false,
+    telemetryEnabled: false,
   },
   lastReset: Date.now(),
   penalizedDomains: {},
@@ -425,18 +426,108 @@ export class Storage {
     return data.settings.theme || 'system';
   }
 
+  /**
+   * Gets the current burner email feature enabled state.
+   * 
+   * @returns A promise that resolves to `true` if the feature is enabled, `false` if disabled.
+   *          Defaults to `false` if the setting has never been explicitly set.
+   * 
+   * @remarks
+   * The method uses the nullish coalescing operator (`??`) to return `false` as the default value
+   * when the setting is `null` or `undefined`. This ensures the feature starts disabled for new
+   * users or when the setting hasn't been persisted yet.
+   */
   static async getBurnerEmailEnabled(): Promise<boolean> {
     const data = await this.get();
-    return data.settings.burnerEmailEnabled ?? true;
+    const value = data.settings.burnerEmailEnabled;
+    return typeof value === 'boolean' ? value : false;
   }
 
+  /**
+   * Sets the burner email feature enabled state.
+   * 
+   * @param enabled - The new enabled state: `true` to enable the feature, `false` to disable it.
+   * 
+   * @remarks
+   * Side Effects:
+   * - Updates the in-memory setting immediately
+   * - Persists the change to storage immediately (awaited save operation)
+   * - Logs an info message with both previous and new values for audit trail
+   * 
+   * Persistence:
+   * - The save operation is immediate (awaited) to ensure the setting is persisted
+   * - User-initiated setting changes are saved synchronously to prevent data loss
+   * - The setting is persisted to `chrome.storage.local` immediately
+   * 
+   * @example
+   * ```typescript
+   * await Storage.setBurnerEmailEnabled(true);
+   * ```
+   */
   static async setBurnerEmailEnabled(enabled: boolean): Promise<void> {
     const data = await this.get();
+    const previousValue = data.settings.burnerEmailEnabled ?? false;
     data.settings.burnerEmailEnabled = enabled;
-    this.scheduleSave();
-    logger.info('Storage', 'Burner email setting updated', { enabled });
+    await this.save(data);
+    logger.info('Storage', 'Burner email setting updated', { previousValue, newValue: enabled });
   }
 
+  static async getTelemetryEnabled(): Promise<boolean> {
+    const data = await this.get();
+    const value = data.settings.telemetryEnabled;
+    return typeof value === 'boolean' ? value : false;
+  }
+
+  /**
+   * Sets the telemetry feature enabled state.
+   * 
+   * @param enabled - The new enabled state: `true` to enable the feature, `false` to disable it.
+   * 
+   * @remarks
+   * Side Effects:
+   * - Updates the in-memory setting immediately
+   * - Persists the change to storage immediately (awaited save operation)
+   * - Logs an info message with both previous and new values for audit trail
+   * 
+   * Persistence:
+   * - The save operation is immediate (awaited) to ensure the setting is persisted
+   * - User-initiated setting changes are saved synchronously to prevent data loss
+   * - The setting is persisted to `chrome.storage.local` immediately
+   * 
+   * @example
+   * ```typescript
+   * await Storage.setTelemetryEnabled(true);
+   * ```
+   */
+  static async setTelemetryEnabled(enabled: boolean): Promise<void> {
+    const data = await this.get();
+    const previousValue = data.settings.telemetryEnabled ?? false;
+    data.settings.telemetryEnabled = enabled;
+    await this.save(data);
+    logger.info('Storage', 'Telemetry setting updated', { previousValue, newValue: enabled });
+  }
+
+  /**
+   * Sets the theme preference.
+   * 
+   * @param theme - The theme preference: 'light', 'dark', or 'system'.
+   * 
+   * @remarks
+   * Side Effects:
+   * - Updates the in-memory theme setting immediately
+   * - Persists the change to storage immediately (awaited save operation)
+   * - Logs an info message with the new theme value
+   * 
+   * Persistence:
+   * - The save operation is immediate (awaited) to ensure the theme is persisted
+   * - User-initiated setting changes are saved synchronously to prevent data loss
+   * - The setting is persisted to `chrome.storage.local` immediately
+   * 
+   * @example
+   * ```typescript
+   * await Storage.setTheme('dark');
+   * ```
+   */
   static async setTheme(theme: 'light' | 'dark' | 'system'): Promise<void> {
     const data = await this.get();
     data.settings.theme = theme;
