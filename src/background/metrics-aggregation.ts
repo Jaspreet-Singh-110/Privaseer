@@ -91,7 +91,7 @@ export class MetricsAggregationService {
     };
   }
 
-  private static calculateTopBlockedDomains(trackers: Record<string, any>): Array<{ domain: string; count: number }> {
+  private static calculateTopBlockedDomains(trackers: Record<string, TrackerData>): Array<{ domain: string; count: number }> {
     const domainCounts: Record<string, number> = {};
 
     for (const tracker of Object.values(trackers)) {

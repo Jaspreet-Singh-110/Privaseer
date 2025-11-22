@@ -161,7 +161,7 @@ export class EmailAutofill {
     });
   }
 
-  showBurnerEmailButton(input: HTMLInputElement): void {
+  showBurnerEmailButton(): void {
     if (this.burnerEmailButton) {
       this.hideBurnerEmailButton();
     }

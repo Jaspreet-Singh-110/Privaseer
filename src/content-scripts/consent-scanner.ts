@@ -1,4 +1,4 @@
-import type { ConsentScanResult, PrivacyRules, CMPDetectionResult, DeceptivePatternViolation } from '../types';
+import type { ConsentScanResult, PrivacyRules, DeceptivePatternViolation } from '../types';
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
 import { sanitizeUrl } from '../utils/sanitizer';
@@ -67,7 +67,7 @@ class ConsentScanner {
             type: 'CONSENT_SCAN_RESULT',
             data: result,
           });
-        } catch (error) {
+        } catch {
           logger.debug('ConsentScanner', 'Service worker not ready, skipping message');
         }
 
@@ -144,7 +144,7 @@ class ConsentScanner {
             cmpType: cmpDetection.cmpType,
           });
         }
-      } catch (error) {
+      } catch {
         logger.debug('ConsentScanner', 'Service worker not ready, skipping message');
       }
     } catch (error) {
@@ -161,7 +161,7 @@ class ConsentScanner {
         if (element && this.isVisible(element)) {
           return element;
         }
-      } catch (error) {
+      } catch {
         continue;
       }
     }

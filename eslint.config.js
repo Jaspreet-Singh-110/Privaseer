@@ -6,7 +6,7 @@ import tseslint from '@typescript-eslint/eslint-plugin';
 import tsparser from '@typescript-eslint/parser';
 
 export default [
-  { ignores: ['dist'] },
+  { ignores: ['dist', 'src/tests/**', 'supabase/**'] },
   js.configs.recommended,
   ...tseslint.configs['flat/recommended'],
   {
@@ -23,6 +23,17 @@ export default [
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      // Disable core rule to avoid conflict with TypeScript ESLint version
+      'no-unused-expressions': 'off',
+      // Ensure TypeScript ESLint version is used (should be enabled by recommended configs)
+      '@typescript-eslint/no-unused-expressions': [
+        'error',
+        {
+          allowShortCircuit: true,
+          allowTernary: true,
+          allowTaggedTemplates: true,
+        },
+      ],
       'react-refresh/only-export-components': [
         'warn',
         { allowConstantExport: true },

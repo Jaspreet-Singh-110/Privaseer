@@ -194,12 +194,10 @@ class TabManager {
 
   cleanup(): void {
     const cutoff = Date.now() - TIME.ONE_DAY_MS;
-    let removed = 0;
 
     for (const [tabId, tab] of this.tabs.entries()) {
       if (tab.lastUpdate < cutoff && !tab.active) {
         this.tabs.delete(tabId);
-        removed++;
       }
     }
   }

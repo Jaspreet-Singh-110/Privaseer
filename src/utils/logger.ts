@@ -79,7 +79,7 @@ class Logger {
       };
 
       await chrome.storage.local.set({ [STORAGE_KEY]: storage });
-    } catch (error) {
+    } catch {
       // Silent fail - extension context may be invalidated
     }
   }

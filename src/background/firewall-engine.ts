@@ -321,7 +321,6 @@ export class FirewallEngine {
     if (!this.trackerLists) return null;
 
     const category = this.getTrackerCategory(domain);
-    const isHighRisk = this.isHighRisk(domain);
 
     const trackerInfo: Record<string, { description: string; alternative: string }> = {
       'google-analytics.com': {

@@ -3,7 +3,6 @@ import { X, MessageSquare, Send, Info, Palette, Mail, ChevronRight, ArrowLeft, S
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
 import { ThemeManager } from '../utils/theme-manager';
-import { BurnerEmailsSection } from './burner-emails-section';
 
 export type SettingsSection = 'menu' | 'feedback' | 'theme' | 'burner-services' | 'telemetry' | 'about';
 type ThemeOption = 'light' | 'dark' | 'system';

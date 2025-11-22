@@ -16,7 +16,7 @@ export function sanitizeUrl(url: string | undefined | null): string | undefined 
     const urlObj = new URL(url);
     // Return only protocol + hostname + pathname (no query params or hash)
     return `${urlObj.protocol}//${urlObj.hostname}${urlObj.pathname}`;
-  } catch (error) {
+  } catch {
     // If URL parsing fails, return a safe placeholder
     return '[invalid-url]';
   }
@@ -60,7 +60,7 @@ export function sanitizeStackTrace(stack: string | undefined): string | undefine
     sanitized = sanitized.replace(/(?:file:\/\/|\/)[^\s:)]*\//g, '');
     
     return sanitized;
-  } catch (error) {
+  } catch {
     // If sanitization fails, return a safe placeholder
     return '[stack trace unavailable]';
   }

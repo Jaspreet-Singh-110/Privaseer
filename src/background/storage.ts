@@ -1,4 +1,4 @@
-import type { StorageData, PrivacyScore, Alert, TrackerData, LocalConsentState, DailyMetricsSnapshot } from '../types';
+import type { StorageData, Alert, LocalConsentState, DailyMetricsSnapshot } from '../types';
 import { logger } from '../utils/logger';
 import { backgroundEvents } from './event-emitter';
 import { toError } from '../utils/type-guards';

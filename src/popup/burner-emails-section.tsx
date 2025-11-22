@@ -43,7 +43,7 @@ export function BurnerEmailsSection({ onOpenSettings }: BurnerEmailsSectionProps
     loadFeatureState();
     loadEmails();
 
-    const messageListener = (message: any) => {
+    const messageListener = (message: { type: string }) => {
       if (message.type === 'STATE_UPDATE') {
         loadFeatureState();
       }

@@ -1,6 +1,35 @@
 import { logger } from './logger';
 import { toError } from './type-guards';
 
+// Type definitions for CMP APIs on window object
+interface OneTrustAPI {
+  GetDomainData?: () => { Groups?: Array<{ Status: string }> };
+}
+
+interface CookiebotAPI {
+  declined?: boolean;
+  consent?: {
+    necessary?: boolean;
+    statistics?: boolean;
+    marketing?: boolean;
+  };
+}
+
+interface TCFData {
+  purpose?: {
+    consents?: Record<string, boolean>;
+  };
+}
+
+interface WindowWithCMP extends Window {
+  OneTrust?: OneTrustAPI;
+  Cookiebot?: CookiebotAPI;
+  termly?: unknown;
+  __tcfapi?: (command: string, version: number, callback: (data: TCFData | null, success: boolean) => void) => void;
+}
+
+declare const window: WindowWithCMP;
+
 export interface CMPDetectionResult {
   detected: boolean;
   cmpType: string;
@@ -66,15 +95,15 @@ const CMP_CONFIGS: Record<string, CMPConfig> = {
 
 async function detectOneTrustAPI(): Promise<CMPDetectionResult | null> {
   try {
-    if (typeof window === 'undefined' || !(window as any).OneTrust) {
+    if (typeof window === 'undefined' || !window.OneTrust) {
       return null;
     }
 
-    const OneTrust = (window as any).OneTrust;
+    const OneTrust = window.OneTrust;
     const activeGroups = OneTrust.GetDomainData?.()?.Groups || [];
 
     let consentStatus: 'accepted' | 'rejected' | 'partial' | 'unknown' = 'unknown';
-    const acceptedGroups = activeGroups.filter((g: any) => g.Status === 'active');
+    const acceptedGroups = activeGroups.filter((g) => g.Status === 'active');
 
     if (acceptedGroups.length === 0) {
       consentStatus = 'rejected';
@@ -100,11 +129,11 @@ async function detectOneTrustAPI(): Promise<CMPDetectionResult | null> {
 
 async function detectCookiebotAPI(): Promise<CMPDetectionResult | null> {
   try {
-    if (typeof window === 'undefined' || !(window as any).Cookiebot) {
+    if (typeof window === 'undefined' || !window.Cookiebot) {
       return null;
     }
 
-    const Cookiebot = (window as any).Cookiebot;
+    const Cookiebot = window.Cookiebot;
     let consentStatus: 'accepted' | 'rejected' | 'partial' | 'unknown' = 'unknown';
 
     if (Cookiebot.declined === true) {
@@ -131,7 +160,7 @@ async function detectCookiebotAPI(): Promise<CMPDetectionResult | null> {
 
 async function detectTermlyAPI(): Promise<CMPDetectionResult | null> {
   try {
-    if (typeof window === 'undefined' || !(window as any).termly) {
+    if (typeof window === 'undefined' || !window.termly) {
       return null;
     }
 
@@ -152,12 +181,12 @@ async function detectTermlyAPI(): Promise<CMPDetectionResult | null> {
 async function detectTCFv2API(): Promise<CMPDetectionResult | null> {
   return new Promise((resolve) => {
     try {
-      if (typeof window === 'undefined' || !(window as any).__tcfapi) {
+      if (typeof window === 'undefined' || !window.__tcfapi) {
         resolve(null);
         return;
       }
 
-      (window as any).__tcfapi('getTCData', 2, (tcData: any, success: boolean) => {
+      window.__tcfapi('getTCData', 2, (tcData: TCFData | null, success: boolean) => {
         if (!success || !tcData) {
           resolve(null);
           return;
@@ -168,7 +197,7 @@ async function detectTCFv2API(): Promise<CMPDetectionResult | null> {
         if (tcData.purpose?.consents) {
           const consents = Object.values(tcData.purpose.consents);
           const totalConsents = consents.length;
-          const acceptedConsents = consents.filter((c: any) => c === true).length;
+          const acceptedConsents = consents.filter((c) => c === true).length;
 
           if (acceptedConsents === 0) {
             consentStatus = 'rejected';
@@ -249,7 +278,7 @@ function parseOneTrustConsent(cookieValue: string): 'accepted' | 'rejected' | 'p
     }
 
     return 'unknown';
-  } catch (error) {
+  } catch {
     return 'unknown';
   }
 }
@@ -271,7 +300,7 @@ function parseCookiebotConsent(cookieValue: string): 'accepted' | 'rejected' | '
     }
 
     return 'unknown';
-  } catch (error) {
+  } catch {
     return 'unknown';
   }
 }
@@ -293,7 +322,7 @@ function parseGenericConsent(cookieValue: string): 'accepted' | 'rejected' | 'pa
     }
 
     return 'unknown';
-  } catch (error) {
+  } catch {
     return 'unknown';
   }
 }
@@ -312,7 +341,7 @@ function detectCMPByBanner(cmpType: string, config: CMPConfig): CMPDetectionResu
           cookieNames: getCookiesByPattern(config.cookiePatterns),
         };
       }
-    } catch (error) {
+    } catch {
       continue;
     }
   }
