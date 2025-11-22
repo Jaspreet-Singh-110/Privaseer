@@ -1,4 +1,4 @@
-import type { MetricsAggregation, DailyMetricsSnapshot } from '../types';
+import type { MetricsAggregation, DailyMetricsSnapshot, TrackerData } from '../types';
 import { Storage } from './storage';
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';

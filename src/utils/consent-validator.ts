@@ -124,7 +124,7 @@ export function isHighRiskCategory(category: string): boolean {
 }
 
 export async function shouldBlockTracker(
-  trackerDomain: string,
+  _trackerDomain: string,
   pageDomain: string,
   category: string,
   isHighRisk: boolean

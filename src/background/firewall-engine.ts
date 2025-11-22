@@ -51,17 +51,6 @@ export class FirewallEngine {
     }
   }
 
-  private static getAllTrackerDomains(): string[] {
-    if (!this.trackerLists) return [];
-
-    const allDomains: string[] = [];
-    for (const category of Object.values(this.trackerLists.categories)) {
-      allDomains.push(...category);
-    }
-
-    return [...new Set(allDomains)];
-  }
-
   private static getTrackerCategory(domain: string): string {
     if (!this.trackerLists) return 'unknown';
 
@@ -157,7 +146,7 @@ export class FirewallEngine {
           message: `Blocked ${domain}${riskWeight > 1 ? ` (${category}, risk: ${riskWeight}x)` : ''}`,
           domain: siteDomain,
           timestamp: Date.now(),
-          url: sanitizeUrl(tab.url),
+          url: sanitizeUrl(tab.url) ?? undefined,
         };
 
         await Storage.addAlert(alert);
@@ -214,7 +203,7 @@ export class FirewallEngine {
             message: `${domain} has no trackers`,
             domain,
             timestamp: Date.now(),
-            url: sanitizeUrl(url),
+            url: sanitizeUrl(url) ?? undefined,
           };
 
           await Storage.addAlert(alert);
@@ -285,14 +274,14 @@ export class FirewallEngine {
     // Clear any existing timer for this tab
     const existingTimer = this.badgeUpdateTimers.get(tabId);
     if (existingTimer) {
-      clearTimeout(existingTimer);
+      clearTimeout(existingTimer as unknown as number);
     }
 
     // Schedule a new update after the debounce delay
     const timer = setTimeout(() => {
       this.updateTabBadgeImmediate(tabId);
       this.badgeUpdateTimers.delete(tabId);
-    }, BADGE_UPDATE_DEBOUNCE_MS);
+    }, BADGE_UPDATE_DEBOUNCE_MS) as unknown as number;
 
     this.badgeUpdateTimers.set(tabId, timer);
   }
@@ -304,7 +293,7 @@ export class FirewallEngine {
   static clearTabTimer(tabId: number): void {
     const timer = this.badgeUpdateTimers.get(tabId);
     if (timer) {
-      clearTimeout(timer);
+      clearTimeout(timer as unknown as number);
       this.badgeUpdateTimers.delete(tabId);
     }
   }
@@ -312,7 +301,7 @@ export class FirewallEngine {
   static cleanup(): void {
     // Clear all pending badge update timers to prevent memory leaks
     for (const timer of this.badgeUpdateTimers.values()) {
-      clearTimeout(timer);
+      clearTimeout(timer as unknown as number);
     }
     this.badgeUpdateTimers.clear();
   }

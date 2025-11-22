@@ -41,7 +41,7 @@ class TabManager {
         if (tab.id) {
           this.tabs.set(tab.id, {
             id: tab.id,
-            url: sanitizeUrl(tab.url),
+            url: sanitizeUrl(tab.url) ?? undefined,
             title: tab.title,
             active: tab.active,
             blockCount: 0,
@@ -65,7 +65,7 @@ class TabManager {
 
     this.tabs.set(tab.id, {
       id: tab.id,
-      url: sanitizeUrl(tab.url),
+      url: sanitizeUrl(tab.url) ?? undefined,
       title: tab.title,
       active: tab.active,
       blockCount: 0,
@@ -98,7 +98,7 @@ class TabManager {
     } else {
       this.tabs.set(tabId, {
         id: tabId,
-        url: sanitizeUrl(tab.url),
+        url: sanitizeUrl(tab.url) ?? undefined,
         title: tab.title,
         active: tab.active,
         blockCount: 0,
@@ -114,7 +114,7 @@ class TabManager {
     });
   }
 
-  private handleTabActivated(activeInfo: chrome.tabs.ActiveInfo): void {
+  private handleTabActivated(activeInfo: chrome.tabs.TabActiveInfo): void {
     if (this.activeTabId !== null) {
       const previousTab = this.tabs.get(this.activeTabId);
       if (previousTab) {

@@ -8,7 +8,6 @@ import { detectCMP, hasValidPersistedConsent } from '../utils/cmp-detector';
 class ConsentScanner {
   private rules: PrivacyRules | null = null;
   private scanTimeout: NodeJS.Timeout | null = null;
-  private hasScanned: boolean = false;
   private scannedBanners: Set<string> = new Set();
 
   async initialize(): Promise<void> {

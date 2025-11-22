@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Shield, ShieldOff, Activity, AlertTriangle, CheckCircle2, XCircle, Info, Mail, Settings } from 'lucide-react';
 import type { StorageData, Alert as AlertType, Message } from '../types';

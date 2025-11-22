@@ -271,26 +271,6 @@ export interface TrackerLists {
   highRisk: string[];
 }
 
-export interface PrivacyRules {
-  version: string;
-  cookieBannerSelectors: string[];
-  rejectButtonPatterns: string[];
-  acceptButtonPatterns: string[];
-  complianceChecks: {
-    rejectButtonRequired: boolean;
-    rejectButtonVisibleWithoutScroll: boolean;
-    equalProminence: boolean;
-    noPreCheckedBoxes: boolean;
-    explicitConsent: boolean;
-  };
-  deceptivePatterns: Array<{
-    name: string;
-    description: string;
-    severity: string;
-    penalty: number;
-  }>;
-}
-
 export interface BurnerEmail {
   id: string;
   email: string;

@@ -39,7 +39,7 @@ export class Storage {
   private static cache: StorageData | null = null;
   private static listenersSetup = false;
   private static isDirty = false;
-  private static saveTimer: number | null = null;
+  private static saveTimer: ReturnType<typeof setTimeout> | null = null;
   private static isSaving = false;
   private static readonly SAVE_DELAY = 500; // ms
 
@@ -133,7 +133,7 @@ export class Storage {
     this.isDirty = true;
     
     if (this.saveTimer) {
-      clearTimeout(this.saveTimer);
+      clearTimeout(this.saveTimer as unknown as number);
     }
     
     this.saveTimer = setTimeout(() => this.flushToDisk(), this.SAVE_DELAY);

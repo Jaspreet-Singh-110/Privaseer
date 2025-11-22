@@ -3,7 +3,6 @@ import { toError } from '../utils/type-guards';
 
 class EmailAutofill {
   private isProcessing: boolean = false;
-  private lastFocusedInput: HTMLInputElement | null = null;
   private burnerEmailButton: HTMLElement | null = null;
   private isEnabled: boolean = false;
   private focusinHandler: ((event: Event) => void) | null = null;
@@ -74,7 +73,6 @@ class EmailAutofill {
       const target = event.target as HTMLElement;
 
       if (this.isEmailInput(target)) {
-        this.lastFocusedInput = target as HTMLInputElement;
         this.showBurnerEmailButton(target as HTMLInputElement);
       }
     };

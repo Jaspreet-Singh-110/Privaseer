@@ -16,6 +16,7 @@ interface CookiebotAPI {
 }
 
 interface TCFData {
+  cmpId?: string;
   purpose?: {
     consents?: Record<string, boolean>;
   };

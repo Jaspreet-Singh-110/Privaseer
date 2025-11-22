@@ -30,7 +30,7 @@ class MessageBus {
     if (!this.handlers.has(type)) {
       this.handlers.set(type, []);
     }
-    this.handlers.get(type)!.push(handler);
+    this.handlers.get(type)!.push(handler as MessageHandler<unknown>);
   }
 
   off(type: MessageType, handler: MessageHandler): void {
@@ -61,7 +61,7 @@ class MessageBus {
       }, timeout) as unknown as number;
 
       this.pendingRequests.set(requestId, {
-        resolve,
+        resolve: resolve as (value: unknown) => void,
         reject,
         timeout: timeoutId,
       });

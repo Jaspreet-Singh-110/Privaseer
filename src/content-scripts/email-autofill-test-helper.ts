@@ -2,8 +2,6 @@ import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
 
 export class EmailAutofill {
-  private isProcessing: boolean = false;
-  private lastFocusedInput: HTMLInputElement | null = null;
   private burnerEmailButton: HTMLElement | null = null;
   private isEnabled: boolean = false;
   private focusinHandler: ((event: Event) => void) | null = null;
@@ -74,8 +72,7 @@ export class EmailAutofill {
       const target = event.target as HTMLElement;
 
       if (this.isEmailInput(target)) {
-        this.lastFocusedInput = target as HTMLInputElement;
-        this.showBurnerEmailButton(target as HTMLInputElement);
+        this.showBurnerEmailButton();
       }
     };
 
