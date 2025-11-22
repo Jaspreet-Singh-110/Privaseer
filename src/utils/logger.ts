@@ -57,7 +57,7 @@ class Logger {
   private async loadLogs(): Promise<void> {
     try {
       const result = await chrome.storage.local.get(STORAGE_KEY);
-      const stored: LogStorage = result[STORAGE_KEY];
+      const stored: LogStorage | undefined = result[STORAGE_KEY];
 
       if (stored?.logs) {
         this.logBuffer = stored.logs.slice(-MAX_LOGS);

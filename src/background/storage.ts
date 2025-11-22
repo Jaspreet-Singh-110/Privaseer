@@ -47,7 +47,7 @@ export class Storage {
     try {
       const data = await chrome.storage.local.get('privacyData');
 
-      if (!data.privacyData) {
+      if (!data || !data.privacyData) {
         await this.save(DEFAULT_STORAGE_DATA);
         this.cache = DEFAULT_STORAGE_DATA;
       } else {
