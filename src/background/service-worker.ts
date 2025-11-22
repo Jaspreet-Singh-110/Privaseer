@@ -47,6 +47,7 @@ async function initializeExtension(): Promise<void> {
       await chrome.action.setBadgeBackgroundColor({ color: BADGE.BACKGROUND_COLOR });
 
       setupMessageHandlers();
+      setupStorageChangeListener();
       setupTabEventHandlers();
       setupCleanupInterval();
       isInitialized = true;
@@ -266,6 +267,20 @@ function setupMessageHandlers(): void {
       const previousValue = await Storage.getBurnerEmailEnabled();
       await Storage.setBurnerEmailEnabled(enabled);
 
+      // Broadcast BURNER_EMAIL_SETTING_CHANGED to all content scripts
+      chrome.tabs.query({}, (tabs) => {
+        tabs.forEach(tab => {
+          if (tab.id) {
+            chrome.tabs.sendMessage(tab.id, {
+              type: 'BURNER_EMAIL_SETTING_CHANGED',
+              data: { enabled }
+            }).catch(() => {
+              // Content script may not be loaded, ignore
+            });
+          }
+        });
+      });
+
       // Broadcast STATE_UPDATE to notify all UI components to refresh their state
       messageBus.broadcast('STATE_UPDATE');
 
@@ -381,6 +396,38 @@ function setupMessageHandlers(): void {
     } catch (error) {
       logger.error('ServiceWorker', 'Failed to record compliance score', toError(error));
       return { success: false, error: 'Failed to record compliance score' };
+    }
+  });
+}
+
+function setupStorageChangeListener(): void {
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName === 'local' && changes.privacyData) {
+      const newData = changes.privacyData.newValue;
+      const oldData = changes.privacyData.oldValue;
+      
+      if (newData?.settings?.burnerEmailEnabled !== oldData?.settings?.burnerEmailEnabled) {
+        const enabled = newData.settings.burnerEmailEnabled ?? false;
+        
+        logger.debug('ServiceWorker', 'Burner email setting changed via storage', { enabled });
+        
+        // Broadcast to tabs
+        chrome.tabs.query({}, (tabs) => {
+          tabs.forEach(tab => {
+            if (tab.id) {
+              chrome.tabs.sendMessage(tab.id, {
+                type: 'BURNER_EMAIL_SETTING_CHANGED',
+                data: { enabled }
+              }).catch(() => {
+                // Content script may not be loaded, ignore
+              });
+            }
+          });
+        });
+        
+        // Broadcast to popup
+        messageBus.broadcast('STATE_UPDATE');
+      }
     }
   });
 }

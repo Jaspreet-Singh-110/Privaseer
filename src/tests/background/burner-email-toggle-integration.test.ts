@@ -46,17 +46,34 @@ describe('Burner Email Toggle - Integration Tests', () => {
     (Storage as any).saveTimer = null;
     (Storage as any).isSaving = false;
 
-    mockRuntimeSendMessage = vi.fn().mockImplementation((message, callback) => {
-      // Simulate broadcasting to all listeners
-      messageListeners.forEach(listener => {
-        try {
-          listener(message);
-        } catch (e) {
-          // Ignore errors
+    mockRuntimeSendMessage = vi.fn().mockImplementation(async (message, callback) => {
+      // Route message through message bus handlers
+      let response: any = { success: false, error: 'No handler found' };
+      
+      try {
+        const handlers = (messageBus as any).handlers.get(message.type);
+        if (handlers && handlers.length > 0) {
+          response = await handlers[0](message.data, {} as any);
         }
-      });
-      if (callback) callback({ success: true });
-      return Promise.resolve({ success: true });
+      } catch (error) {
+        response = { success: false, error: (error as Error).message };
+      }
+
+      // Simulate broadcasting to all listeners for state change messages
+      if (message.type === 'BURNER_EMAIL_SETTING_CHANGED' || message.type === 'STATE_UPDATE') {
+        messageListeners.forEach(listener => {
+          try {
+            listener(message);
+          } catch (e) {
+            // Ignore errors
+          }
+        });
+      }
+
+      if (callback) {
+        callback(response);
+      }
+      return Promise.resolve(response);
     });
 
     mockTabsSendMessage = vi.fn().mockImplementation((tabId, message, callback) => {
@@ -189,7 +206,7 @@ describe('Burner Email Toggle - Integration Tests', () => {
   }
 
   // Helper to create a content script instance
-  function createContentScriptInstance() {
+  async function createContentScriptInstance() {
     const instance = {
       isEnabled: false,
       listener: (message: any) => {
@@ -199,12 +216,19 @@ describe('Burner Email Toggle - Integration Tests', () => {
       },
     };
 
-    // Initialize by checking current state
-    chrome.runtime.sendMessage({ type: 'GET_BURNER_EMAIL_SETTING' }, (response) => {
-      if (response?.success) {
+    // Initialize by checking current state (default is false)
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'GET_BURNER_EMAIL_SETTING' });
+      if (response?.success && typeof response.enabled === 'boolean') {
         instance.isEnabled = response.enabled === true;
+      } else {
+        // Default to false if response is invalid
+        instance.isEnabled = false;
       }
-    });
+    } catch (error) {
+      // Default to false if initialization fails
+      instance.isEnabled = false;
+    }
 
     // Listen for changes
     chrome.runtime.onMessage.addListener(instance.listener);
@@ -214,7 +238,7 @@ describe('Burner Email Toggle - Integration Tests', () => {
   }
 
   // Helper to create a popup instance
-  function createPopupInstance() {
+  async function createPopupInstance() {
     let isEnabled = false;
     const listener = (message: any) => {
       if (message.type === 'BURNER_EMAIL_SETTING_CHANGED') {
@@ -222,12 +246,19 @@ describe('Burner Email Toggle - Integration Tests', () => {
       }
     };
 
-    // Initialize by checking current state
-    chrome.runtime.sendMessage({ type: 'GET_BURNER_EMAIL_SETTING' }, (response) => {
-      if (response?.success) {
+    // Initialize by checking current state (default is false)
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'GET_BURNER_EMAIL_SETTING' });
+      if (response?.success && typeof response.enabled === 'boolean') {
         isEnabled = response.enabled === true;
+      } else {
+        // Default to false if response is invalid
+        isEnabled = false;
       }
-    });
+    } catch (error) {
+      // Default to false if initialization fails
+      isEnabled = false;
+    }
 
     // Listen for changes
     chrome.runtime.onMessage.addListener(listener);
@@ -236,11 +267,9 @@ describe('Burner Email Toggle - Integration Tests', () => {
       getIsEnabled: () => isEnabled,
       toggle: async () => {
         const newValue = !isEnabled;
-        const response = await new Promise((resolve) => {
-          chrome.runtime.sendMessage({
-            type: 'SET_BURNER_EMAIL_SETTING',
-            data: { enabled: newValue }
-          }, resolve);
+        const response = await chrome.runtime.sendMessage({
+          type: 'SET_BURNER_EMAIL_SETTING',
+          data: { enabled: newValue }
         });
         if (response && (response as any).success) {
           isEnabled = newValue;
@@ -248,9 +277,7 @@ describe('Burner Email Toggle - Integration Tests', () => {
         return response;
       },
       getSetting: async () => {
-        return new Promise((resolve) => {
-          chrome.runtime.sendMessage({ type: 'GET_BURNER_EMAIL_SETTING' }, resolve);
-        });
+        return await chrome.runtime.sendMessage({ type: 'GET_BURNER_EMAIL_SETTING' });
       },
       listener,
     };
@@ -261,14 +288,12 @@ describe('Burner Email Toggle - Integration Tests', () => {
       await Storage.setBurnerEmailEnabled(true);
 
       // Create content script instance
-      const contentScript = createContentScriptInstance();
-      await new Promise(resolve => setTimeout(resolve, 10)); // Wait for initialization
+      const contentScript = await createContentScriptInstance();
 
       expect(contentScript.isEnabled).toBe(true);
 
       // Toggle off via settings
-      const popup = createPopupInstance();
-      await new Promise(resolve => setTimeout(resolve, 10)); // Wait for initialization
+      const popup = await createPopupInstance();
 
       await popup.toggle();
       await new Promise(resolve => setTimeout(resolve, 10)); // Wait for broadcast
@@ -281,16 +306,14 @@ describe('Burner Email Toggle - Integration Tests', () => {
       await Storage.setBurnerEmailEnabled(true);
 
       // Create multiple content script instances (simulating multiple tabs)
-      const contentScript1 = createContentScriptInstance();
-      const contentScript2 = createContentScriptInstance();
-      await new Promise(resolve => setTimeout(resolve, 10));
+      const contentScript1 = await createContentScriptInstance();
+      const contentScript2 = await createContentScriptInstance();
 
       expect(contentScript1.isEnabled).toBe(true);
       expect(contentScript2.isEnabled).toBe(true);
 
       // Toggle off
-      const popup = createPopupInstance();
-      await new Promise(resolve => setTimeout(resolve, 10));
+      const popup = await createPopupInstance();
       await popup.toggle();
       await new Promise(resolve => setTimeout(resolve, 10));
 
@@ -301,14 +324,12 @@ describe('Burner Email Toggle - Integration Tests', () => {
     it('should enable content script when feature is re-enabled', async () => {
       await Storage.setBurnerEmailEnabled(false);
 
-      const contentScript = createContentScriptInstance();
-      await new Promise(resolve => setTimeout(resolve, 10));
+      const contentScript = await createContentScriptInstance();
 
       expect(contentScript.isEnabled).toBe(false);
 
       // Enable via settings
-      const popup = createPopupInstance();
-      await new Promise(resolve => setTimeout(resolve, 10));
+      const popup = await createPopupInstance();
       await popup.toggle();
       await new Promise(resolve => setTimeout(resolve, 10));
 
@@ -323,8 +344,7 @@ describe('Burner Email Toggle - Integration Tests', () => {
       expect(await Storage.getBurnerEmailEnabled()).toBe(true);
 
       // Disable feature
-      const popup1 = createPopupInstance();
-      await new Promise(resolve => setTimeout(resolve, 10));
+      const popup1 = await createPopupInstance();
       await popup1.toggle();
       await new Promise(resolve => setTimeout(resolve, 10));
 
@@ -334,8 +354,7 @@ describe('Burner Email Toggle - Integration Tests', () => {
       chrome.runtime.onMessage.removeListener(popup1.listener);
 
       // Simulate popup reopen
-      const popup2 = createPopupInstance();
-      await new Promise(resolve => setTimeout(resolve, 10));
+      const popup2 = await createPopupInstance();
 
       const setting = await popup2.getSetting();
       expect(setting).toHaveProperty('success', true);
@@ -348,8 +367,7 @@ describe('Burner Email Toggle - Integration Tests', () => {
       await Storage.setBurnerEmailEnabled(false);
 
       // Enable feature
-      const popup1 = createPopupInstance();
-      await new Promise(resolve => setTimeout(resolve, 10));
+      const popup1 = await createPopupInstance();
       await popup1.toggle();
       await new Promise(resolve => setTimeout(resolve, 10));
 
@@ -359,8 +377,7 @@ describe('Burner Email Toggle - Integration Tests', () => {
       chrome.runtime.onMessage.removeListener(popup1.listener);
 
       // Simulate popup reopen
-      const popup2 = createPopupInstance();
-      await new Promise(resolve => setTimeout(resolve, 10));
+      const popup2 = await createPopupInstance();
 
       const setting = await popup2.getSetting();
       expect(setting).toHaveProperty('enabled', true);
@@ -446,13 +463,10 @@ describe('Burner Email Toggle - Integration Tests', () => {
     it('should show existing emails in popup when feature is disabled', async () => {
       await Storage.setBurnerEmailEnabled(false);
 
-      const popup = createPopupInstance();
-      await new Promise(resolve => setTimeout(resolve, 10));
+      const popup = await createPopupInstance();
 
       // Simulate fetching emails
-      const emailsResult = await new Promise((resolve) => {
-        chrome.runtime.sendMessage({ type: 'GET_BURNER_EMAILS' }, resolve);
-      });
+      const emailsResult = await chrome.runtime.sendMessage({ type: 'GET_BURNER_EMAILS' });
 
       expect(emailsResult).toHaveProperty('success', true);
       expect(emailsResult).toHaveProperty('emails');
@@ -479,13 +493,11 @@ describe('Burner Email Toggle - Integration Tests', () => {
     it('should restore content script functionality when re-enabled', async () => {
       await Storage.setBurnerEmailEnabled(false);
 
-      const contentScript = createContentScriptInstance();
-      await new Promise(resolve => setTimeout(resolve, 10));
+      const contentScript = await createContentScriptInstance();
       expect(contentScript.isEnabled).toBe(false);
 
       // Re-enable
-      const popup = createPopupInstance();
-      await new Promise(resolve => setTimeout(resolve, 10));
+      const popup = await createPopupInstance();
       await popup.toggle();
       await new Promise(resolve => setTimeout(resolve, 10));
 
@@ -515,9 +527,8 @@ describe('Burner Email Toggle - Integration Tests', () => {
     it('should sync toggle state across multiple popup instances', async () => {
       await Storage.setBurnerEmailEnabled(true);
 
-      const popup1 = createPopupInstance();
-      const popup2 = createPopupInstance();
-      await new Promise(resolve => setTimeout(resolve, 10));
+      const popup1 = await createPopupInstance();
+      const popup2 = await createPopupInstance();
 
       expect(popup1.getIsEnabled()).toBe(true);
       expect(popup2.getIsEnabled()).toBe(true);
@@ -534,9 +545,8 @@ describe('Burner Email Toggle - Integration Tests', () => {
     it('should handle rapid toggles from different popup instances', async () => {
       await Storage.setBurnerEmailEnabled(true);
 
-      const popup1 = createPopupInstance();
-      const popup2 = createPopupInstance();
-      await new Promise(resolve => setTimeout(resolve, 10));
+      const popup1 = await createPopupInstance();
+      const popup2 = await createPopupInstance();
 
       // Rapid toggles from both popups
       await Promise.all([
@@ -554,10 +564,9 @@ describe('Burner Email Toggle - Integration Tests', () => {
     it('should maintain consistency when multiple popups query state', async () => {
       await Storage.setBurnerEmailEnabled(false);
 
-      const popup1 = createPopupInstance();
-      const popup2 = createPopupInstance();
-      const popup3 = createPopupInstance();
-      await new Promise(resolve => setTimeout(resolve, 10));
+      const popup1 = await createPopupInstance();
+      const popup2 = await createPopupInstance();
+      const popup3 = await createPopupInstance();
 
       // All should see same state
       const [state1, state2, state3] = await Promise.all([
@@ -577,10 +586,9 @@ describe('Burner Email Toggle - Integration Tests', () => {
       await Storage.setBurnerEmailEnabled(true);
 
       // Create content scripts for multiple tabs
-      const tab1Script = createContentScriptInstance();
-      const tab2Script = createContentScriptInstance();
-      const tab3Script = createContentScriptInstance();
-      await new Promise(resolve => setTimeout(resolve, 10));
+      const tab1Script = await createContentScriptInstance();
+      const tab2Script = await createContentScriptInstance();
+      const tab3Script = await createContentScriptInstance();
 
       // All should be enabled
       expect(tab1Script.isEnabled).toBe(true);
@@ -588,8 +596,7 @@ describe('Burner Email Toggle - Integration Tests', () => {
       expect(tab3Script.isEnabled).toBe(true);
 
       // Disable globally
-      const popup = createPopupInstance();
-      await new Promise(resolve => setTimeout(resolve, 10));
+      const popup = await createPopupInstance();
       await popup.toggle();
       await new Promise(resolve => setTimeout(resolve, 10));
 
@@ -602,16 +609,14 @@ describe('Burner Email Toggle - Integration Tests', () => {
     it('should update all tabs when setting changes', async () => {
       await Storage.setBurnerEmailEnabled(false);
 
-      const tab1Script = createContentScriptInstance();
-      const tab2Script = createContentScriptInstance();
-      await new Promise(resolve => setTimeout(resolve, 10));
+      const tab1Script = await createContentScriptInstance();
+      const tab2Script = await createContentScriptInstance();
 
       expect(tab1Script.isEnabled).toBe(false);
       expect(tab2Script.isEnabled).toBe(false);
 
       // Enable globally
-      const popup = createPopupInstance();
-      await new Promise(resolve => setTimeout(resolve, 10));
+      const popup = await createPopupInstance();
       await popup.toggle();
       await new Promise(resolve => setTimeout(resolve, 10));
 
@@ -623,21 +628,18 @@ describe('Burner Email Toggle - Integration Tests', () => {
     it('should handle new tabs created after setting change', async () => {
       await Storage.setBurnerEmailEnabled(true);
 
-      const existingTab = createContentScriptInstance();
-      await new Promise(resolve => setTimeout(resolve, 10));
+      const existingTab = await createContentScriptInstance();
       expect(existingTab.isEnabled).toBe(true);
 
       // Disable
-      const popup = createPopupInstance();
-      await new Promise(resolve => setTimeout(resolve, 10));
+      const popup = await createPopupInstance();
       await popup.toggle();
       await new Promise(resolve => setTimeout(resolve, 10));
 
       expect(existingTab.isEnabled).toBe(false);
 
       // New tab created after disable
-      const newTab = createContentScriptInstance();
-      await new Promise(resolve => setTimeout(resolve, 10));
+      const newTab = await createContentScriptInstance();
 
       // New tab should also be disabled
       expect(newTab.isEnabled).toBe(false);
@@ -647,8 +649,7 @@ describe('Burner Email Toggle - Integration Tests', () => {
       await Storage.setBurnerEmailEnabled(false);
 
       // Create multiple tabs
-      const tabs = Array.from({ length: 5 }, () => createContentScriptInstance());
-      await new Promise(resolve => setTimeout(resolve, 10));
+      const tabs = await Promise.all(Array.from({ length: 5 }, () => createContentScriptInstance()));
 
       // All should be disabled
       tabs.forEach(tab => {
@@ -656,8 +657,7 @@ describe('Burner Email Toggle - Integration Tests', () => {
       });
 
       // Enable globally
-      const popup = createPopupInstance();
-      await new Promise(resolve => setTimeout(resolve, 10));
+      const popup = await createPopupInstance();
       await popup.toggle();
       await new Promise(resolve => setTimeout(resolve, 10));
 
@@ -672,13 +672,11 @@ describe('Burner Email Toggle - Integration Tests', () => {
     it('should handle complete user workflow: enable → use → disable → re-enable', async () => {
       // Start disabled
       await Storage.setBurnerEmailEnabled(false);
-      const contentScript = createContentScriptInstance();
-      await new Promise(resolve => setTimeout(resolve, 10));
+      const contentScript = await createContentScriptInstance();
       expect(contentScript.isEnabled).toBe(false);
 
       // Enable
-      const popup = createPopupInstance();
-      await new Promise(resolve => setTimeout(resolve, 10));
+      const popup = await createPopupInstance();
       await popup.toggle();
       await new Promise(resolve => setTimeout(resolve, 10));
       expect(contentScript.isEnabled).toBe(true);
@@ -709,11 +707,10 @@ describe('Burner Email Toggle - Integration Tests', () => {
     it('should maintain state consistency with multiple components', async () => {
       await Storage.setBurnerEmailEnabled(true);
 
-      const popup1 = createPopupInstance();
-      const popup2 = createPopupInstance();
-      const tab1Script = createContentScriptInstance();
-      const tab2Script = createContentScriptInstance();
-      await new Promise(resolve => setTimeout(resolve, 10));
+      const popup1 = await createPopupInstance();
+      const popup2 = await createPopupInstance();
+      const tab1Script = await createContentScriptInstance();
+      const tab2Script = await createContentScriptInstance();
 
       // All should be enabled
       expect(popup1.getIsEnabled()).toBe(true);

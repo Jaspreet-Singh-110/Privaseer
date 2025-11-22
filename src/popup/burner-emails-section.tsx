@@ -37,7 +37,8 @@ export function BurnerEmailsSection({ onOpenSettings }: BurnerEmailsSectionProps
   const [emails, setEmails] = useState<BurnerEmail[]>([]);
   const [loading, setLoading] = useState(true);
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
-  const [isFeatureEnabled, setIsFeatureEnabled] = useState(true);
+  // Default to false (disabled) - feature must be explicitly enabled by user
+  const [isFeatureEnabled, setIsFeatureEnabled] = useState(false);
 
   useEffect(() => {
     loadFeatureState();
