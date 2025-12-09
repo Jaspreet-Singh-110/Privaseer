@@ -1,488 +1,187 @@
-# Privaseer
+# Privaseer: Privacy-First Browser Extension
 
-**Version 1.0.0** - A production-ready, privacy-first Chrome extension that blocks trackers, scores your privacy, scans for deceptive cookie banners, and generates disposable burner emails to protect your identity online.
+## Project Overview
 
-> Built with TypeScript, React 18, and Manifest V3 for maximum performance and security.
+Privaseer is a production-ready browser extension developed for Chrome and Chromium-based browsers. Built with modern web technologies including TypeScript, React 18, and Manifest V3, it provides comprehensive privacy protection through real-time tracking prevention, privacy scoring, regulatory compliance verification, and identity protection features.
 
-## Features
+## Core Capabilities
 
-### Real-Time Tracker Blocking
-- **120+ tracking domains** blocked across 7 categories
-- **30 declarative blocking rules** using Chrome's native engine
-- **Per-tab badge counter** showing blocked trackers on current page
-- **Dynamic enable/disable** with actual pause/resume blocking
-- **Smart exceptions** - don't block services on their own domains
+### Privacy Protection Suite
+- **Tracker Blocking**: Implements declarative blocking of tracking domains across seven categories including analytics, advertising, social media, and fingerprinting
+- **Privacy Scoring**: Dynamic algorithm calculating a 0-100 privacy score based on browsing behavior with 30-day historical tracking
+- **Consent Compliance**: Automated detection and analysis of cookie consent banners with GDPR compliance verification
+- **Identity Protection**: Disposable email address generation with domain tracking and management interface
 
-### Privacy Score (0-100)
-- **Intelligent scoring algorithm** that adapts to your browsing
-- Starts at 100 (perfect privacy)
-- Decreases by 1 for each tracker blocked (-1 point)
-- Increases by 2 for visiting clean sites (+2 points)
-- Decreases by 5 for deceptive cookie banners (-5 points)
-- **Real-time updates** as you browse
-- **30-day history tracking** for trend analysis
+### Technical Architecture
 
-### Cookie Consent Scanner
-- **Automatic detection** of cookie banners on every page
-- **GDPR compliance checking** for "Reject All" buttons
-- **Dark pattern detection** - identifies deceptive design
-- **Real-time alerts** for non-compliant sites
-- **DOM-based scanning** with comprehensive pattern matching
+**Foundation**
+- Manifest V3 compliance utilizing native browser security features
+- TypeScript 5.5.3 with strict type checking throughout
+- React 18.3.1 for user interface components
+- Event-driven architecture with custom pub/sub implementation
 
-### Burner Email Generator
-- **One-click disposable emails** - generate random email addresses instantly
-- **Automatic form fill** - click any email field to see the generator button
-- **Email management** - view and delete your burner emails in the popup
-- **Domain tracking** - see which sites you've used burner emails on
-- **Privacy protection** - keep your real email address private
+**Performance Characteristics**
+- Service worker memory footprint: approximately 15MB
+- Content script memory usage: approximately 5MB per instance
+- Storage utilization: 10KB initial, expanding to 50KB after one week of typical use
+- Build output: 166KB JavaScript + 15KB CSS for popup interface (52KB gzipped)
 
-###  Feedback System
-- **Submit feedback** directly from the extension popup
-- **Bug reporting** - help improve the extension
-- **Feature requests** - suggest new features
-- **Privacy-respecting** - only collects what you explicitly submit
+## Implementation Details
 
-### popup Interface
-- **Live activity feed** with color-coded alerts (green/yellow/red)
-- **Interactive tracker info** - click ℹ️ button to learn what trackers do
-- **Safer alternatives** suggested for each tracker
-- **Smooth animations** with React 18 and Tailwind CSS
-- **One-click toggle** protection with shield button
-- **Dual-tab interface** - Dashboard and Burner Emails sections
-- **Dynamic version display** synced with manifest.json
+### Blocking Mechanism
+The extension employs Chrome's declarativeNetRequest API with 30 predefined rules targeting 120+ tracking domains. Blocking categories include:
+- Analytics platforms (Google Analytics, Mixpanel, Amplitude)
+- Advertising networks (DoubleClick, Facebook Ads, Criteo)
+- Social media tracking (Facebook Pixel, Twitter, LinkedIn)
+- Fingerprinting services (FingerprintJS, device identification)
+- Behavioral tracking (heatmaps, session recording)
+- Affiliate and referral tracking
 
-### Private & Secure
-- **Local-first architecture** - all tracking data stays on your device
-- **Optional feedback system** - submit feedback only when you choose to
-- **No accounts required** - no login, no registration, no authentication
-- **Open source** - fully auditable code base
-- **Type-safe** - written in TypeScript with strict mode
-- **Input sanitization** - all user inputs are validated and sanitized
-- **Browser-compatible types** - works across Chrome/Chromium browsers
+Intelligent exceptions ensure essential services function normally on their native domains, and critical services like payment processors and security tools remain unaffected.
 
-#### Architecture & Code Quality
+### Privacy Scoring Algorithm
+The privacy score begins at 100 (optimal privacy) and adjusts dynamically:
+- Decrease by 1 point for each tracker blocked
+- Increase by 2 points for visiting tracker-free websites
+- Decrease by 5 points for encountering deceptive cookie banners
+- Thirty-day rolling history enables tracking of privacy trends
 
-- **15 TypeScript modules** with strict type checking
-- **Modular architecture** - clean separation of concerns
-- **Event-driven design** with custom EventEmitter
-- **Message bus system** for reliable component communication
-- **Tab lifecycle manager** for accurate tracking
-- **Type guards** for runtime type validation
-- **Input sanitizer** for security
-- **Logger utility** for development debugging
-- **Constants centralization** for maintainability
+### User Interface
+The extension interface provides:
+- Real-time privacy score display with qualitative assessment
+- Color-coded activity feed indicating threat levels
+- Interactive tracker information with educational resources
+- Dual-panel layout for dashboard and email management
+- Per-tab badge counter showing active tracking prevention
 
-#### Modern Tech Stack
-
-- **React 18.3.1** for UI components
-- **TypeScript 5.5.3** with strict mode
-- **Vite 5.4.2** for blazing-fast builds
-- **Tailwind CSS 3.4.1** for styling
-- **Lucide React 0.344.0** for icons
-- **Manifest V3** - latest Chrome extension standard
-- **534 lines** of blocking rules and privacy patterns
-
-#### Security & Privacy Features
-
-- **Declarative net request** - native Chrome blocking engine
-- **Row Level Security** ready (Supabase integration available)
-- **No eval() or unsafe code** - passes strict CSP
-- **Sanitized inputs** - XSS protection throughout
-- **Type-safe messages** - validated at runtime
-- **Browser-compatible types** - Chrome + Chromium support
-
-#### Tracking & Blocking
-
-- **30 declarative blocking rules** for maximum performance
-- **120+ tracker domains** across 7 categories:
-  - Analytics (Google Analytics, Mixpanel, Amplitude)
-  - Advertising (DoubleClick, Facebook Ads, Criteo)
-  - Social Media (Facebook Pixel, Twitter, LinkedIn)
-  - Fingerprinting (FingerprintJS, device ID)
-  - Beacons (tracking pixels, conversion tracking)
-  - Heatmaps (Hotjar, CrazyEgg, session recording)
-  - Affiliate (commission tracking, referral links)
-- **Smart exceptions** - services work on their own domains
-- **Per-tab badge counter** - accurate per-page tracking
-
-####  GDPR & Cookie Compliance
-- **Automatic cookie banner detection**
-- **GDPR compliance verification**
-- **Dark pattern identification**
-- **Real-time compliance scoring**
-
-####  User Experience
-
-- **Dynamic version display** from manifest.json
-- **Color-coded activity feed** (🟢 low, 🟡 medium, 🔴 high risk)
-- **Interactive tracker info** with alternatives
-- **Smooth animations** and transitions
-- **One-click protection toggle**
-- **Real-time privacy score** (0-100)
-
-##  Quick Start
-
-### Installation
-
-1. **Build the extension:**
-   ```bash
-   npm install
-   npm run build
-   ```
-
-2. **Load in Chrome:**
-   - Open `chrome://extensions/`
-   - Enable "Developer mode"
-   - Click "Load unpacked"
-   - Select the `dist` folder
-
-3. **Start browsing!**
-   - The shield icon appears in your toolbar
-   - Click it to see your privacy score
-   - Visit any website to see blocking in action
-
-## 📸 What You'll See
-
-### Popup Interface
-
-```
-┌────────────────────────────────────────┐
-│  🛡️ Privaseer               [🛡️ Blue]│
-├────────────────────────────────────────┤
-│                                        │
-│              94 / 100                  │  ← Privacy Score
-│         Excellent Privacy              │
-│                                        │
-│         ❌ 12 blocked today            │  ← Daily Stats
-│                                        │
-├────────────────────────────────────────┤
-│  Recent Activity                       │
-├────────────────────────────────────────┤
-│                                        │
-│  🟢  🛡️  Blocked google-analytics    │
-│          cnn.com      Just now    [i] │  ← Click for info
-│                                        │
-│  🔴  ⚠️  Blocked facebook.net (HIGH)  │
-│          news.com          2m ago     │
-│                                        │
-│  🟡  ❌  bbc.co.uk has deceptive      │
-│          cookie banner                 │
-│          bbc.co.uk         5m ago     │
-│                                        │
-└────────────────────────────────────────┘
-```
-
-### Badge Counter
-
-The extension icon shows a red badge with the number of trackers blocked **on the current tab**:
-
-- Visit CNN.com → Badge shows "3"
-- Switch to NYTimes.com → Badge shows "5"
-- Switch back to CNN → Badge shows "3" again
-- Navigate to new page → Badge resets to "0"
-
-## 🔧 Technical Details
-
-### Architecture Overview
-
-**Manifest V3** (latest Chrome extension standard)
-
-#### Core Components
-
-1. **Service Worker** (`background/service-worker.ts`)
-   - Main coordinator for all extension operations
-   - Event-driven architecture with custom EventEmitter
-   - Message bus for inter-component communication
-   - Tab lifecycle management
-   - Storage management
-
-2. **Firewall Engine** (`background/firewall-engine.ts`)
-   - Manages declarativeNetRequest rules
-   - Dynamic enable/disable blocking
-   - Rule updates and refresh
-   - Per-tab blocking statistics
-
-3. **Privacy Score** (`background/privacy-score.ts`)
-   - Intelligent scoring algorithm (0-100 scale)
-   - 30-day history tracking
-   - Daily statistics aggregation
-   - Real-time score updates
-
-4. **Cookie Consent Scanner** (`content-scripts/consent-scanner.ts`)
-   - DOM-based banner detection
-   - GDPR compliance verification
-   - Dark pattern identification
-   - Message-based alerts to service worker
-
-5. **Popup UI** (`popup/popup.tsx`)
-   - React 18 with TypeScript
-   - Real-time activity feed
-   - Interactive tracker information
-   - Dynamic version display
-   - Color-coded alerts
-
-#### Utility Modules
-
-- **Event Emitter** - Custom pub/sub system
-- **Message Bus** - Reliable Chrome message passing
-- **Tab Manager** - Complete tab lifecycle tracking
-- **Logger** - Development debugging utility
-- **Sanitizer** - Input validation and XSS protection
-- **Type Guards** - Runtime type validation
-- **Constants** - Centralized configuration
-
-### Blocking Categories
-
-1. **Analytics**: Google Analytics, Mixpanel, Amplitude, etc.
-2. **Advertising**: DoubleClick, Facebook Ads, Criteo, etc.
-3. **Social Media**: Facebook Pixel, Twitter tracking, LinkedIn tracking
-4. **Fingerprinting**: FingerprintJS, device identification
-5. **Beacons**: Tracking pixels, conversion tracking
-6. **Heatmaps**: Hotjar, CrazyEgg, session recording
-7. **Affiliate**: Commission tracking, referral links
-
-### Safe Blocking
-
-We **never block** essential services:
-- Payment processors (Stripe, PayPal)
-- Security services (reCAPTCHA)
-- CDNs (Cloudflare, jsDelivr, unpkg)
-- Essential libraries (jQuery, Google Fonts)
-
-We **exclude from blocking** on their own domains:
-- Google Analytics on Google.com
-- Facebook trackers on Facebook.com/Messenger
-- Twitter platform on Twitter.com/X.com
-- LinkedIn tracking on LinkedIn.com
-
-### Performance Metrics
-
-**Resource Usage:**
-- **Memory**: ~15 MB service worker, ~5 MB per content script
-- **CPU**: <1% average (native blocking engine, no JS interception)
-- **Storage**: ~10 KB initial, ~50 KB after 1 week of use
-- **Battery**: Minimal impact (declarativeNetRequest uses native code)
-- **Build Time**: ~3 seconds for full production build
-- **Bundle Size**:
-  - Popup: 166 KB JS + 15 KB CSS (52 KB gzipped)
-  - Service Worker: 27 KB (8.5 KB gzipped)
-  - Content Script: 8 KB (2.9 KB gzipped)
-
-**Blocking Performance:**
-- **Latency**: 0ms (blocks before network request)
-- **Throughput**: Unlimited (handled by browser engine)
-- **Rules**: 30 declarative rules (10,000 rule limit available)
-- **Domains**: 120+ patterns matched instantly
-
-## 📁 Project Structure
+## Project Structure
 
 ```
 privaseer/
-├── src/                            # Source code (15 TypeScript files)
-│   ├── background/                 # Service worker & core logic
-│   │   ├── service-worker.ts       # Main coordinator & event handler
-│   │   ├── firewall-engine.ts      # DeclarativeNetRequest manager
-│   │   ├── privacy-score.ts        # Scoring algorithm & history
-│   │   ├── storage.ts              # Chrome storage abstraction
-│   │   └── event-emitter.ts        # Custom pub/sub system
-│   ├── content-scripts/            # Injected page scripts
+├── src/
+│   ├── background/                 # Service worker and core logic
+│   │   ├── service-worker.ts       # Main coordination and event handling
+│   │   ├── firewall-engine.ts      # Request blocking management
+│   │   ├── privacy-score.ts        # Scoring algorithm implementation
+│   │   ├── storage.ts              # Browser storage abstraction
+│   │   └── event-emitter.ts        # Custom event system
+│   ├── content-scripts/            # Page-level functionality
 │   │   └── consent-scanner.ts      # Cookie banner detection
-│   ├── popup/                      # Extension popup UI
-│   │   ├── popup.html              # HTML template
-│   │   └── popup.tsx               # React 18 component
+│   ├── popup/                      # Extension interface
+│   │   ├── popup.html              # HTML foundation
+│   │   └── popup.tsx               # React component implementation
 │   ├── types/                      # TypeScript definitions
-│   │   └── index.ts                # All type definitions
-│   └── utils/                      # Shared utilities (8 modules)
-│       ├── constants.ts            # App-wide constants
-│       ├── event-emitter.ts        # Event system (moved here)
+│   │   └── index.ts                # Centralized type declarations
+│   └── utils/                      # Shared utilities
+│       ├── constants.ts            # Application constants
+│       ├── event-emitter.ts        # Event system utilities
 │       ├── logger.ts               # Development logging
-│       ├── message-bus.ts          # Chrome messaging wrapper
-│       ├── sanitizer.ts            # Input validation & XSS protection
-│       ├── tab-manager.ts          # Tab lifecycle tracking
+│       ├── message-bus.ts          # Inter-component communication
+│       ├── sanitizer.ts            # Input validation and security
+│       ├── tab-manager.ts          # Browser tab lifecycle management
 │       └── type-guards.ts          # Runtime type validation
-├── public/                         # Static assets
-│   ├── data/                       # Configuration files (534 lines total)
-│   │   ├── tracker-lists.json      # 120+ tracker domains by category
-│   │   ├── privacy-rules.json      # GDPR compliance patterns
-│   │   └── blocking-rules.json     # 30 declarativeNetRequest rules
-│   └── icons/                      # Extension icons (5 sizes)
-│       ├── icon.svg                # Vector source
-│       ├── icon16.png              # Toolbar icon
-│       ├── icon32.png              # Toolbar icon @2x
-│       ├── icon48.png              # Extension management
-│       └── icon128.png             # Chrome Web Store
-├── dist/                           # Built extension (generated)
-├── package.json                    # npm configuration
+├── public/                         # Static assets and configuration
+│   ├── data/                       # Rule definitions and patterns
+│   │   ├── tracker-lists.json      # Tracking domain catalog
+│   │   ├── privacy-rules.json      # Compliance verification patterns
+│   │   └── blocking-rules.json     # Declarative blocking rules
+│   └── icons/                      # Extension icons in standard sizes
+├── dist/                           # Built extension output
+├── package.json                    # Dependency management
 ├── tsconfig.json                   # TypeScript configuration
-├── vite.config.ts                  # Vite build configuration
-├── tailwind.config.js              # Tailwind CSS configuration
-└── README.md                       # This file
+├── vite.config.ts                  # Build configuration
+├── tailwind.config.js              # Styling configuration
+└── README.md                       # Project documentation
 ```
 
-## 🛠️ Development
+## Development Guide
 
 ### Prerequisites
+- Node.js version 18 or higher
+- npm version 9 or higher
+- Chrome browser version 91 or higher
 
-- Node.js 18+
-- npm 9+
-- Chrome 91+
-
-### Build Commands
+### Building and Installation
 
 ```bash
-# Install dependencies
+# Install project dependencies
 npm install
 
-# Build for production (outputs to dist/)
+# Production build (outputs to dist/)
 npm run build
 
-# Development mode with hot reload
+# Development build with hot reload
 npm run dev
 
-# Type checking (strict mode)
+# Type checking validation
 npm run typecheck
 
-# Linting (ESLint 9)
+# Code quality verification
 npm run lint
 
 # Preview built extension
 npm run preview
 ```
 
-### Dependencies
+### Loading in Browser
+1. Navigate to chrome://extensions/
+2. Enable Developer Mode
+3. Select "Load unpacked extension"
+4. Choose the generated `dist` directory
 
-**Runtime Dependencies:**
-- `react@18.3.1` - UI framework
-- `react-dom@18.3.1` - React DOM renderer
-- `react-window@2.2.0` - Virtualized list rendering
-- `lucide-react@0.344.0` - Icon library
+## Privacy and Security Considerations
 
-**Development Dependencies:**
-- `typescript@5.5.3` - Type system
-- `vite@5.4.2` - Build tool
-- `vite-plugin-web-extension@4.4.5` - Extension bundler
-- `@vitejs/plugin-react@4.3.1` - React plugin
-- `tailwindcss@3.4.1` - CSS framework
-- `eslint@9.9.1` - Code linting
-- `@types/chrome@0.1.22` - Chrome API types
+### Data Handling
+All user data remains local to the browser instance utilizing chrome.storage.local. No information is transmitted to external servers except when explicitly submitting optional feedback. The extension requires no user accounts or authentication.
 
-### Hot Reload Workflow
+### Permission Justification
+- `storage`: Essential for maintaining privacy metrics and settings locally
+- `activeTab`: Required for contextual privacy scoring based on current page
+- `declarativeNetRequest`: Foundation of tracker prevention functionality
+- `declarativeNetRequestFeedback`: Enables accurate blocking statistics
+- `tabs`: Necessary for per-tab badge counter functionality
+- `<all_urls>`: Mandatory for comprehensive website coverage
 
-1. Make changes to source files
-2. Run `npm run build`
-3. Go to `chrome://extensions/`
-4. Click refresh icon on Privaseer
-5. Reload any open tabs
+## Maintenance and Extension
 
-##  Troubleshooting
+### Enhancement Opportunities
+1. **Tracker Catalog Expansion**: Additional domains and patterns in tracker-lists.json
+2. **Detection Pattern Improvement**: Enhanced banner identification in privacy-rules.json
+3. **Internationalization Support**: Multi-language compatibility for user interface
+4. **Testing Infrastructure**: Comprehensive browser compatibility verification
+5. **Documentation Enhancement**: Detailed usage guides and technical documentation
 
-### "Failed to fetch" Error
+### Troubleshooting Guidelines
 
-If you see console errors about failed fetches:
+**Extension Loading Issues**
+- Verify Chrome browser version meets minimum requirements
+- Confirm Developer Mode is enabled in extension management
+- Rebuild project if manifest validation errors occur
 
-1. Rebuild: `npm run build`
-2. Reload extension in `chrome://extensions/`
-3. Refresh all open tabs
+**Functionality Irregularities**
+- Ensure protection is enabled (shield indicator displays active state)
+- Reload web pages to initialize content scripts properly
+- Verify essential services are not incorrectly blocked via exception mechanisms
 
-This happens if you installed v1.0 and are upgrading. The manifest now includes `web_accessible_resources` for content script access.
+## License and Attribution
 
-### Badge Not Showing
+This project is distributed under the MIT License. Complete license terms are available in the project repository.
 
-- Make sure you're on a regular website (not chrome:// pages)
-- Check that protection is enabled (shield is blue)
-- Visit a site with trackers (news sites work well)
-- Badge is per-tab, switch tabs to see different counts
+Third-party dependencies include:
+- React and React DOM for user interface components
+- TypeScript for type-safe development
+- Vite for build tooling
+- Tailwind CSS for styling
+- Lucide React for iconography
 
-### Trackers Not Blocked
+## Version Information
 
-- Click shield button to ensure it's blue (enabled)
-- Reload the webpage
-- Check DevTools Network tab for blocked requests
-- Some essential services are intentionally not blocked
+**Current Release**: 1.0.0  
+**Release Date**: October 2025  
+**Browser Target**: Chrome/Chromium with Manifest V3 support  
+**Primary Technologies**: TypeScript 5.5, React 18, Vite 5, Tailwind CSS 3  
+**Code Metrics**: 15 core modules, 534 rule definitions, 120+ tracked domains
 
-## 📊 Data Storage
+---
 
-All data stored in `chrome.storage.local`:
-
-- **Privacy scores**: Current score, daily stats, 30-day history
-- **Blocked trackers**: Domain, category, count, last blocked time
-- **Alerts**: Last 100 alerts with timestamps
-- **Settings**: Protection enabled, notification preferences
-
-**Total storage**: ~50 KB after 1 week of use (10 MB quota available)
-
-##  Security & Privacy
-
-### Permissions Explained
-
-- `storage`: Save privacy data locally
-- `activeTab`: Get current page URL for alerts
-- `declarativeNetRequest`: Block tracker requests
-- `declarativeNetRequestFeedback`: Log blocked requests for scoring
-- `tabs`: Monitor navigation for per-tab badges
-- `<all_urls>`: Required to scan and block on all websites
-
-### Privacy Guarantees
-
-✅ **No external servers** - Everything runs on your device
-✅ **No network requests** - Except the ones we block!
-✅ **No user tracking** - We practice what we preach
-✅ **No analytics** - Not even privacy-friendly ones
-✅ **Open source** - Fully auditable code
-✅ **No accounts** - Anonymous by default
-
-### Comparison to Other Extensions
-
-| Feature | Privaseer | uBlock Origin | Ghostery | Privacy Badger |
-|---------|-----------|---------------|----------|----------------|
-| Tracker Blocking | ✅ | ✅ | ✅ | ✅ |
-| Privacy Score | ✅ | ❌ | ❌ | ❌ |
-| Cookie Scanner | ✅ | ❌ | ❌ | ❌ |
-| Tracker Info | ✅ | ❌ | ✅ | ❌ |
-| Per-Tab Badges | ✅ | ❌ | ❌ | ❌ |
-| 100% Local | ✅ | ✅ | ❌ | ✅ |
-| Manifest V3 | ✅ | ❌ | ✅ | ❌ |
-
-##  Contributing
-
-Contributions welcome! Areas that need help:
-
-1. **Tracker lists**: Add more domains to `tracker-lists.json`
-2. **Cookie patterns**: Improve banner detection in `privacy-rules.json`
-3. **Translations**: Multi-language support for consent scanner
-4. **Testing**: Browser compatibility, edge cases
-5. **Documentation**: Improve guides and examples
-
-## 📜 License
-
-MIT License - see LICENSE file for details
-
-##  Credits
-
-Built with:
-- TypeScript
-- React 18
-- Vite
-- Tailwind CSS
-- Lucide Icons
-- Chrome Extension APIs (Manifest V3)
-
-Inspired by privacy-focused projects:
-- EasyList
-- Privacy Badger
-- uBlock Origin
-- Cookie AutoDelete
-
-##  Support
-
-- **Issues**: Check [TROUBLESHOOTING.md](TROUBLESHOOTING.md) (if available)
-- **Questions**: Read [INSTALL.md](INSTALL.md) (if available)
-- **Documentation**: This README
-
-**Built with ❤️ for privacy-conscious users**
-
-**Version:** 1.0.0 | **Released:** 2025-10-12 | **Manifest:** V3 | **License:** MIT
-
-**Tech Stack:** TypeScript 5.5 • React 18 • Vite 5 • Tailwind 3 • Chrome APIs
-
-**Code Stats:** 15 modules • 534 rules • 120+ trackers • 7 categories • 100% type-safe
+*This document provides comprehensive technical documentation for the Privaseer browser extension. For implementation details, refer to the source code repository and inline documentation.*
