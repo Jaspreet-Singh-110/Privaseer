@@ -413,7 +413,10 @@ function Popup() {
 
       {activeTab === 'burner' ? (
         <div className="flex-1 overflow-y-auto">
-          <BurnerEmailsSection onOpenSettings={openSettingsToBurner} />
+          <BurnerEmailsSection 
+            onOpenSettings={openSettingsToBurner}
+            isActive={activeTab === 'burner'}
+          />
         </div>
       ) : (
         <>

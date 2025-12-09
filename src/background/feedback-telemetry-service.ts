@@ -5,7 +5,7 @@ import { Storage } from './storage';
 
 const FEEDBACK_ENDPOINT = `${SUPABASE.URL}/functions/v1/submit-feedback/feedback`;
 const TELEMETRY_ENDPOINT = `${SUPABASE.URL}/functions/v1/submit-feedback/telemetry`;
-const EXTENSION_VERSION = '2.4.0';
+const EXTENSION_VERSION = chrome.runtime.getManifest().version;
 
 interface FeedbackData {
   feedbackText: string;

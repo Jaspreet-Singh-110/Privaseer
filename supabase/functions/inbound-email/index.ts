@@ -130,7 +130,7 @@ async function forwardEmail(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: `Privaseer Burner <noreply@burner.privaseer.io>`,
+          from: `Privaseer Burner <noreply@burner.privaseer.co.uk>`,
           to: targetEmail,
           subject: `[Forwarded] ${cleanSubject}`,
           text: sanitized.text + sanitizationReport,
@@ -152,7 +152,7 @@ async function forwardEmail(
 
       return { success: true, trackersRemoved };
     } else if (emailProvider === "mailgun") {
-      const domain = Deno.env.get("MAILGUN_DOMAIN") || "burner.privaseer.io";
+      const domain = Deno.env.get("MAILGUN_DOMAIN") || "burner.privaseer.co.uk";
       const response = await fetch(`https://api.mailgun.net/v3/${domain}/messages`, {
         method: "POST",
         headers: {
@@ -160,7 +160,7 @@ async function forwardEmail(
           "Content-Type": "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams({
-          from: `Privaseer Burner <noreply@burner.privaseer.io>`,
+          from: `Privaseer Burner <noreply@burner.privaseer.co.uk>`,
           to: targetEmail,
           subject: `[Forwarded] ${cleanSubject}`,
           text: sanitized.text + sanitizationReport,

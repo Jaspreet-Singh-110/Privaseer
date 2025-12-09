@@ -3,6 +3,7 @@ import { X, MessageSquare, Send, Info, Palette, Mail, ChevronRight, ArrowLeft, S
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
 import { ThemeManager } from '../utils/theme-manager';
+import { validateEmail } from '../utils/validation';
 
 export type SettingsSection = 'menu' | 'feedback' | 'theme' | 'burner-services' | 'telemetry' | 'about';
 type ThemeOption = 'light' | 'dark' | 'system';
@@ -37,13 +38,59 @@ export function SettingsPage({
   const [shouldHighlightBurnerToggle, setShouldHighlightBurnerToggle] = useState(false);
   const [isTelemetryEnabled, setIsTelemetryEnabled] = useState(false);
   const [isTogglingTelemetry, setIsTogglingTelemetry] = useState(false);
+  const [realEmail, setRealEmail] = useState<string>('');
+  const [realEmailInput, setRealEmailInput] = useState<string>('');
+  const [isSavingRealEmail, setIsSavingRealEmail] = useState(false);
+  const [realEmailError, setRealEmailError] = useState<string | null>(null);
   const burnerToggleRef = useRef<HTMLButtonElement | null>(null);
+  const isTogglingRef = useRef(false);
 
   useEffect(() => {
     loadCurrentTheme();
     loadBurnerEmailSetting();
     loadTelemetrySetting();
+    loadRealEmail();
+
+    const messageListener = (message: { type: string }) => {
+      if (message.type === 'STATE_UPDATE') {
+        logger.debug('Settings', 'STATE_UPDATE received, reloading burner email setting');
+        loadBurnerEmailSetting();
+        // Don't reload email - let user control the input
+      }
+    };
+
+    chrome.runtime.onMessage.addListener(messageListener);
+
+    return () => {
+      chrome.runtime.onMessage.removeListener(messageListener);
+    };
   }, []);
+
+  // Reload state when settings modal opens to ensure consistency
+  useEffect(() => {
+    if (isOpen) {
+      logger.info('Settings', 'Modal opened, reloading state', { currentBurnerEnabled: isBurnerEmailEnabled });
+
+      // When arriving via burner deep-link (highlightBurnerToggle), skip the initial
+      // burner setting fetch to avoid immediately overwriting the user's intent.
+      if (!highlightBurnerToggle) {
+        loadBurnerEmailSetting();
+      } else {
+        logger.info('Settings', 'Modal opened via deep-link, skipping initial burner setting fetch');
+      }
+
+      loadRealEmail();
+    }
+  }, [isOpen, highlightBurnerToggle]);
+
+  // Reload burner email setting when navigating to burner-services section
+  useEffect(() => {
+    if (isOpen && activeSection === 'burner-services' && !highlightBurnerToggle) {
+      logger.info('Settings', 'Navigated to burner-services, reloading state', { currentBurnerEnabled: isBurnerEmailEnabled });
+      loadBurnerEmailSetting();
+      // Don't reload email - it's already loaded when modal opened
+    }
+  }, [isOpen, activeSection, highlightBurnerToggle]);
 
   const loadCurrentTheme = async () => {
     try {
@@ -57,10 +104,21 @@ export function SettingsPage({
   };
 
   const loadBurnerEmailSetting = async () => {
+    // If a toggle is in progress, don't fetch. The toggle handler is the source of truth.
+    if (isTogglingRef.current) {
+      logger.debug('Settings', 'loadBurnerEmailSetting: Skipped fetch, toggle in progress');
+      return;
+    }
     try {
       const response = await chrome.runtime.sendMessage({ type: 'GET_BURNER_EMAIL_SETTING' });
       if (response.success) {
-        setIsBurnerEmailEnabled(response.enabled);
+        logger.info('Settings', 'loadBurnerEmailSetting: Setting isBurnerEmailEnabled state', { enabled: response.enabled });
+        // Only update state if it's different, to avoid unnecessary re-renders
+        if (response.enabled !== isBurnerEmailEnabled) {
+          setIsBurnerEmailEnabled(response.enabled);
+        }
+      } else {
+        logger.warn('Settings', 'loadBurnerEmailSetting: Response was not successful', { response });
       }
     } catch (error) {
       logger.error('Settings', 'Failed to load burner email setting', toError(error));
@@ -76,6 +134,66 @@ export function SettingsPage({
     } catch (error) {
       logger.error('Settings', 'Failed to load telemetry setting', toError(error));
     }
+  };
+
+  const loadRealEmail = async () => {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'GET_REAL_EMAIL' });
+      if (response.success) {
+        const email = response.email || '';
+        logger.info('Settings', 'loadRealEmail: Setting email state', { email: email ? 'present' : 'empty' });
+        setRealEmail(email);
+        setRealEmailInput(email);
+      } else {
+        logger.warn('Settings', 'loadRealEmail: Response was not successful', { response });
+      }
+    } catch (error) {
+      logger.error('Settings', 'Failed to load real email', toError(error));
+    }
+  };
+
+  const handleSaveRealEmail = async () => {
+    if (isSavingRealEmail) return;
+
+    // Use shared validation module for consistent validation
+    const validation = validateEmail(realEmailInput);
+    if (!validation.valid) {
+      setRealEmailError(validation.error || 'Please enter a valid email address');
+      return;
+    }
+
+    setIsSavingRealEmail(true);
+    setRealEmailError(null);
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'SET_REAL_EMAIL',
+        data: { email: validation.sanitized }
+      });
+
+      if (response.success) {
+        setRealEmail(validation.sanitized!);
+        setRealEmailInput(validation.sanitized!);
+        logger.info('Settings', 'Real email saved successfully');
+      } else {
+        setRealEmailError(response.error || 'Failed to save email');
+        logger.error('Settings', 'Failed to save real email', new Error(response.error || 'Unknown error'));
+      }
+    } catch (error) {
+      const err = toError(error);
+      setRealEmailError('Failed to save email. Please try again.');
+      logger.error('Settings', 'Failed to save real email', err);
+    } finally {
+      setIsSavingRealEmail(false);
+    }
+  };
+
+  const maskEmail = (email: string): string => {
+    if (!email) return '';
+    const [local, domain] = email.split('@');
+    if (!domain) return email;
+    if (local.length <= 1) return `***@${domain}`;
+    return `${local[0]}***@${domain}`;
   };
 
   /**
@@ -108,9 +226,23 @@ export function SettingsPage({
       return;
     }
 
+    // Any explicit interaction with the toggle should clear the highlight state
+    if (shouldHighlightBurnerToggle) {
+      setShouldHighlightBurnerToggle(false);
+      if (burnerToggleRef.current) {
+        burnerToggleRef.current.blur();
+      }
+      onBurnerHighlightComplete?.();
+    }
+
+    const previousValue = isBurnerEmailEnabled;
+    const newValue = !previousValue;
+
+    // Optimistically update the UI to feel responsive
+    setIsBurnerEmailEnabled(newValue);
     setIsTogglingBurnerEmail(true);
-    const newValue = !isBurnerEmailEnabled;
-    logger.debug('Settings', 'Starting burner email toggle', { currentValue: isBurnerEmailEnabled, newValue });
+    isTogglingRef.current = true;
+    logger.info('Settings', 'handleBurnerEmailToggle: Starting toggle', { previousValue, newValue });
 
     try {
       const response = await chrome.runtime.sendMessage({
@@ -118,18 +250,27 @@ export function SettingsPage({
         data: { enabled: newValue }
       });
 
-      if (response.success) {
-        setIsBurnerEmailEnabled(newValue);
-        logger.info('Settings', 'Burner email setting updated', { previousValue: isBurnerEmailEnabled, newValue });
+      if (response.success && typeof response.enabled === 'boolean') {
+        // The service worker has confirmed the new state. We can be confident in this value.
+        logger.info('Settings', 'Burner email setting updated successfully', { verifiedValue: response.enabled });
+        setIsBurnerEmailEnabled(response.enabled);
+        
+        // After successfully enabling, also reload the real email
+        if (response.enabled) {
+          await loadRealEmail();
+        }
       } else {
-        logger.error('Settings', 'Failed to update burner email setting', new Error(response.error || 'Unknown error'), { attemptedValue: newValue, previousValue: isBurnerEmailEnabled });
-        await loadBurnerEmailSetting();
+        // If the update fails, roll back to the previous state
+        logger.error('Settings', 'Failed to update burner email setting, rolling back UI', new Error(response.error || 'Unknown error'));
+        setIsBurnerEmailEnabled(previousValue);
       }
     } catch (error) {
-      logger.error('Settings', 'Failed to toggle burner email setting', toError(error), { attemptedValue: newValue, previousValue: isBurnerEmailEnabled });
-      await loadBurnerEmailSetting();
+      // If the message fails to send, roll back to the previous state
+      logger.error('Settings', 'Error toggling burner email setting, rolling back UI', toError(error));
+      setIsBurnerEmailEnabled(previousValue);
     } finally {
       setIsTogglingBurnerEmail(false);
+      isTogglingRef.current = false;
     }
   };
 
@@ -196,7 +337,7 @@ export function SettingsPage({
       setIsNavigatingForward(deepLinkSection !== 'menu');
       setActiveSection(deepLinkSection);
     }
-  }, [deepLinkSection, isOpen]);
+  }, [deepLinkSection, isOpen, highlightBurnerToggle]);
 
   useEffect(() => {
     if (!isOpen || !highlightBurnerToggle) return;
@@ -208,6 +349,9 @@ export function SettingsPage({
 
     const timer = window.setTimeout(() => {
       setShouldHighlightBurnerToggle(false);
+      if (burnerToggleRef.current) {
+        burnerToggleRef.current.blur();
+      }
       onBurnerHighlightComplete?.();
     }, 2500);
 
@@ -219,8 +363,22 @@ export function SettingsPage({
   useEffect(() => {
     if (!isOpen) {
       setShouldHighlightBurnerToggle(false);
+      if (burnerToggleRef.current) {
+        burnerToggleRef.current.blur();
+      }
     }
   }, [isOpen]);
+
+  // Ensure toggle loses focus when highlightBurnerToggle becomes false
+  useEffect(() => {
+    if (!highlightBurnerToggle && shouldHighlightBurnerToggle) {
+      setShouldHighlightBurnerToggle(false);
+      if (burnerToggleRef.current) {
+        burnerToggleRef.current.blur();
+      }
+    }
+  }, [highlightBurnerToggle, shouldHighlightBurnerToggle]);
+
 
   if (!isOpen) return null;
 
@@ -546,7 +704,7 @@ export function SettingsPage({
                     ref={burnerToggleRef}
                     onClick={handleBurnerEmailToggle}
                     disabled={isTogglingBurnerEmail}
-                    className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 ${
                       isBurnerEmailEnabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
                     } ${isTogglingBurnerEmail ? 'opacity-50 cursor-not-allowed' : ''} ${
                       shouldHighlightBurnerToggle ? 'ring-4 ring-blue-300 dark:ring-blue-700 ring-offset-2 dark:ring-offset-gray-800' : ''
@@ -571,6 +729,72 @@ export function SettingsPage({
                   Burner email capabilities power the in-page autofill experience and the burner emails tab. Disabling
                   this feature blocks future email generation but keeps existing addresses accessible.
                 </p>
+
+                <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-600">
+                  <label htmlFor="real-email-input" className={`block text-sm font-medium mb-2 ${
+                    !isBurnerEmailEnabled
+                      ? 'text-gray-400 dark:text-gray-500'
+                      : 'text-gray-900 dark:text-white'
+                  }`}>
+                    Forwarding Email Address
+                  </label>
+                  <p className={`text-xs mb-3 ${
+                    !isBurnerEmailEnabled
+                      ? 'text-gray-400 dark:text-gray-500'
+                      : 'text-gray-600 dark:text-gray-400'
+                  }`}>
+                    Emails sent to your burner addresses will be forwarded to this address. Your email is stored locally and never shared.
+                  </p>
+                  
+                  {!isBurnerEmailEnabled && (
+                    <div className="mb-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                      <p className="text-xs text-amber-800 dark:text-amber-300">
+                        Enable Burner Email Protection above to configure your forwarding email address.
+                      </p>
+                    </div>
+                  )}
+                  
+                  {realEmail && (
+                    <div className="mb-3 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <p className="text-xs text-gray-600 dark:text-gray-400">
+                        Current: <span className="font-mono text-gray-900 dark:text-white">{maskEmail(realEmail)}</span>
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <input
+                      id="real-email-input"
+                      type="email"
+                      value={realEmailInput}
+                      onChange={(e) => {
+                        setRealEmailInput(e.target.value);
+                        setRealEmailError(null);
+                      }}
+                      placeholder="your.email@example.com"
+                      className={`w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-all ${
+                        !isBurnerEmailEnabled
+                          ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 border-gray-200 dark:border-gray-600 cursor-not-allowed'
+                          : realEmailError
+                          ? 'border-red-300 dark:border-red-600'
+                          : 'border-gray-300 dark:border-gray-600'
+                      }`}
+                      disabled={isSavingRealEmail || !isBurnerEmailEnabled}
+                      aria-disabled={!isBurnerEmailEnabled}
+                    />
+                    {realEmailError && (
+                      <p className="text-xs text-red-600 dark:text-red-400">{realEmailError}</p>
+                    )}
+                    <button
+                      onClick={handleSaveRealEmail}
+                      disabled={isSavingRealEmail || !isBurnerEmailEnabled || realEmailInput.trim() === realEmail}
+                      className="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 dark:hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg transition-colors"
+                      aria-disabled={!isBurnerEmailEnabled}
+                    >
+                      {isSavingRealEmail ? 'Saving...' : realEmail ? 'Update Email' : 'Save Email'}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}

@@ -4,16 +4,16 @@
 
 > Built with TypeScript, React 18, and Manifest V3 for maximum performance and security.
 
-## ✨ Features
+## Features
 
-### 🛡️ Real-Time Tracker Blocking
+### Real-Time Tracker Blocking
 - **120+ tracking domains** blocked across 7 categories
 - **30 declarative blocking rules** using Chrome's native engine
 - **Per-tab badge counter** showing blocked trackers on current page
 - **Dynamic enable/disable** with actual pause/resume blocking
 - **Smart exceptions** - don't block services on their own domains
 
-### 📊 Privacy Score (0-100)
+### Privacy Score (0-100)
 - **Intelligent scoring algorithm** that adapts to your browsing
 - Starts at 100 (perfect privacy)
 - Decreases by 1 for each tracker blocked (-1 point)
@@ -22,27 +22,27 @@
 - **Real-time updates** as you browse
 - **30-day history tracking** for trend analysis
 
-### 🍪 Cookie Consent Scanner
+### Cookie Consent Scanner
 - **Automatic detection** of cookie banners on every page
 - **GDPR compliance checking** for "Reject All" buttons
 - **Dark pattern detection** - identifies deceptive design
 - **Real-time alerts** for non-compliant sites
 - **DOM-based scanning** with comprehensive pattern matching
 
-### 📧 Burner Email Generator
+### Burner Email Generator
 - **One-click disposable emails** - generate random email addresses instantly
 - **Automatic form fill** - click any email field to see the generator button
 - **Email management** - view and delete your burner emails in the popup
 - **Domain tracking** - see which sites you've used burner emails on
 - **Privacy protection** - keep your real email address private
 
-### 💬 Feedback System
+###  Feedback System
 - **Submit feedback** directly from the extension popup
 - **Bug reporting** - help improve the extension
 - **Feature requests** - suggest new features
 - **Privacy-respecting** - only collects what you explicitly submit
 
-### 📱 Beautiful Popup Interface
+### popup Interface
 - **Live activity feed** with color-coded alerts (green/yellow/red)
 - **Interactive tracker info** - click ℹ️ button to learn what trackers do
 - **Safer alternatives** suggested for each tracker
@@ -51,7 +51,7 @@
 - **Dual-tab interface** - Dashboard and Burner Emails sections
 - **Dynamic version display** synced with manifest.json
 
-### 🔒 Private & Secure
+### Private & Secure
 - **Local-first architecture** - all tracking data stays on your device
 - **Optional feedback system** - submit feedback only when you choose to
 - **No accounts required** - no login, no registration, no authentication
@@ -60,13 +60,7 @@
 - **Input sanitization** - all user inputs are validated and sanitized
 - **Browser-compatible types** - works across Chrome/Chromium browsers
 
-## 🎯 What's New in v1.0.0
-
-### 🚀 Production Release - Complete Rewrite
-
-This is a production-ready release built from the ground up with modern web technologies and best practices.
-
-#### 🏗️ Architecture & Code Quality
+#### Architecture & Code Quality
 
 - **15 TypeScript modules** with strict type checking
 - **Modular architecture** - clean separation of concerns
@@ -78,7 +72,7 @@ This is a production-ready release built from the ground up with modern web tech
 - **Logger utility** for development debugging
 - **Constants centralization** for maintainability
 
-#### 🎨 Modern Tech Stack
+#### Modern Tech Stack
 
 - **React 18.3.1** for UI components
 - **TypeScript 5.5.3** with strict mode
@@ -88,7 +82,7 @@ This is a production-ready release built from the ground up with modern web tech
 - **Manifest V3** - latest Chrome extension standard
 - **534 lines** of blocking rules and privacy patterns
 
-#### 🛡️ Security & Privacy Features
+#### Security & Privacy Features
 
 - **Declarative net request** - native Chrome blocking engine
 - **Row Level Security** ready (Supabase integration available)
@@ -97,7 +91,7 @@ This is a production-ready release built from the ground up with modern web tech
 - **Type-safe messages** - validated at runtime
 - **Browser-compatible types** - Chrome + Chromium support
 
-#### 📊 Tracking & Blocking
+#### Tracking & Blocking
 
 - **30 declarative blocking rules** for maximum performance
 - **120+ tracker domains** across 7 categories:
@@ -111,14 +105,13 @@ This is a production-ready release built from the ground up with modern web tech
 - **Smart exceptions** - services work on their own domains
 - **Per-tab badge counter** - accurate per-page tracking
 
-#### 🍪 GDPR & Cookie Compliance
-
+####  GDPR & Cookie Compliance
 - **Automatic cookie banner detection**
 - **GDPR compliance verification**
 - **Dark pattern identification**
 - **Real-time compliance scoring**
 
-#### 🎯 User Experience
+####  User Experience
 
 - **Dynamic version display** from manifest.json
 - **Color-coded activity feed** (🟢 low, 🟡 medium, 🔴 high risk)
@@ -127,7 +120,7 @@ This is a production-ready release built from the ground up with modern web tech
 - **One-click protection toggle**
 - **Real-time privacy score** (0-100)
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### Installation
 
@@ -381,7 +374,7 @@ npm run preview
 4. Click refresh icon on Privaseer
 5. Reload any open tabs
 
-## 🐛 Troubleshooting
+##  Troubleshooting
 
 ### "Failed to fetch" Error
 
@@ -418,7 +411,7 @@ All data stored in `chrome.storage.local`:
 
 **Total storage**: ~50 KB after 1 week of use (10 MB quota available)
 
-## 🔐 Security & Privacy
+##  Security & Privacy
 
 ### Permissions Explained
 
@@ -450,7 +443,7 @@ All data stored in `chrome.storage.local`:
 | 100% Local | ✅ | ✅ | ❌ | ✅ |
 | Manifest V3 | ✅ | ❌ | ✅ | ❌ |
 
-## 🤝 Contributing
+##  Contributing
 
 Contributions welcome! Areas that need help:
 
@@ -464,7 +457,7 @@ Contributions welcome! Areas that need help:
 
 MIT License - see LICENSE file for details
 
-## 🙏 Credits
+##  Credits
 
 Built with:
 - TypeScript
@@ -480,27 +473,11 @@ Inspired by privacy-focused projects:
 - uBlock Origin
 - Cookie AutoDelete
 
-## 📞 Support
+##  Support
 
 - **Issues**: Check [TROUBLESHOOTING.md](TROUBLESHOOTING.md) (if available)
 - **Questions**: Read [INSTALL.md](INSTALL.md) (if available)
 - **Documentation**: This README
-
-## 🗺️ Roadmap
-
-### v1.1 (Next)
-- [ ] Custom whitelist (user exceptions)
-- [ ] Statistics dashboard with charts
-- [ ] Export/import settings
-- [ ] Advanced logging system with export
-
-### v2.0 (Future)
-- [ ] Multi-language support
-- [ ] Cloud sync (optional)
-- [ ] Advanced filtering rules
-- [ ] Firefox port
-
----
 
 **Built with ❤️ for privacy-conscious users**
 

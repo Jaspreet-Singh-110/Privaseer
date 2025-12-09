@@ -241,6 +241,28 @@ export function validateGenerateEmailRequest(body: any): ValidationResult {
     return { valid: false, error: `Real email: ${realEmailValidation.error}` };
   }
 
+  const domainValidation = validateString(body.domain || '', 'Domain', {
+    required: true,
+    maxLength: 255,
+  });
+  if (!domainValidation.valid) {
+    return { valid: false, error: domainValidation.error };
+  }
+
+  const urlValidation = validateString(body.url || '', 'URL', {
+    maxLength: 2048,
+  });
+  if (!urlValidation.valid) {
+    return { valid: false, error: urlValidation.error };
+  }
+
+  const labelValidation = validateString(body.label || '', 'Label', {
+    maxLength: 255,
+  });
+  if (!labelValidation.valid) {
+    return { valid: false, error: labelValidation.error };
+  }
+
   const descriptionValidation = validateString(body.description || '', 'Description', {
     maxLength: 500,
   });
@@ -262,6 +284,9 @@ export function validateGenerateEmailRequest(body: any): ValidationResult {
     sanitized: {
       installationId: installationIdValidation.sanitized,
       realEmail: realEmailValidation.sanitized,
+      domain: domainValidation.sanitized,
+      url: urlValidation.sanitized,
+      label: labelValidation.sanitized,
       description: descriptionValidation.sanitized,
       expiresInDays: expiresInDaysValidation.sanitized,
     },

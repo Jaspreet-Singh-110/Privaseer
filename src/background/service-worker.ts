@@ -181,9 +181,11 @@ function setupMessageHandlers(): void {
   // Existing emails remain fully accessible - users can still view, copy, and delete
   // their previously generated burner emails even when generation is disabled.
   messageBus.on('GENERATE_BURNER_EMAIL', async (data: unknown) => {
+      logger.debug('ServiceWorker', 'GENERATE_BURNER_EMAIL received', { data });
     try {
       // Guard to ensure only generation is affected by the feature toggle; existing emails remain accessible
       const isEnabled = await Storage.getBurnerEmailEnabled();
+      logger.debug('ServiceWorker', 'Burner email feature enabled check', { isEnabled });
 
       if (!isEnabled) {
         const { domain } = data as { domain?: string };
@@ -192,8 +194,11 @@ function setupMessageHandlers(): void {
       }
 
       const { domain, url, label } = data as { domain: string; url?: string; label?: string };
+      logger.debug('ServiceWorker', 'Generating email for', { domain, url, label });
+      
       const email = await burnerEmailService.generateEmail(domain, url, label);
-      logger.debug('ServiceWorker', 'Email generated successfully', { email });
+      logger.info('ServiceWorker', 'Email generated successfully', { email });
+      
       feedbackTelemetryService.trackEvent({
         eventType: 'burner_email_generated',
         eventData: { domain },
@@ -201,7 +206,7 @@ function setupMessageHandlers(): void {
       return { success: true, email };
     } catch (error) {
       const err = toError(error);
-      logger.error('ServiceWorker', 'Failed to generate burner email', err);
+      logger.error('ServiceWorker', 'GENERATE_BURNER_EMAIL failed', err);
       return { success: false, error: err.message };
     }
   });
@@ -260,20 +265,26 @@ function setupMessageHandlers(): void {
   messageBus.on('SET_BURNER_EMAIL_SETTING', async (data: unknown) => {
     try {
       const { enabled } = data as { enabled: boolean };
-      logger.debug('ServiceWorker', 'SET_BURNER_EMAIL_SETTING request received', { enabled });
+      logger.info('ServiceWorker', 'SET_BURNER_EMAIL_SETTING: Request received', { enabled, dataType: typeof enabled });
       if (typeof enabled !== 'boolean') {
+        logger.error('ServiceWorker', 'SET_BURNER_EMAIL_SETTING: Invalid enabled value', { enabled, type: typeof enabled });
         return { success: false, error: 'Invalid enabled value' };
       }
       const previousValue = await Storage.getBurnerEmailEnabled();
+      
       await Storage.setBurnerEmailEnabled(enabled);
 
-      // Broadcast BURNER_EMAIL_SETTING_CHANGED to all content scripts
+      // Verify the setting was persisted correctly
+      const verifiedValue = await Storage.getBurnerEmailEnabled();
+      logger.info('ServiceWorker', 'SET_BURNER_EMAIL_SETTING: Verified after save', { requested: enabled, verified: verifiedValue, match: enabled === verifiedValue });
+
+      // Broadcast BURNER_EMAIL_SETTING_CHANGED to all content scripts with verified value
       chrome.tabs.query({}, (tabs) => {
         tabs.forEach(tab => {
           if (tab.id) {
             chrome.tabs.sendMessage(tab.id, {
               type: 'BURNER_EMAIL_SETTING_CHANGED',
-              data: { enabled }
+              data: { enabled: verifiedValue }
             }).catch(() => {
               // Content script may not be loaded, ignore
             });
@@ -284,8 +295,9 @@ function setupMessageHandlers(): void {
       // Broadcast STATE_UPDATE to notify all UI components to refresh their state
       messageBus.broadcast('STATE_UPDATE');
 
-      logger.info('ServiceWorker', 'Burner email setting updated and broadcasted', { previousValue, newValue: enabled });
-      return { success: true, enabled };
+      logger.info('ServiceWorker', 'Burner email setting updated and broadcasted', { previousValue, newValue: verifiedValue });
+      // Return the verified value from storage to ensure single source of truth
+      return { success: true, enabled: verifiedValue };
     } catch (error) {
       logger.error('ServiceWorker', 'Failed to set burner email setting', toError(error));
       return { success: false, error: 'Failed to set burner email setting' };
@@ -325,8 +337,9 @@ function setupMessageHandlers(): void {
    */
   messageBus.on('GET_BURNER_EMAIL_SETTING', async () => {
     try {
+      logger.debug('ServiceWorker', 'GET_BURNER_EMAIL_SETTING: Request received');
       const enabled = await Storage.getBurnerEmailEnabled();
-      logger.debug('ServiceWorker', 'Burner email setting retrieved', { enabled });
+      logger.info('ServiceWorker', 'GET_BURNER_EMAIL_SETTING: Retrieved from storage', { enabled, type: typeof enabled });
       return { success: true, enabled };
     } catch (error) {
       logger.error('ServiceWorker', 'Failed to get burner email setting', toError(error));
@@ -363,6 +376,51 @@ function setupMessageHandlers(): void {
     } catch (error) {
       logger.error('ServiceWorker', 'Failed to get telemetry setting', toError(error));
       return { success: false, error: 'Failed to get telemetry setting' };
+    }
+  });
+
+  messageBus.on('GET_REAL_EMAIL', async () => {
+    try {
+      logger.debug('ServiceWorker', 'GET_REAL_EMAIL: Request received');
+      const email = await Storage.getRealEmail();
+      logger.info('ServiceWorker', 'GET_REAL_EMAIL: Retrieved from storage', { hasEmail: !!email, emailLength: email?.length || 0 });
+      return { success: true, email };
+    } catch (error) {
+      logger.error('ServiceWorker', 'Failed to get real email', toError(error));
+      return { success: false, error: 'Failed to get real email' };
+    }
+  });
+
+  messageBus.on('SET_REAL_EMAIL', async (data: unknown) => {
+    try {
+      const { email } = data as { email: string };
+      logger.info('ServiceWorker', 'SET_REAL_EMAIL: Request received', { hasEmail: !!email, emailLength: email?.length || 0 });
+      if (typeof email !== 'string' || !email.trim()) {
+        logger.error('ServiceWorker', 'SET_REAL_EMAIL: Invalid email value', { email, type: typeof email });
+        return { success: false, error: 'Invalid email value' };
+      }
+
+      // Check if burner email feature is enabled before allowing real email configuration
+      const isEnabled = await Storage.getBurnerEmailEnabled();
+      logger.debug('ServiceWorker', 'SET_REAL_EMAIL: Checked burner email enabled state', { isEnabled });
+      if (!isEnabled) {
+        logger.warn('ServiceWorker', 'SET_REAL_EMAIL blocked - burner email feature is disabled');
+        return { success: false, error: 'Burner email feature is disabled. Please enable it in settings to configure your forwarding email address.' };
+      }
+
+      await Storage.setRealEmail(email);
+      logger.debug('ServiceWorker', 'SET_REAL_EMAIL: Email saved to storage');
+
+      // Broadcast STATE_UPDATE to notify all UI components to refresh their state
+      logger.debug('ServiceWorker', 'SET_REAL_EMAIL: Broadcasting STATE_UPDATE');
+      messageBus.broadcast('STATE_UPDATE');
+
+      logger.info('ServiceWorker', 'Real email updated and broadcasted');
+      return { success: true };
+    } catch (error) {
+      const err = toError(error);
+      logger.error('ServiceWorker', 'Failed to set real email', err);
+      return { success: false, error: err.message };
     }
   });
 

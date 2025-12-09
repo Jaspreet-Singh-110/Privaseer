@@ -44,7 +44,6 @@ class Logger {
       await this.loadLogs();
       await this.cleanup();
       this.initialized = true;
-      console.log('[Logger] Auto-initialized successfully');
     } catch (error) {
       console.error('[Logger] Failed to auto-initialize:', error);
       // Continue anyway - logger will work with in-memory buffer

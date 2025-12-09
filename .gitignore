@@ -23,5 +23,8 @@ dist-ssr
 *.sw?
 .env
 
+# Supabase temp artifacts
+supabase/.temp/
+
 # Bolt.new
 .bolt/

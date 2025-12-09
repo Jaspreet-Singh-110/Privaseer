@@ -165,6 +165,7 @@ export interface StorageData {
     forwarded: number;
   };
   complianceScores?: number[];
+  realEmail?: string; // User's real email for forwarding
 }
 
 export type MessageType =
@@ -195,7 +196,9 @@ export type MessageType =
   | 'GET_PRIVACY_SCORE_TREND'
   | 'SET_THEME'
   | 'GET_THEME'
-  | 'THEME_CHANGED';
+  | 'THEME_CHANGED'
+  | 'GET_REAL_EMAIL'
+  | 'SET_REAL_EMAIL';
 
 // Message data types for type-safe messaging
 export interface GetTrackerInfoData {

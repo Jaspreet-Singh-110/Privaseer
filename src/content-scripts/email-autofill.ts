@@ -1,5 +1,6 @@
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
+import { sanitizeUrlForBurner } from '../utils/validation';
 
 class EmailAutofill {
   private isProcessing: boolean = false;
@@ -252,8 +253,10 @@ class EmailAutofill {
 
     try {
       const domain = new URL(window.location.href).hostname;
+      logger.debug('EmailAutofill', 'Domain:', { domain });
 
       if (!chrome?.runtime?.id) {
+        logger.error('EmailAutofill', 'Extension context invalidated');
         throw new Error('Extension context invalidated - please reload the page');
       }
 
@@ -265,18 +268,22 @@ class EmailAutofill {
 
       while (retries <= maxRetries) {
         try {
+          logger.debug(`Sending GENERATE_BURNER_EMAIL message (attempt ${retries + 1}/${maxRetries + 1})`);
+          const sanitizedUrl = sanitizeUrlForBurner(window.location.href);
           response = await chrome.runtime.sendMessage({
             type: 'GENERATE_BURNER_EMAIL',
             data: {
               domain,
-              url: window.location.href,
+              ...(sanitizedUrl && { url: sanitizedUrl }),
             },
           });
+          logger.debug('EmailAutofill', 'Response received from background', { response });
           break;
         } catch (err) {
           const error = toError(err);
+          logger.error('Message send error:', { error: error.message });
           if (error.message.includes('Receiving end does not exist') && retries < maxRetries) {
-            logger.debug('EmailAutofill', 'Service worker asleep, retrying...', { attempt: retries + 1 });
+            logger.debug(`Service worker asleep, retrying in 500ms...`);
             retries++;
             await new Promise(resolve => setTimeout(resolve, 500));
           } else {
@@ -285,7 +292,7 @@ class EmailAutofill {
         }
       }
 
-      logger.debug('EmailAutofill', 'Received response', { response });
+      logger.debug('EmailAutofill', 'Final response from background', { response });
 
       if (response && response.success && response.email) {
         input.value = response.email;

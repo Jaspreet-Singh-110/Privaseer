@@ -1,5 +1,5 @@
-import { logger } from '../utils/logger';
-import { toError } from '../utils/type-guards';
+import { logger } from '../../utils/logger';
+import { toError } from '../../utils/type-guards';
 
 export class EmailAutofill {
   private burnerEmailButton: HTMLElement | null = null;

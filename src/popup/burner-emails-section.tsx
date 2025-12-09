@@ -1,12 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Mail, Copy, Trash2, Plus, ExternalLink } from 'lucide-react';
 import type { BurnerEmail } from '../types';
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
 import { BurnerEmailDisabled } from './BurnerEmailDisabled';
+import { validateEmail } from '../utils/validation';
 
 interface BurnerEmailsSectionProps {
   onOpenSettings?: () => void;
+  isActive?: boolean;
 }
 
 /**
@@ -31,7 +33,7 @@ interface BurnerEmailsSectionProps {
  * <BurnerEmailsSection onOpenSettings={() => setShowSettings(true)} />
  * ```
  */
-export function BurnerEmailsSection({ onOpenSettings }: BurnerEmailsSectionProps = {}) {
+export function BurnerEmailsSection({ onOpenSettings, isActive = true }: BurnerEmailsSectionProps = {}) {
   // Emails persist across feature toggles: once fetched they remain in state and storage
   // so users can resume accessing them even if the feature is later disabled
   const [emails, setEmails] = useState<BurnerEmail[]>([]);
@@ -39,14 +41,20 @@ export function BurnerEmailsSection({ onOpenSettings }: BurnerEmailsSectionProps
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
   // Default to false (disabled) - feature must be explicitly enabled by user
   const [isFeatureEnabled, setIsFeatureEnabled] = useState(false);
+  const [realEmail, setRealEmail] = useState<string | null>(null);
+  const [realEmailInput, setRealEmailInput] = useState<string>('');
+  const [isSavingRealEmail, setIsSavingRealEmail] = useState(false);
+  const [realEmailError, setRealEmailError] = useState<string | null>(null);
 
   useEffect(() => {
     loadFeatureState();
     loadEmails();
+    loadRealEmail();
 
     const messageListener = (message: { type: string }) => {
       if (message.type === 'STATE_UPDATE') {
         loadFeatureState();
+        // Don't reload email - let user control the input
       }
     };
 
@@ -57,11 +65,24 @@ export function BurnerEmailsSection({ onOpenSettings }: BurnerEmailsSectionProps
     };
   }, []);
 
+  // Reload state when the tab becomes active to ensure consistency
+  // This handles the case where settings were changed in another tab/section
+  useEffect(() => {
+    if (isActive) {
+      logger.info('BurnerEmails', 'Tab became active, reloading state', { currentFeatureEnabled: isFeatureEnabled });
+      loadFeatureState();
+      loadRealEmail();
+    }
+  }, [isActive]);
+
   const loadFeatureState = async () => {
     try {
       const response = await chrome.runtime.sendMessage({ type: 'GET_BURNER_EMAIL_SETTING' });
       if (response.success) {
+        logger.info('BurnerEmails', 'loadFeatureState: Setting isFeatureEnabled state', { enabled: response.enabled });
         setIsFeatureEnabled(response.enabled);
+      } else {
+        logger.warn('BurnerEmails', 'loadFeatureState: Response was not successful', { response });
       }
     } catch (error) {
       logger.error('BurnerEmails', 'Failed to load feature state', toError(error));
@@ -79,6 +100,75 @@ export function BurnerEmailsSection({ onOpenSettings }: BurnerEmailsSectionProps
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadRealEmail = async () => {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'GET_REAL_EMAIL' });
+      if (response.success) {
+        const email = response.email || null;
+        logger.info('BurnerEmails', 'loadRealEmail: Setting email state', { email: email ? 'present' : 'empty' });
+        setRealEmail(email);
+        setRealEmailInput(email || '');
+      } else {
+        logger.warn('BurnerEmails', 'loadRealEmail: Response was not successful', { response });
+      }
+    } catch (error) {
+      logger.error('BurnerEmails', 'Failed to load real email', toError(error));
+    }
+  };
+
+  const handleSaveRealEmail = async () => {
+    if (isSavingRealEmail) return;
+
+    // Check if feature is enabled before allowing save
+    if (!isFeatureEnabled) {
+      setRealEmailError('Burner email feature is disabled. Please enable it in settings.');
+      return;
+    }
+
+    // Use shared validation module for consistent validation
+    const validation = validateEmail(realEmailInput);
+    if (!validation.valid) {
+      setRealEmailError(validation.error || 'Please enter a valid email address');
+      return;
+    }
+
+    setIsSavingRealEmail(true);
+    setRealEmailError(null);
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'SET_REAL_EMAIL',
+        data: { email: validation.sanitized }
+      });
+
+      if (response.success) {
+        setRealEmail(validation.sanitized!);
+        setRealEmailInput(validation.sanitized!);
+        logger.info('BurnerEmails', 'Real email saved successfully');
+        
+        // Reload feature state to ensure consistency after save
+        await loadFeatureState();
+      } else {
+        setRealEmailError(response.error || 'Failed to save email');
+        logger.error('BurnerEmails', 'Failed to save real email', new Error(response.error || 'Unknown error'));
+      }
+    } catch (error) {
+      const err = toError(error);
+      setRealEmailError('Failed to save email. Please try again.');
+      logger.error('BurnerEmails', 'Failed to save real email', err);
+    } finally {
+      setIsSavingRealEmail(false);
+    }
+  };
+
+  const maskEmail = (email: string): string => {
+    if (!email) return '';
+    const [local, domain] = email.split('@');
+    if (!domain) return email;
+    if (local.length <= 1) return `***@${domain}`;
+    return `${local[0]}***@${domain}`;
   };
 
   // Copy functionality works regardless of feature state - users can copy emails even when disabled
@@ -164,6 +254,83 @@ export function BurnerEmailsSection({ onOpenSettings }: BurnerEmailsSectionProps
 
       {!isFeatureEnabled && (
         <BurnerEmailDisabled onOpenSettings={onOpenSettings} />
+      )}
+
+      {/* Email configuration section - only visible when feature is enabled */}
+      {isFeatureEnabled && (
+        <div className="mb-4 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+        <div className="flex items-start gap-3 mb-3">
+          <div className="flex-shrink-0">
+            <Mail className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
+              Forwarding Email Address
+            </h4>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
+              Emails sent to your burner addresses will be forwarded to this address. Your email is stored locally and never shared.
+            </p>
+            
+            {realEmail && (
+              <div className="mb-3 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  Current: <span className="font-mono text-gray-900 dark:text-white">{maskEmail(realEmail)}</span>
+                </p>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <input
+                type="email"
+                value={realEmailInput}
+                onChange={(e) => {
+                  setRealEmailInput(e.target.value);
+                  setRealEmailError(null);
+                }}
+                placeholder="your.email@example.com"
+                className={`w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-all ${
+                  !isFeatureEnabled
+                    ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 border-gray-200 dark:border-gray-600 cursor-not-allowed'
+                    : realEmailError
+                    ? 'border-red-300 dark:border-red-600'
+                    : 'border-gray-300 dark:border-gray-600'
+                }`}
+                disabled={isSavingRealEmail || !isFeatureEnabled}
+                aria-disabled={!isFeatureEnabled}
+              />
+              {realEmailError && (
+                <p className="text-xs text-red-600 dark:text-red-400">{realEmailError}</p>
+              )}
+              <button
+                onClick={handleSaveRealEmail}
+                disabled={isSavingRealEmail || !isFeatureEnabled || realEmailInput.trim() === (realEmail || '')}
+                className="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 dark:hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg transition-colors"
+                aria-disabled={!isFeatureEnabled}
+              >
+                {isSavingRealEmail ? 'Saving...' : realEmail ? 'Update Email' : 'Save Email'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      )}
+
+      {isFeatureEnabled && !realEmail && (
+        <div className="mb-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0">
+              <Mail className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-sm font-semibold text-amber-900 dark:text-amber-200 mb-1">
+                Forwarding Email Not Configured
+              </h4>
+              <p className="text-xs text-amber-800 dark:text-amber-300">
+                To receive emails at your burner addresses, configure your forwarding email address above or in settings.
+              </p>
+            </div>
+          </div>
+        </div>
       )}
 
       {emails.length === 0 ? (

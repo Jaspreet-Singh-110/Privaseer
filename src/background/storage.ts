@@ -48,8 +48,10 @@ export class Storage {
       const data = await chrome.storage.local.get('privacyData');
 
       if (!data || !data.privacyData) {
-        await this.save(DEFAULT_STORAGE_DATA);
-        this.cache = DEFAULT_STORAGE_DATA;
+        // Use deep copy to avoid mutating the DEFAULT_STORAGE_DATA constant
+        const defaultData = JSON.parse(JSON.stringify(DEFAULT_STORAGE_DATA));
+        await this.save(defaultData);
+        this.cache = defaultData;
       } else {
         this.cache = data.privacyData;
         await this.checkDailyReset();
@@ -62,7 +64,8 @@ export class Storage {
       }
     } catch (error) {
       logger.error('Storage', 'Storage initialization failed', toError(error));
-      this.cache = DEFAULT_STORAGE_DATA;
+      // Use deep copy to avoid mutating the DEFAULT_STORAGE_DATA constant
+      this.cache = JSON.parse(JSON.stringify(DEFAULT_STORAGE_DATA));
     }
   }
 
@@ -440,7 +443,9 @@ export class Storage {
   static async getBurnerEmailEnabled(): Promise<boolean> {
     const data = await this.get();
     const value = data.settings.burnerEmailEnabled;
-    return typeof value === 'boolean' ? value : false;
+    const result = typeof value === 'boolean' ? value : false;
+    logger.debug('Storage', 'getBurnerEmailEnabled', { rawValue: value, result });
+    return result;
   }
 
   /**
@@ -537,5 +542,84 @@ export class Storage {
 
   static async updateTheme(theme: 'light' | 'dark' | 'system'): Promise<void> {
     await this.setTheme(theme);
+  }
+
+  /**
+   * Gets the user's real email address for forwarding.
+   * 
+   * @returns A promise that resolves to the real email address, or `null` if not set.
+   * 
+   * @remarks
+   * The real email is used to forward emails received at burner email addresses.
+   * This email is stored locally in Chrome storage and is never shared with third parties.
+   * 
+   * @example
+   * ```typescript
+   * const realEmail = await Storage.getRealEmail();
+   * if (realEmail) {
+   *   console.log('Real email configured:', realEmail);
+   * }
+   * ```
+   */
+  static async getRealEmail(): Promise<string | null> {
+    const data = await this.get();
+    const result = data.realEmail || null;
+    logger.debug('Storage', 'getRealEmail', { hasRealEmail: !!result });
+    return result;
+  }
+
+  /**
+   * Sets the user's real email address for forwarding.
+   * 
+   * @param email - The real email address to use for forwarding. Must be a valid email format.
+   * 
+   * @remarks
+   * Side Effects:
+   * - Updates the in-memory real email immediately
+   * - Persists the change to storage immediately (awaited save operation)
+   * - Logs an info message with the masked email for audit trail
+   * 
+   * Validation:
+   * - The email is validated using a basic regex pattern
+   * - Invalid emails will throw an error
+   * 
+   * Persistence:
+   * - The save operation is immediate (awaited) to ensure the email is persisted
+   * - User-initiated setting changes are saved synchronously to prevent data loss
+   * - The email is persisted to `chrome.storage.local` immediately
+   * 
+   * Privacy:
+   * - The email is stored locally and never transmitted except when generating burner emails
+   * - Only the masked version (first character + domain) is logged
+   * 
+   * @example
+   * ```typescript
+   * await Storage.setRealEmail('user@example.com');
+   * ```
+   */
+  static async setRealEmail(email: string): Promise<void> {
+    // Basic email validation
+    const emailRegex = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+    if (!emailRegex.test(email.trim())) {
+      throw new Error('Invalid email format');
+    }
+
+    const data = await this.get();
+    const previousEmail = data.realEmail;
+    data.realEmail = email.trim().toLowerCase();
+    await this.save(data);
+    
+    // Mask email for logging (show first char + domain)
+    const maskEmail = (email: string): string => {
+      const [local, domain] = email.split('@');
+      if (!domain) return '***';
+      const maskedLocal = local.length > 0 ? local[0] + '***' : '***';
+      return `${maskedLocal}@${domain}`;
+    };
+    
+    logger.info('Storage', 'Real email updated', {
+      previousEmail: previousEmail ? maskEmail(previousEmail) : null,
+      newEmail: maskEmail(data.realEmail),
+    });
   }
 }
