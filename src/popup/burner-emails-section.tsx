@@ -66,26 +66,23 @@ export function BurnerEmailsSection({ onOpenSettings, isActive = true }: BurnerE
   }, []);
 
   // Reload state when the tab becomes active to ensure consistency
-  // This handles the case where settings were changed in another tab/section
+  // This handles the case where settings were changed in another tab/section.
+  // We deliberately avoid re-running when internal state changes to prevent loops.
+  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (isActive) {
       logger.info('BurnerEmails', 'Tab became active, reloading state', { currentFeatureEnabled: isFeatureEnabled });
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/d9ddd67e-e9e4-491a-8839-18c41a0af346',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'initial',hypothesisId:'H1',location:'burner-emails-section.tsx:72',message:'Tab active reload',data:{isFeatureEnabled}})}).catch(()=>{});
-      // #endregion
       loadFeatureState();
       loadRealEmail();
     }
   }, [isActive]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   const loadFeatureState = async () => {
     try {
       const response = await chrome.runtime.sendMessage({ type: 'GET_BURNER_EMAIL_SETTING' });
       if (response.success) {
         logger.info('BurnerEmails', 'loadFeatureState: Setting isFeatureEnabled state', { enabled: response.enabled });
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/d9ddd67e-e9e4-491a-8839-18c41a0af346',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'initial',hypothesisId:'H1',location:'burner-emails-section.tsx:82',message:'Setting feature enabled',data:{enabled:response.enabled}})}).catch(()=>{});
-        // #endregion
         setIsFeatureEnabled(response.enabled);
       } else {
         logger.warn('BurnerEmails', 'loadFeatureState: Response was not successful', { response });

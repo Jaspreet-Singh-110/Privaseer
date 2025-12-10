@@ -50,6 +50,8 @@ export function SettingsPage({
   const burnerToggleRef = useRef<HTMLButtonElement | null>(null);
   const isTogglingRef = useRef(false);
 
+  // Run once on mount to register listeners; helper functions intentionally excluded to avoid ref churn.
+  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     loadCurrentTheme();
     loadBurnerEmailSetting();
@@ -70,8 +72,11 @@ export function SettingsPage({
       chrome.runtime.onMessage.removeListener(messageListener);
     };
   }, []);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
-  // Reload state when settings modal opens to ensure consistency
+  // Reload state when settings modal opens to ensure consistency.
+  // Refetch only when modal visibility/deep-link inputs change.
+  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (isOpen) {
       logger.info('Settings', 'Modal opened, reloading state', { currentBurnerEnabled: isBurnerEmailEnabled });
@@ -87,8 +92,11 @@ export function SettingsPage({
       loadRealEmail();
     }
   }, [isOpen, highlightBurnerToggle]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
-  // Reload burner email setting when navigating to burner-services section
+  // Reload burner email setting when navigating to burner-services section.
+  // Restrict to section/nav changes to avoid redundant fetch loops.
+  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (isOpen && activeSection === 'burner-services' && !highlightBurnerToggle) {
       logger.info('Settings', 'Navigated to burner-services, reloading state', { currentBurnerEnabled: isBurnerEmailEnabled });
@@ -96,6 +104,7 @@ export function SettingsPage({
       // Don't reload email - it's already loaded when modal opened
     }
   }, [isOpen, activeSection, highlightBurnerToggle]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   const loadCurrentTheme = async () => {
     try {
