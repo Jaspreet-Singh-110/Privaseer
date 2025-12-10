@@ -5,13 +5,12 @@
   "description": "Privacy-first browser extension with real-time tracker blocking, privacy scoring, and consent scanning",
   "permissions": [
     "storage",
-    "activeTab",
     "declarativeNetRequest",
     "declarativeNetRequestFeedback",
     "tabs"
   ],
   "host_permissions": [
-    "<all_urls>"
+    "https://llffqxdhpgsqnpzeznaq.supabase.co/*"
   ],
   "background": {
     "service_worker": "src/background/service-worker.ts",

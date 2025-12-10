@@ -233,6 +233,16 @@ export interface MessageResponse {
 }
 
 // Map of message types to their data types
+export interface TabSummary {
+  id: number;
+  url?: string;
+  title?: string;
+  active: boolean;
+  blockCount: number;
+  lastUpdate: number;
+  status?: 'loading' | 'complete';
+}
+
 export interface MessageDataMap {
   STATE_UPDATE: undefined;
   GET_STATE: undefined;
@@ -240,22 +250,41 @@ export interface MessageDataMap {
   CONSENT_SCAN_RESULT: ConsentScanResult;
   GET_TRACKER_INFO: GetTrackerInfoData;
   TRACKER_BLOCKED: undefined;
-  TAB_ACTIVATED: undefined;
-  TAB_UPDATED: undefined;
-  TAB_REMOVED: undefined;
+  TAB_ACTIVATED: { tabId: number; tab?: TabSummary };
+  TAB_UPDATED: { tabId: number; changeInfo?: Record<string, unknown>; tab?: TabSummary };
+  TAB_REMOVED: { tabId: number };
   CLEAR_ALERTS: undefined;
   EXTENSION_READY: undefined;
+  GENERATE_BURNER_EMAIL: { domain: string; url?: string; label?: string };
+  GET_BURNER_EMAILS: undefined;
+  DELETE_BURNER_EMAIL: { emailId: string };
+  SUBMIT_FEEDBACK: { feedbackText: string; url?: string; domain?: string };
+  GET_BURNER_EMAIL_SETTING: undefined;
+  SET_BURNER_EMAIL_SETTING: { enabled: boolean };
+  BURNER_EMAIL_SETTING_CHANGED: { enabled: boolean };
+  GET_METRICS_AGGREGATION: { period?: 'week' | 'month' | 'all-time' } | undefined;
+  GET_PRIVACY_SCORE_TREND: undefined;
+  GET_TELEMETRY_SETTING: undefined;
+  SET_TELEMETRY_SETTING: { enabled: boolean };
+  TELEMETRY_SETTING_CHANGED: { enabled: boolean };
+  GET_REAL_EMAIL: undefined;
+  SET_REAL_EMAIL: { email: string };
+  SET_THEME: { theme: 'light' | 'dark' | 'system' };
+  GET_THEME: undefined;
+  THEME_CHANGED: { theme: 'light' | 'dark' | 'system' };
+  TRACK_EVENT: { eventType: string; eventData?: Record<string, unknown> };
+  RECORD_COMPLIANCE_SCORE: { score: number };
 }
 
-export interface Message<T = unknown> {
-  type: MessageType;
-  data?: T;
+export interface Message<T extends MessageType = MessageType> {
+  type: T;
+  data?: MessageDataMap[T];
   requestId?: string;
   timestamp?: number;
 }
 
-export interface MessageHandler<T = unknown> {
-  (data: T, sender: chrome.runtime.MessageSender): Promise<unknown> | unknown;
+export interface MessageHandler<T extends MessageType = MessageType> {
+  (data: MessageDataMap[T], sender: chrome.runtime.MessageSender): Promise<unknown> | unknown;
 }
 
 // Backward compatibility alias
