@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Mail, Copy, Trash2, Plus, ExternalLink } from 'lucide-react';
 import type { BurnerEmail } from '../types';
 import { logger } from '../utils/logger';
@@ -70,6 +70,9 @@ export function BurnerEmailsSection({ onOpenSettings, isActive = true }: BurnerE
   useEffect(() => {
     if (isActive) {
       logger.info('BurnerEmails', 'Tab became active, reloading state', { currentFeatureEnabled: isFeatureEnabled });
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/d9ddd67e-e9e4-491a-8839-18c41a0af346',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'initial',hypothesisId:'H1',location:'burner-emails-section.tsx:72',message:'Tab active reload',data:{isFeatureEnabled}})}).catch(()=>{});
+      // #endregion
       loadFeatureState();
       loadRealEmail();
     }
@@ -80,6 +83,9 @@ export function BurnerEmailsSection({ onOpenSettings, isActive = true }: BurnerE
       const response = await chrome.runtime.sendMessage({ type: 'GET_BURNER_EMAIL_SETTING' });
       if (response.success) {
         logger.info('BurnerEmails', 'loadFeatureState: Setting isFeatureEnabled state', { enabled: response.enabled });
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/d9ddd67e-e9e4-491a-8839-18c41a0af346',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'initial',hypothesisId:'H1',location:'burner-emails-section.tsx:82',message:'Setting feature enabled',data:{enabled:response.enabled}})}).catch(()=>{});
+        // #endregion
         setIsFeatureEnabled(response.enabled);
       } else {
         logger.warn('BurnerEmails', 'loadFeatureState: Response was not successful', { response });

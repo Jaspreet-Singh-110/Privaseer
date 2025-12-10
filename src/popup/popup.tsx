@@ -5,9 +5,16 @@ import type { StorageData, Alert as AlertType, Message } from '../types';
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
 import { BurnerEmailsSection } from './burner-emails-section';
-import { SettingsPage, type SettingsSection } from './settings-page';
+import { SettingsPage, type SettingsSection, type SettingsPageProps } from './settings-page';
 import { ThemeManager } from '../utils/theme-manager';
 import '../index.css';
+
+type ReportableSettingsPageProps = SettingsPageProps & {
+  reportContext?: AlertType | null;
+  onReportClear?: () => void;
+};
+
+const ReportableSettingsPage = SettingsPage as (props: ReportableSettingsPageProps) => JSX.Element;
 
 function PrivacyScoreMeter({ score }: { score: number }) {
   const [animatedScore, setAnimatedScore] = useState(0);
@@ -115,7 +122,7 @@ function PrivacyScoreMeter({ score }: { score: number }) {
   );
 }
 
-function Popup() {
+export function Popup() {
   const [data, setData] = useState<StorageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedAlerts, setExpandedAlerts] = useState<Set<string>>(new Set());
@@ -129,6 +136,7 @@ function Popup() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'burner'>('dashboard');
   const [settingsDeepLink, setSettingsDeepLink] = useState<SettingsSection | null>(null);
   const [highlightBurnerToggle, setHighlightBurnerToggle] = useState(false);
+  const [reportingAlert, setReportingAlert] = useState<AlertType | null>(null);
 
   useEffect(() => {
     checkCurrentTab();
@@ -274,6 +282,15 @@ function Popup() {
     setTimeout(() => setShowSuccessBanner(false), 3000);
   };
 
+  /**
+   * Opens the settings modal to the feedback tab with alert context so the user can report violations.
+   */
+  const openReportDialog = (alert: AlertType) => {
+    setReportingAlert(alert);
+    setSettingsDeepLink('feedback');
+    setShowSettings(true);
+  };
+
   if (loading || !data) {
     return (
       <div className="w-full h-[500px] flex items-center justify-center bg-gray-50 dark:bg-gray-900">
@@ -315,7 +332,7 @@ function Popup() {
           </div>
         </div>
 
-        <SettingsPage
+        <ReportableSettingsPage
           isOpen={showSettings}
           onClose={() => setShowSettings(false)}
           currentTab={currentTab}
@@ -468,11 +485,12 @@ function Popup() {
             </div>
           ) : (
             data.alerts.map((alert) => (
-              <AlertItem
+                <AlertItem
                 key={alert.id}
                 alert={alert}
                 isExpanded={expandedAlerts.has(alert.id)}
-                onToggleExpanded={() => toggleExpanded(alert.id)}
+                  onToggleExpanded={() => toggleExpanded(alert.id)}
+                  onReport={openReportDialog}
               />
             ))
           )}
@@ -481,12 +499,13 @@ function Popup() {
         </>
       )}
 
-      <SettingsPage
+      <ReportableSettingsPage
         isOpen={showSettings}
         onClose={() => {
           setShowSettings(false);
           setSettingsDeepLink(null);
           setHighlightBurnerToggle(false);
+          setReportingAlert(null);
         }}
         currentTab={currentTab}
         onFeedbackSuccess={handleFeedbackSuccess}
@@ -496,6 +515,8 @@ function Popup() {
           setHighlightBurnerToggle(false);
           setSettingsDeepLink(null);
         }}
+        reportContext={reportingAlert}
+        onReportClear={() => setReportingAlert(null)}
       />
 
       {showSuccessBanner && (
@@ -531,14 +552,16 @@ function Popup() {
   );
 }
 
-function AlertItem({
+export function AlertItem({
   alert,
   isExpanded,
-  onToggleExpanded
+  onToggleExpanded,
+  onReport,
 }: {
   alert: AlertType;
   isExpanded: boolean;
   onToggleExpanded: () => void;
+  onReport: (alert: AlertType) => void;
 }) {
   const [trackerInfo, setTrackerInfo] = useState<{ description: string; alternative: string } | null>(null);
   const [loadingInfo, setLoadingInfo] = useState(false);
@@ -560,6 +583,8 @@ function AlertItem({
         return <AlertTriangle className="w-4 h-4 text-red-600" />;
       case 'non_compliant_site':
         return <XCircle className="w-4 h-4 text-amber-600" />;
+      case 'post_consent_violation':
+        return <AlertTriangle className="w-4 h-4 text-red-600" />;
       default:
         return <Shield className="w-4 h-4 text-blue-600" />;
     }
@@ -598,18 +623,22 @@ function AlertItem({
     }
   };
 
+  const isTrackerAlert = alert.type === 'tracker_blocked' || alert.type === 'high_risk';
+  const isCookieBannerAlert = alert.type === 'non_compliant_site';
+  const isPostConsentViolation = alert.type === 'post_consent_violation';
+  const isReportable = isCookieBannerAlert || isPostConsentViolation;
+  const hasBannerDetails = isCookieBannerAlert && Boolean(alert.deceptivePatterns?.length);
+  const hasViolationDetails = isPostConsentViolation && Boolean(alert.blockedTrackers?.length);
+
   const handleAlertClick = () => {
     if (isTrackerAlert) {
       loadTrackerInfo();
-    }
-    else if (isCookieBannerAlert) {
+    } else if (hasBannerDetails || hasViolationDetails) {
       onToggleExpanded();
     }
   };
 
-  const isTrackerAlert = alert.type === 'tracker_blocked' || alert.type === 'high_risk';
-  const isCookieBannerAlert = alert.type === 'non_compliant_site';
-  const hasExpandableInfo = isTrackerAlert || (isCookieBannerAlert && alert.deceptivePatterns && alert.deceptivePatterns.length > 0);
+  const hasExpandableInfo = isTrackerAlert || hasBannerDetails || hasViolationDetails;
 
   return (
     <div className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-b border-gray-100 dark:border-gray-700">
@@ -629,7 +658,13 @@ function AlertItem({
                     handleAlertClick();
                   }}
                   className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors flex-shrink-0"
-                  title={isTrackerAlert ? "Show tracker info" : "Show banner details"}
+                  title={
+                    isTrackerAlert
+                      ? 'Show tracker info'
+                      : isPostConsentViolation
+                        ? 'Show violation details'
+                        : 'Show banner details'
+                  }
                   disabled={loadingInfo}
                 >
                   {loadingInfo ? (
@@ -637,6 +672,17 @@ function AlertItem({
                   ) : (
                     <Info className="w-3 h-3 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400" />
                   )}
+                </button>
+              )}
+              {isReportable && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onReport(alert);
+                  }}
+                  className="text-xs text-red-600 dark:text-red-400 hover:underline font-medium ml-2"
+                >
+                  Report
                 </button>
               )}
             </div>
@@ -685,6 +731,41 @@ function AlertItem({
               <div className="mt-2 pt-2 border-t border-amber-200 dark:border-amber-800">
                 <span className="font-semibold text-amber-900 dark:text-amber-300">URL: </span>
                 <span className="text-amber-800 dark:text-amber-400 break-all">{alert.url}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {isExpanded && hasViolationDetails && alert.blockedTrackers && (
+        <div className="px-6 pb-3">
+          <div className="ml-5 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-xs">
+            <div className="mb-2">
+              <span className="font-semibold text-red-900 dark:text-red-300">GDPR Violation Detected</span>
+            </div>
+            <p className="text-red-800 dark:text-red-400 mb-2">
+              This site loaded tracking scripts after you explicitly denied consent.
+            </p>
+            <div className="mt-2">
+              <span className="font-semibold text-red-900 dark:text-red-300">Trackers loaded:</span>
+              <ul className="mt-1 space-y-1 text-red-800 dark:text-red-400">
+                {alert.blockedTrackers.map((tracker, idx) => (
+                  <li key={`${tracker}-${idx}`} className="flex items-start gap-2">
+                    <span className="text-red-600 dark:text-red-500 mt-0.5">•</span>
+                    <span>{tracker}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            {typeof alert.trackerCount === 'number' && (
+              <div className="mt-2 text-red-900 dark:text-red-300">
+                Total trackers detected after denial: <span className="font-semibold">{alert.trackerCount}</span>
+              </div>
+            )}
+            {alert.url && (
+              <div className="mt-2 pt-2 border-t border-red-200 dark:border-red-800">
+                <span className="font-semibold text-red-900 dark:text-red-300">URL: </span>
+                <span className="text-red-800 dark:text-red-400 break-all">{alert.url}</span>
               </div>
             )}
           </div>

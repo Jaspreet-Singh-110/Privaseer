@@ -175,9 +175,9 @@ describe('Burner Email Toggle - Comprehensive Tests', () => {
       expect(enabled).toBe(true);
     });
 
-    it('should return true by default when not set', async () => {
+    it('should return false by default when not set', async () => {
       const enabled = await Storage.getBurnerEmailEnabled();
-      expect(enabled).toBe(true);
+      expect(enabled).toBe(false);
     });
 
     it('should persist setting across multiple calls', async () => {

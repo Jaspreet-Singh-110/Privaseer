@@ -16,6 +16,7 @@ const VALID_MESSAGE_TYPES = new Set<MessageType>([
   'CONSENT_SCAN_RESULT',
   'GET_TRACKER_INFO',
   'TRACKER_BLOCKED',
+  'POST_CONSENT_VIOLATION',
   'TAB_ACTIVATED',
   'TAB_UPDATED',
   'TAB_REMOVED',
@@ -231,7 +232,6 @@ class MessageBus {
       let lastResult: unknown = { success: true };
       // Process sequentially to avoid race conditions between handlers
       for (const handler of [...handlers]) {
-        // eslint-disable-next-line no-await-in-loop
         lastResult = await handler(message.data as MessageDataMap[typeof message.type], sender);
       }
       return lastResult;

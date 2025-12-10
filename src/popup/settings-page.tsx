@@ -4,11 +4,12 @@ import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
 import { ThemeManager } from '../utils/theme-manager';
 import { validateEmail } from '../utils/validation';
+import type { Alert as AlertType } from '../types';
 
 export type SettingsSection = 'menu' | 'feedback' | 'theme' | 'burner-services' | 'telemetry' | 'about';
 type ThemeOption = 'light' | 'dark' | 'system';
 
-interface SettingsPageProps {
+export interface SettingsPageProps {
   isOpen: boolean;
   onClose: () => void;
   currentTab: chrome.tabs.Tab | null;
@@ -16,6 +17,8 @@ interface SettingsPageProps {
   deepLinkSection?: SettingsSection | null;
   highlightBurnerToggle?: boolean;
   onBurnerHighlightComplete?: () => void;
+  reportContext?: AlertType | null;
+  onReportClear?: () => void;
 }
 
 export function SettingsPage({
@@ -26,6 +29,8 @@ export function SettingsPage({
   deepLinkSection,
   highlightBurnerToggle = false,
   onBurnerHighlightComplete,
+  reportContext = null,
+  onReportClear,
 }: SettingsPageProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>('menu');
   const [feedbackText, setFeedbackText] = useState('');
@@ -340,6 +345,18 @@ export function SettingsPage({
   }, [deepLinkSection, isOpen, highlightBurnerToggle]);
 
   useEffect(() => {
+    if (!isOpen || !reportContext) return;
+    if (activeSection !== 'feedback') return;
+
+    const contextText =
+      reportContext.type === 'post_consent_violation'
+        ? `[GDPR Violation Report]\nDomain: ${reportContext.domain}\nTrackers loaded after denial: ${reportContext.trackerCount ?? 'unknown'}\nTrackers: ${reportContext.blockedTrackers?.join(', ') || 'N/A'}\nURL: ${reportContext.url || 'N/A'}\n\nAdditional details:`
+        : `[Deceptive Banner Report]\nDomain: ${reportContext.domain}\nPatterns: ${reportContext.deceptivePatterns?.join(', ') || 'N/A'}\nURL: ${reportContext.url || 'N/A'}\n\nAdditional details:`;
+
+    setFeedbackText(contextText);
+  }, [isOpen, reportContext, activeSection]);
+
+  useEffect(() => {
     if (!isOpen || !highlightBurnerToggle) return;
     if (activeSection !== 'burner-services') return;
     if (!burnerToggleRef.current) return;
@@ -380,6 +397,11 @@ export function SettingsPage({
   }, [highlightBurnerToggle, shouldHighlightBurnerToggle]);
 
 
+  const handleClose = () => {
+    onReportClear?.();
+    onClose();
+  };
+
   if (!isOpen) return null;
 
   const navigateToSection = (section: SettingsSection) => {
@@ -418,7 +440,7 @@ export function SettingsPage({
       if (response.success) {
         logger.info('Popup', 'User feedback submitted', { domain: getDomain(currentTab?.url) });
         setFeedbackText('');
-        onClose();
+        handleClose();
         onFeedbackSuccess();
       } else {
         logger.error('Popup', 'Failed to submit feedback', new Error(response.error || 'Unknown error'));
@@ -432,7 +454,7 @@ export function SettingsPage({
 
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {
-      onClose();
+      handleClose();
     }
   };
 
@@ -462,7 +484,7 @@ export function SettingsPage({
             </h2>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all hover:scale-110"
             aria-label="Close settings"
           >
@@ -895,7 +917,7 @@ export function SettingsPage({
 
         <div className="px-6 py-4 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600 rounded-b-xl">
           <button
-            onClick={activeSection === 'menu' ? onClose : navigateBack}
+            onClick={activeSection === 'menu' ? handleClose : navigateBack}
             className="w-full px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
           >
             {activeSection === 'menu' ? 'Close' : 'Back'}

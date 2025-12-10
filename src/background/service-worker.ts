@@ -10,11 +10,28 @@ import { tabManager } from '../utils/tab-manager';
 import { backgroundEvents } from './event-emitter';
 import { toError, isGetTrackerInfoData, isConsentScanResult } from '../utils/type-guards';
 import { sanitizeUrl } from '../utils/sanitizer';
-import { BADGE, TIME } from '../utils/constants';
+import { BADGE, TIME, CONSENT_VIOLATION } from '../utils/constants';
 
 let isInitialized = false;
 let initializationPromise: Promise<void> | null = null;
 const consentAlertCache = new Map<string, number>(); // Track consent alerts by domain
+const consentRejectionCache = new Map<string, { timestamp: number; tabId?: number }>();
+
+export function getConsentRejection(domain: string): { timestamp: number; tabId?: number } | null {
+  const entry = consentRejectionCache.get(domain);
+  if (!entry) {
+    return null;
+  }
+
+  if (Date.now() - entry.timestamp > CONSENT_VIOLATION.REJECTION_WINDOW_MS) {
+    consentRejectionCache.delete(domain);
+    return null;
+  }
+
+  return entry;
+}
+
+FirewallEngine.setConsentRejectionProvider(getConsentRejection);
 
 async function initializeExtension(): Promise<void> {
   // If already initialized, skip
@@ -89,7 +106,7 @@ function setupMessageHandlers(): void {
     return { success: true, info };
   });
 
-  messageBus.on('CONSENT_SCAN_RESULT', async (data: unknown) => {
+  messageBus.on('CONSENT_SCAN_RESULT', async (data: unknown, sender) => {
     if (!isConsentScanResult(data)) {
       return { success: false, error: 'Invalid consent scan result data' };
     }
@@ -97,6 +114,18 @@ function setupMessageHandlers(): void {
 
     const urlObj = new URL(result.url);
     const domain = urlObj.hostname;
+
+    if (result.cmpDetection?.consentStatus === 'rejected') {
+      consentRejectionCache.set(domain, {
+        timestamp: Date.now(),
+        tabId: sender?.tab?.id ?? undefined,
+      });
+      logger.info('ServiceWorker', 'Consent rejection recorded', {
+        domain,
+        cmpType: result.cmpDetection?.cmpType,
+        tabId: sender?.tab?.id,
+      });
+    }
 
     if (result.hasPersistedConsent) {
       logger.info('ServiceWorker', 'Site has valid persisted consent, skipping penalty', {

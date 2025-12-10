@@ -1,12 +1,14 @@
 export interface Alert {
   id: string;
-  type: 'tracker_blocked' | 'non_compliant_site' | 'high_risk';
+  type: 'tracker_blocked' | 'non_compliant_site' | 'high_risk' | 'post_consent_violation';
   severity: 'low' | 'medium' | 'high';
   message: string;
   domain: string;
   timestamp: number;
   url?: string;
   deceptivePatterns?: string[];
+  trackerCount?: number;
+  blockedTrackers?: string[];
 }
 
 export interface PrivacyScore {
@@ -175,6 +177,7 @@ export type MessageType =
   | 'CONSENT_SCAN_RESULT'
   | 'GET_TRACKER_INFO'
   | 'TRACKER_BLOCKED'
+  | 'POST_CONSENT_VIOLATION'
   | 'TAB_ACTIVATED'
   | 'TAB_UPDATED'
   | 'TAB_REMOVED'
@@ -250,6 +253,7 @@ export interface MessageDataMap {
   CONSENT_SCAN_RESULT: ConsentScanResult;
   GET_TRACKER_INFO: GetTrackerInfoData;
   TRACKER_BLOCKED: undefined;
+  POST_CONSENT_VIOLATION: { domain: string; count: number; trackers: string[] };
   TAB_ACTIVATED: { tabId: number; tab?: TabSummary };
   TAB_UPDATED: { tabId: number; changeInfo?: Record<string, unknown>; tab?: TabSummary };
   TAB_REMOVED: { tabId: number };

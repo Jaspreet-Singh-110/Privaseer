@@ -6,7 +6,7 @@ import { tabManager } from '../utils/tab-manager';
 import { backgroundEvents } from './event-emitter';
 import { toError } from '../utils/type-guards';
 import { sanitizeUrl } from '../utils/sanitizer';
-import { BADGE } from '../utils/constants';
+import { BADGE, CONSENT_VIOLATION } from '../utils/constants';
 
 const RULESET_ID = 'tracker_blocklist';
 const BADGE_UPDATE_DEBOUNCE_MS = 300;
@@ -17,6 +17,11 @@ export class FirewallEngine {
   private static badgeUpdateTimers = new Map<number, number>();
   private static cleanSiteAlerts = new Map<string, number>(); // Track clean site alerts by domain
   private static trackerAlertCache = new Map<string, number>(); // Track tracker alerts by "tracker:site" key
+  private static postConsentViolationCache = new Map<
+    string,
+    { count: number; trackers: string[]; timestamp: number; timeoutId?: number; url?: string }
+  >();
+  private static consentRejectionProvider?: (domain: string) => { timestamp: number; tabId?: number } | null;
 
   private static readonly RISK_WEIGHTS = {
     'analytics': 1,        // Basic analytics (Google Analytics, Matomo)
@@ -85,6 +90,12 @@ export class FirewallEngine {
     return this.RISK_WEIGHTS[category as keyof typeof this.RISK_WEIGHTS] || this.RISK_WEIGHTS['unknown'];
   }
 
+  static setConsentRejectionProvider(
+    provider: ((domain: string) => { timestamp: number; tabId?: number } | null) | null
+  ): void {
+    this.consentRejectionProvider = provider ?? undefined;
+  }
+
   static async handleBlockedRequest(url: string, tabId: number): Promise<void> {
     try {
       const urlObj = new URL(url);
@@ -116,6 +127,15 @@ export class FirewallEngine {
 
       const tab = await chrome.tabs.get(tabId);
       const siteDomain = tab.url ? new URL(tab.url).hostname : 'unknown';
+
+      const consentRejection = this.consentRejectionProvider?.(siteDomain) ?? null;
+      if (
+        consentRejection &&
+        Date.now() - consentRejection.timestamp <= CONSENT_VIOLATION.REJECTION_WINDOW_MS
+      ) {
+        this.recordPostConsentViolation(siteDomain, domain, tab.url);
+        return;
+      }
 
       // Check if we've already alerted about this tracker on this site recently (within 1 minute)
       const alertKey = `${domain}:${siteDomain}`;
@@ -219,6 +239,68 @@ export class FirewallEngine {
     messageBus.broadcast('STATE_UPDATE');
   }
 
+  private static recordPostConsentViolation(siteDomain: string, trackerDomain: string, pageUrl?: string | null): void {
+    const existing = this.postConsentViolationCache.get(siteDomain);
+
+    if (existing) {
+      existing.count += 1;
+      if (!existing.trackers.includes(trackerDomain)) {
+        existing.trackers.push(trackerDomain);
+      }
+      existing.url = existing.url ?? pageUrl ?? undefined;
+      if (existing.timeoutId) {
+        clearTimeout(existing.timeoutId);
+      }
+    } else {
+      this.postConsentViolationCache.set(siteDomain, {
+        count: 1,
+        trackers: [trackerDomain],
+        timestamp: Date.now(),
+        url: pageUrl ?? undefined,
+      });
+    }
+
+    const entry = this.postConsentViolationCache.get(siteDomain)!;
+    entry.timeoutId = setTimeout(() => {
+      void this.flushPostConsentViolation(siteDomain);
+    }, CONSENT_VIOLATION.AGGREGATION_DELAY_MS) as unknown as number;
+  }
+
+  private static async flushPostConsentViolation(siteDomain: string): Promise<void> {
+    const entry = this.postConsentViolationCache.get(siteDomain);
+    if (!entry) {
+      return;
+    }
+
+    if (entry.timeoutId) {
+      clearTimeout(entry.timeoutId);
+    }
+    this.postConsentViolationCache.delete(siteDomain);
+
+    const alert: Alert = {
+      id: `pcv-${Date.now()}-${Math.random()}`,
+      type: 'post_consent_violation',
+      severity: 'high',
+      message: `Alert: This site may be violating privacy laws. It loaded ${entry.count} tracker${
+        entry.count > 1 ? 's' : ''
+      } after you denied consent.`,
+      domain: siteDomain,
+      timestamp: Date.now(),
+      url: entry.url ? sanitizeUrl(entry.url) ?? undefined : undefined,
+      trackerCount: entry.count,
+      blockedTrackers: [...entry.trackers],
+    };
+
+    await Storage.addAlert(alert);
+    this.notifyPopup();
+
+    backgroundEvents.emit('POST_CONSENT_VIOLATION', {
+      domain: siteDomain,
+      trackerCount: entry.count,
+      trackers: entry.trackers,
+    });
+  }
+
   static async toggleProtection(): Promise<boolean> {
     const enabled = await Storage.toggleProtection();
 
@@ -304,6 +386,13 @@ export class FirewallEngine {
       clearTimeout(timer as unknown as number);
     }
     this.badgeUpdateTimers.clear();
+
+    for (const entry of this.postConsentViolationCache.values()) {
+      if (entry.timeoutId) {
+        clearTimeout(entry.timeoutId as unknown as number);
+      }
+    }
+    this.postConsentViolationCache.clear();
   }
 
   static getTrackerInfo(domain: string): { description: string; alternative: string } | null {

@@ -1,17 +1,23 @@
+import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SettingsPage } from '../../popup/settings-page';
 
 describe('Settings Page - Burner Email Toggle', () => {
+  const originalChrome = global.chrome;
   let mockSendMessage: ReturnType<typeof vi.fn>;
   let mockAddListener: ReturnType<typeof vi.fn>;
   let mockRemoveListener: ReturnType<typeof vi.fn>;
+  let mockStorageGet: ReturnType<typeof vi.fn>;
+  let mockStorageSet: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     mockSendMessage = vi.fn();
     mockAddListener = vi.fn();
     mockRemoveListener = vi.fn();
+    mockStorageGet = vi.fn().mockResolvedValue({});
+    mockStorageSet = vi.fn().mockResolvedValue(undefined);
 
     // Mock Chrome APIs
     global.chrome = {
@@ -22,11 +28,18 @@ describe('Settings Page - Burner Email Toggle', () => {
           removeListener: mockRemoveListener,
         },
       },
-    } as any;
+      storage: {
+        local: {
+          get: mockStorageGet,
+          set: mockStorageSet,
+        },
+      },
+    } as unknown as typeof chrome;
   });
 
   afterEach(() => {
     vi.clearAllMocks();
+    global.chrome = originalChrome;
   });
 
   it('should enable email input after toggling burner email ON', async () => {
