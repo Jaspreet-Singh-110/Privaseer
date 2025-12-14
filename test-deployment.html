@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edge Function Deployment Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 30px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        .test-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .status {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+        .status.pass {
+            background: #10b981;
+            color: white;
+        }
+        .status.fail {
+            background: #ef4444;
+            color: white;
+        }
+        .status.pending {
+            background: #f59e0b;
+            color: white;
+        }
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #e5e7eb;
+            font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .result.success {
+            border-color: #10b981;
+            background: #f0fdf4;
+        }
+        .result.error {
+            border-color: #ef4444;
+            background: #fef2f2;
+        }
+        .info {
+            background: #eff6ff;
+            border: 1px solid #3b82f6;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 20px;
+            color: #1e40af;
+            font-size: 14px;
+        }
+        .info strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .field-check {
+            margin-top: 10px;
+            padding: 10px;
+            background: white;
+            border-radius: 4px;
+            border: 1px solid #e5e7eb;
+        }
+        .field-check.pass {
+            border-color: #10b981;
+            background: #f0fdf4;
+        }
+        .field-check.fail {
+            border-color: #ef4444;
+            background: #fef2f2;
+        }
+        .field-check-label {
+            font-weight: 600;
+            margin-bottom: 5px;
+            display: block;
+        }
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Edge Function Deployment Test</h1>
+        <p class="subtitle">Testing generate-burner-email function deployment</p>
+
+        <div class="info">
+            <strong>ℹ️ Test Configuration</strong>
+            <div>Supabase URL: <code id="supabase-url">Loading...</code></div>
+            <div>Function: <code>generate-burner-email</code></div>
+            <div>Test Installation ID: <code id="test-installation-id">Generating...</code></div>
+        </div>
+
+        <div class="test-section">
+            <div class="test-title">
+                Test 1: Create Burner Email (POST)
+                <span class="status pending" id="test1-status">PENDING</span>
+            </div>
+            <button onclick="testCreateEmail()" id="test1-btn">Run Test</button>
+            <div id="test1-result"></div>
+        </div>
+
+        <div class="test-section">
+            <div class="test-title">
+                Test 2: Verify email_address Field
+                <span class="status pending" id="test2-status">PENDING</span>
+            </div>
+            <button onclick="testFieldCheck()" id="test2-btn" disabled>Run Test</button>
+            <div id="test2-result"></div>
+        </div>
+
+        <div class="test-section">
+            <div class="test-title">
+                Test 3: Retrieve Burner Emails (GET)
+                <span class="status pending" id="test3-status">PENDING</span>
+            </div>
+            <button onclick="testGetEmails()" id="test3-btn" disabled>Run Test</button>
+            <div id="test3-result"></div>
+        </div>
+
+        <div class="test-section">
+            <div class="test-title">
+                Test 4: Run All Tests
+            </div>
+            <button onclick="runAllTests()" style="background: #10b981;">Run All Tests</button>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://llffqxdhpgsqnpzeznaq.supabase.co';
+        const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxsZmZxeGRocGdzcW5wemV6bmFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA4NjMxNjIsImV4cCI6MjA3NjQzOTE2Mn0.Eaug9z-gFKPiD3vGI7yKXVUUwJMEMsfUnZ3SXj9SO4Y';
+        const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/generate-burner-email`;
+        
+        // Generate a test installation ID
+        const testInstallationId = 'test-' + crypto.randomUUID();
+        let createdEmailId = null;
+
+        document.getElementById('supabase-url').textContent = SUPABASE_URL;
+        document.getElementById('test-installation-id').textContent = testInstallationId;
+
+        function updateStatus(testNum, status, text) {
+            const statusEl = document.getElementById(`test${testNum}-status`);
+            statusEl.className = `status ${status}`;
+            statusEl.textContent = text;
+        }
+
+        function showResult(testNum, data, isError = false) {
+            const resultEl = document.getElementById(`test${testNum}-result`);
+            resultEl.innerHTML = `<div class="result ${isError ? 'error' : 'success'}">${JSON.stringify(data, null, 2)}</div>`;
+        }
+
+        async function testCreateEmail() {
+            const btn = document.getElementById('test1-btn');
+            btn.disabled = true;
+            updateStatus(1, 'pending', 'RUNNING...');
+
+            try {
+                const response = await fetch(FUNCTION_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${ANON_KEY}`,
+                        'apikey': ANON_KEY
+                    },
+                    body: JSON.stringify({
+                        installationId: testInstallationId,
+                        realEmail: 'test@example.com',
+                        domain: 'test-domain.com',
+                        url: 'https://example.com',
+                        label: 'Test Email',
+                        description: 'Test burner email for deployment verification',
+                        expiresInDays: 30
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok && data.success && data.email) {
+                    createdEmailId = data.email.id;
+                    updateStatus(1, 'pass', 'PASS');
+                    showResult(1, data);
+                    
+                    // Enable next tests
+                    document.getElementById('test2-btn').disabled = false;
+                    document.getElementById('test3-btn').disabled = false;
+                } else {
+                    updateStatus(1, 'fail', 'FAIL');
+                    showResult(1, { error: 'Request failed', response: data, status: response.status }, true);
+                }
+            } catch (error) {
+                updateStatus(1, 'fail', 'FAIL');
+                showResult(1, { error: error.message, stack: error.stack }, true);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function testFieldCheck() {
+            const btn = document.getElementById('test2-btn');
+            btn.disabled = true;
+            updateStatus(2, 'pending', 'RUNNING...');
+
+            try {
+                const response = await fetch(FUNCTION_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${ANON_KEY}`,
+                        'apikey': ANON_KEY
+                    },
+                    body: JSON.stringify({
+                        installationId: testInstallationId,
+                        realEmail: 'test2@example.com',
+                        domain: 'test-domain.com',
+                        url: 'https://example.com',
+                        label: 'Field Check Test',
+                        description: 'Testing email_address field',
+                        expiresInDays: 30
+                    })
+                });
+
+                const data = await response.json();
+                const resultEl = document.getElementById('test2-result');
+                
+                if (response.ok && data.success && data.email) {
+                    const email = data.email;
+                    const hasEmailAddress = 'email_address' in email && email.email_address !== null && email.email_address !== undefined;
+                    const hasEmailField = 'email' in email;
+                    
+                    let html = `<div class="field-check ${hasEmailAddress && !hasEmailField ? 'pass' : 'fail'}">`;
+                    html += `<div class="field-check-label">Field Verification:</div>`;
+                    html += `<div>✓ email_address exists: ${hasEmailAddress ? '✅ YES' : '❌ NO'}</div>`;
+                    html += `<div>✗ email field exists: ${hasEmailField ? '❌ YES (should not exist)' : '✅ NO (correct)'}</div>`;
+                    html += `</div>`;
+                    html += `<div class="result ${hasEmailAddress && !hasEmailField ? 'success' : 'error'}" style="margin-top: 10px;">${JSON.stringify(data, null, 2)}</div>`;
+                    resultEl.innerHTML = html;
+                    
+                    if (hasEmailAddress && !hasEmailField) {
+                        updateStatus(2, 'pass', 'PASS');
+                    } else {
+                        updateStatus(2, 'fail', 'FAIL');
+                    }
+                } else {
+                    updateStatus(2, 'fail', 'FAIL');
+                    showResult(2, { error: 'Request failed', response: data, status: response.status }, true);
+                }
+            } catch (error) {
+                updateStatus(2, 'fail', 'FAIL');
+                showResult(2, { error: error.message, stack: error.stack }, true);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function testGetEmails() {
+            const btn = document.getElementById('test3-btn');
+            btn.disabled = true;
+            updateStatus(3, 'pending', 'RUNNING...');
+
+            try {
+                const url = `${FUNCTION_URL}?installationId=${encodeURIComponent(testInstallationId)}`;
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${ANON_KEY}`,
+                        'apikey': ANON_KEY
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok && data.success && Array.isArray(data.emails)) {
+                    const emails = data.emails;
+                    const allHaveEmailAddress = emails.every(e => 'email_address' in e && e.email_address);
+                    const noneHaveEmailField = emails.every(e => !('email' in e));
+                    
+                    let html = `<div class="field-check ${allHaveEmailAddress && noneHaveEmailField ? 'pass' : 'fail'}">`;
+                    html += `<div class="field-check-label">Retrieved ${emails.length} email(s):</div>`;
+                    html += `<div>✓ All have email_address: ${allHaveEmailAddress ? '✅ YES' : '❌ NO'}</div>`;
+                    html += `<div>✓ None have email field: ${noneHaveEmailField ? '✅ YES' : '❌ NO'}</div>`;
+                    html += `</div>`;
+                    html += `<div class="result ${allHaveEmailAddress && noneHaveEmailField ? 'success' : 'error'}" style="margin-top: 10px;">${JSON.stringify(data, null, 2)}</div>`;
+                    document.getElementById('test3-result').innerHTML = html;
+                    
+                    if (allHaveEmailAddress && noneHaveEmailField) {
+                        updateStatus(3, 'pass', 'PASS');
+                    } else {
+                        updateStatus(3, 'fail', 'FAIL');
+                    }
+                } else {
+                    updateStatus(3, 'fail', 'FAIL');
+                    showResult(3, { error: 'Request failed', response: data, status: response.status }, true);
+                }
+            } catch (error) {
+                updateStatus(3, 'fail', 'FAIL');
+                showResult(3, { error: error.message, stack: error.stack }, true);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function runAllTests() {
+            updateStatus(1, 'pending', 'PENDING');
+            updateStatus(2, 'pending', 'PENDING');
+            updateStatus(3, 'pending', 'PENDING');
+            
+            await testCreateEmail();
+            if (createdEmailId) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+                await testFieldCheck();
+                await new Promise(resolve => setTimeout(resolve, 500));
+                await testGetEmails();
+            }
+        }
+    </script>
+</body>
+</html>
