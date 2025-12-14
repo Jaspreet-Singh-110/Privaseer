@@ -367,7 +367,7 @@ export function BurnerEmailsSection({ onOpenSettings, isActive = true }: BurnerE
           {emails.map((email) => (
             <div
               key={email.id}
-              aria-label={`Burner email ${email.email} for ${email.domain}`}
+              aria-label={`Burner email ${email.email_address} for ${email.domain}`}
               className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:border-blue-300 dark:hover:border-blue-500 hover:shadow-sm transition-all group"
             >
               <div className="flex items-start justify-between gap-3">
@@ -375,7 +375,7 @@ export function BurnerEmailsSection({ onOpenSettings, isActive = true }: BurnerE
                   <div className="flex items-center gap-2 mb-1">
                     <Mail className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
                     <span className="text-sm font-mono font-medium text-gray-900 dark:text-white truncate">
-                      {email.email}
+                      {email.email_address}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
@@ -394,12 +394,12 @@ export function BurnerEmailsSection({ onOpenSettings, isActive = true }: BurnerE
                 <div className="flex items-center gap-1">
                   {/* Copy button uses native <button> semantics, so it is fully keyboard accessible */}
                   <button
-                    onClick={() => copyEmail(email.email)}
-                    aria-label={`Copy email address ${email.email}`}
+                    onClick={() => copyEmail(email.email_address)}
+                    aria-label={`Copy email address ${email.email_address}`}
                     className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/40 rounded-lg transition-colors group/copy"
                     title="Copy email"
                   >
-                    {copiedEmail === email.email ? (
+                    {copiedEmail === email.email_address ? (
                       <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
@@ -410,7 +410,7 @@ export function BurnerEmailsSection({ onOpenSettings, isActive = true }: BurnerE
                   {/* Delete button also relies on native <button> semantics for keyboard access */}
                   <button
                     onClick={() => deleteEmail(email.id)}
-                    aria-label={`Delete email address ${email.email}`}
+                    aria-label={`Delete email address ${email.email_address}`}
                     className="p-2 hover:bg-red-50 dark:hover:bg-red-900/40 rounded-lg transition-colors group/delete"
                     title="Delete email"
                   >

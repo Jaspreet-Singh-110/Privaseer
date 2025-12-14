@@ -122,14 +122,14 @@ class BurnerEmailService {
         throw new Error(errorMsg);
       }
 
-      if (!data.email || !data.email.email) {
+      if (!data.email || !data.email.email_address) {
         logger.error('BurnerEmailService', 'Missing email in response', new Error('No email field'), { data });
         throw new Error('Server did not return an email address');
       }
 
       logger.info('BurnerEmailService', 'Success! Generated email');
 
-      return data.email.email;
+      return data.email.email_address;
     } catch (error) {
       const err = toError(error);
       logger.error('BurnerEmailService', 'generateEmail FAILED', err, { domain });

@@ -1,5 +1,17 @@
+// @ts-nocheck - Deno Edge Function with npm: specifiers resolved at runtime
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+
+type DenoRuntime = {
+  env: { get(key: string): string | undefined };
+  serve: (handler: (req: Request) => Response | Promise<Response>) => void;
+};
+
+const denoRuntime = (globalThis as typeof globalThis & { Deno?: DenoRuntime }).Deno;
+
+if (!denoRuntime) {
+  throw new Error("Deno runtime is required for this function");
+}
 
 // ============= Inlined validation functions =============
 interface ValidationResult {
@@ -380,7 +392,7 @@ interface GenerateEmailRequest {
 
 interface BurnerEmail {
   id: string;
-  email: string;
+  email_address: string;
   installation_id: string;
   real_email: string;
   domain: string;
@@ -407,7 +419,7 @@ function generateRandomEmail(): string {
   return `${randomAdjective}-${randomNoun}-${randomNum}@burner.privaseer.co.uk`;
 }
 
-Deno.serve(async (req: Request) => {
+denoRuntime.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 200,
@@ -416,8 +428,8 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseUrl = denoRuntime.env.get("SUPABASE_URL")!;
+    const supabaseKey = denoRuntime.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     if (req.method === "POST") {
@@ -437,8 +449,8 @@ Deno.serve(async (req: Request) => {
       while (attempts < maxAttempts) {
         const { data: existing } = await supabase
           .from("burner_emails")
-          .select("email")
-          .eq("email", emailAddress)
+          .select("email_address")
+          .eq("email_address", emailAddress)
           .maybeSingle();
 
         if (!existing) {
@@ -459,7 +471,7 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      let expiresAt = null;
+      let expiresAt: string | null = null;
       if (body.expiresInDays && body.expiresInDays > 0) {
         const expirationDate = new Date();
         expirationDate.setDate(expirationDate.getDate() + body.expiresInDays);
@@ -470,7 +482,7 @@ Deno.serve(async (req: Request) => {
         .from("burner_emails")
         .insert({
           installation_id: body.installationId,
-          email: emailAddress,
+          email_address: emailAddress,
           real_email: body.realEmail,
           domain: body.domain,
           url: body.url || null,

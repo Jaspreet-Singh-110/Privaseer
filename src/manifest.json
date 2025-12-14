@@ -54,12 +54,9 @@
   },
   "web_accessible_resources": [
     {
-      "resources": [
-        "data/privacy-rules.json",
-        "data/tracker-lists.json",
-        "data/blocking-rules.json"
-      ],
-      "matches": ["<all_urls>"]
+      "_comment_backup_wars": "\"resources\": [\"data/privacy-rules.json\", \"data/tracker-lists.json\", \"data/blocking-rules.json\"], \"matches\": [\"<all_urls>\"]",
+      "resources": ["data/privacy-rules.json"],
+      "matches": ["http://*/*", "https://*/*"]
     }
   ]
 }

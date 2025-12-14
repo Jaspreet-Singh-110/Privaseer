@@ -309,7 +309,7 @@ export interface TrackerLists {
 
 export interface BurnerEmail {
   id: string;
-  email: string;
+  email_address: string;
   domain: string;
   url?: string;
   label?: string;

@@ -11,6 +11,7 @@ import { backgroundEvents } from './event-emitter';
 import { toError, isGetTrackerInfoData, isConsentScanResult } from '../utils/type-guards';
 import { sanitizeUrl } from '../utils/sanitizer';
 import { BADGE, TIME, CONSENT_VIOLATION } from '../utils/constants';
+import { validateComplianceScore, validateEventPayload, validateFeedbackPayload } from '../utils/validation';
 
 let isInitialized = false;
 let initializationPromise: Promise<void> | null = null;
@@ -266,7 +267,14 @@ function setupMessageHandlers(): void {
 
   messageBus.on('SUBMIT_FEEDBACK', async (data: unknown) => {
     try {
-      const { feedbackText, url, domain } = data as { feedbackText: string; url?: string; domain?: string };
+      const validation = validateFeedbackPayload(data);
+      if (!validation.valid || !validation.sanitized) {
+        const errorMessage = validation.error ?? 'Invalid feedback payload';
+        logger.warn('ServiceWorker', 'SUBMIT_FEEDBACK validation failed', { error: errorMessage });
+        return { success: false, error: errorMessage };
+      }
+
+      const { feedbackText, url, domain } = validation.sanitized;
       const result = await feedbackTelemetryService.submitFeedback({ feedbackText, url, domain });
       return result;
     } catch (error) {
@@ -311,12 +319,21 @@ function setupMessageHandlers(): void {
       chrome.tabs.query({}, (tabs) => {
         tabs.forEach(tab => {
           if (tab.id) {
-            chrome.tabs.sendMessage(tab.id, {
-              type: 'BURNER_EMAIL_SETTING_CHANGED',
-              data: { enabled: verifiedValue }
-            }).catch(() => {
-              // Content script may not be loaded, ignore
-            });
+            chrome.tabs.sendMessage(
+              tab.id,
+              {
+                type: 'BURNER_EMAIL_SETTING_CHANGED',
+                data: { enabled: verifiedValue }
+              },
+              () => {
+                if (chrome.runtime.lastError) {
+                  logger.debug('ServiceWorker', 'Failed to send BURNER_EMAIL_SETTING_CHANGED', {
+                    tabId: tab.id,
+                    error: chrome.runtime.lastError.message,
+                  });
+                }
+              }
+            );
           }
         });
       });
@@ -341,10 +358,19 @@ function setupMessageHandlers(): void {
       }
       await Storage.setTheme(theme);
 
-      chrome.runtime.sendMessage({
-        type: 'THEME_CHANGED',
-        data: { theme }
-      }).catch(() => {});
+      chrome.runtime.sendMessage(
+        {
+          type: 'THEME_CHANGED',
+          data: { theme }
+        },
+        () => {
+          if (chrome.runtime.lastError) {
+            logger.debug('ServiceWorker', 'Failed to send THEME_CHANGED message', {
+              error: chrome.runtime.lastError.message,
+            });
+          }
+        }
+      );
 
       return { success: true, theme };
     } catch (error) {
@@ -466,7 +492,14 @@ function setupMessageHandlers(): void {
 
   messageBus.on('TRACK_EVENT', async (data: unknown) => {
     try {
-      const { eventType, eventData } = data as { eventType: string; eventData?: Record<string, unknown> };
+      const validation = validateEventPayload(data);
+      if (!validation.valid || !validation.sanitized) {
+        const errorMessage = validation.error ?? 'Invalid event payload';
+        logger.warn('ServiceWorker', 'TRACK_EVENT validation failed', { error: errorMessage });
+        return { success: false, error: errorMessage };
+      }
+
+      const { eventType, eventData } = validation.sanitized;
       await feedbackTelemetryService.trackEvent({ eventType, eventData });
       return { success: true };
     } catch (error) {
@@ -477,7 +510,14 @@ function setupMessageHandlers(): void {
 
   messageBus.on('RECORD_COMPLIANCE_SCORE', async (data: unknown) => {
     try {
-      const { score } = data as { score: number };
+      const validation = validateComplianceScore(data);
+      if (!validation.valid || !validation.sanitized) {
+        const errorMessage = validation.error ?? 'Invalid compliance score payload';
+        logger.warn('ServiceWorker', 'RECORD_COMPLIANCE_SCORE validation failed', { error: errorMessage });
+        return { success: false, error: errorMessage };
+      }
+
+      const { score } = validation.sanitized;
       await Storage.recordComplianceScore(score);
       return { success: true };
     } catch (error) {
@@ -502,12 +542,21 @@ function setupStorageChangeListener(): void {
         chrome.tabs.query({}, (tabs) => {
           tabs.forEach(tab => {
             if (tab.id) {
-              chrome.tabs.sendMessage(tab.id, {
-                type: 'BURNER_EMAIL_SETTING_CHANGED',
-                data: { enabled }
-              }).catch(() => {
-                // Content script may not be loaded, ignore
-              });
+              chrome.tabs.sendMessage(
+                tab.id,
+                {
+                  type: 'BURNER_EMAIL_SETTING_CHANGED',
+                  data: { enabled }
+                },
+                () => {
+                  if (chrome.runtime.lastError) {
+                    logger.debug('ServiceWorker', 'Failed to send storage-driven BURNER_EMAIL_SETTING_CHANGED', {
+                      tabId: tab.id,
+                      error: chrome.runtime.lastError.message,
+                    });
+                  }
+                }
+              );
             }
           });
         });

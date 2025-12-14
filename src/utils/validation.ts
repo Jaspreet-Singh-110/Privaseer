@@ -1,3 +1,5 @@
+import { sanitizeUrl } from './sanitizer';
+
 /**
  * Shared validation utilities for the Privaseer extension.
  * These functions mirror the validation logic in supabase/functions/shared/input-validation.ts
@@ -79,5 +81,177 @@ export function sanitizeUrlForBurner(url: string | undefined | null): string | n
   } catch {
     // If the URL cannot be parsed, treat it as unusable metadata
     return null;
+  }
+}
+
+const MAX_FEEDBACK_LENGTH = 5000;
+const MAX_EVENT_TYPE_LENGTH = 100;
+const MAX_EVENT_DATA_BYTES = 10 * 1024; // ~10KB
+const MIN_COMPLIANCE_SCORE = 0;
+const MAX_COMPLIANCE_SCORE = 100;
+
+type PlainObject = Record<string, unknown>;
+
+interface PayloadValidationResult<T> {
+  valid: boolean;
+  error?: string;
+  sanitized?: T;
+}
+
+export interface FeedbackValidationResult
+  extends PayloadValidationResult<{ feedbackText: string; url?: string; domain?: string }> {}
+
+export interface EventValidationResult
+  extends PayloadValidationResult<{ eventType: string; eventData?: Record<string, unknown> }> {}
+
+export interface ScoreValidationResult extends PayloadValidationResult<{ score: number }> {}
+
+export function validateFeedbackPayload(data: unknown): FeedbackValidationResult {
+  if (!isPlainObject(data)) {
+    return { valid: false, error: 'Invalid payload: expected object' };
+  }
+
+  const { feedbackText, url, domain } = data as {
+    feedbackText?: unknown;
+    url?: unknown;
+    domain?: unknown;
+  };
+
+  if (typeof feedbackText !== 'string') {
+    return { valid: false, error: 'feedbackText must be a string' };
+  }
+
+  const trimmedFeedback = feedbackText.trim();
+  if (!trimmedFeedback) {
+    return { valid: false, error: 'feedbackText cannot be empty' };
+  }
+
+  if (trimmedFeedback.length > MAX_FEEDBACK_LENGTH) {
+    return { valid: false, error: `feedbackText exceeds ${MAX_FEEDBACK_LENGTH} characters` };
+  }
+
+  let sanitizedUrl: string | undefined;
+  if (url !== undefined) {
+    if (typeof url !== 'string') {
+      return { valid: false, error: 'url must be a string when provided' };
+    }
+
+    const result = sanitizeOptionalUrl(url);
+    if (!result.valid) {
+      return { valid: false, error: result.error };
+    }
+    sanitizedUrl = result.url;
+  }
+
+  let sanitizedDomain: string | undefined;
+  if (domain !== undefined) {
+    if (typeof domain !== 'string') {
+      return { valid: false, error: 'domain must be a string when provided' };
+    }
+    sanitizedDomain = domain.trim().toLowerCase();
+    if (!sanitizedDomain) {
+      sanitizedDomain = undefined;
+    }
+  }
+
+  return {
+    valid: true,
+    sanitized: {
+      feedbackText: trimmedFeedback,
+      ...(sanitizedUrl ? { url: sanitizedUrl } : {}),
+      ...(sanitizedDomain ? { domain: sanitizedDomain } : {}),
+    },
+  };
+}
+
+export function validateEventPayload(data: unknown): EventValidationResult {
+  if (!isPlainObject(data)) {
+    return { valid: false, error: 'Invalid payload: expected object' };
+  }
+
+  const { eventType, eventData } = data as {
+    eventType?: unknown;
+    eventData?: unknown;
+  };
+
+  if (typeof eventType !== 'string') {
+    return { valid: false, error: 'eventType must be a string' };
+  }
+
+  const trimmedType = eventType.trim();
+  if (!trimmedType) {
+    return { valid: false, error: 'eventType cannot be empty' };
+  }
+
+  if (trimmedType.length > MAX_EVENT_TYPE_LENGTH) {
+    return { valid: false, error: `eventType exceeds ${MAX_EVENT_TYPE_LENGTH} characters` };
+  }
+
+  let sanitizedEventData: Record<string, unknown> | undefined;
+  if (eventData !== undefined) {
+    if (!isPlainObject(eventData)) {
+      return { valid: false, error: 'eventData must be a plain object' };
+    }
+
+    try {
+      const serialized = JSON.stringify(eventData);
+      if (serialized.length > MAX_EVENT_DATA_BYTES) {
+        return { valid: false, error: 'eventData exceeds 10KB limit' };
+      }
+
+      sanitizedEventData = JSON.parse(serialized) as Record<string, unknown>;
+    } catch {
+      return { valid: false, error: 'eventData must be serializable' };
+    }
+  }
+
+  return {
+    valid: true,
+    sanitized: {
+      eventType: trimmedType,
+      ...(sanitizedEventData ? { eventData: sanitizedEventData } : {}),
+    },
+  };
+}
+
+export function validateComplianceScore(data: unknown): ScoreValidationResult {
+  if (!isPlainObject(data)) {
+    return { valid: false, error: 'Invalid payload: expected object' };
+  }
+
+  const { score } = data as { score?: unknown };
+  if (typeof score !== 'number' || Number.isNaN(score) || !Number.isFinite(score)) {
+    return { valid: false, error: 'score must be a finite number' };
+  }
+
+  if (score < MIN_COMPLIANCE_SCORE || score > MAX_COMPLIANCE_SCORE) {
+    return { valid: false, error: `score must be between ${MIN_COMPLIANCE_SCORE} and ${MAX_COMPLIANCE_SCORE}` };
+  }
+
+  return {
+    valid: true,
+    sanitized: { score },
+  };
+}
+
+function isPlainObject(value: unknown): value is PlainObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function sanitizeOptionalUrl(value: string): { valid: true; url?: string } | { valid: false; error: string } {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return { valid: false, error: 'url cannot be empty when provided' };
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    const sanitized = sanitizeUrl(parsed.toString());
+    if (!sanitized || sanitized === '[invalid-url]') {
+      return { valid: false, error: 'url is invalid' };
+    }
+    return { valid: true, url: sanitized };
+  } catch {
+    return { valid: false, error: 'url is invalid' };
   }
 }
