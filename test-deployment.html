@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Burner Email Deployment</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      margin-top: 0;
+    }
+    .test-section {
+      margin: 20px 0;
+      padding: 20px;
+      background: #f9f9f9;
+      border-radius: 4px;
+      border-left: 4px solid #4CAF50;
+    }
+    .test-section h3 {
+      margin-top: 0;
+      color: #4CAF50;
+    }
+    button {
+      background: #4CAF50;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      margin-right: 10px;
+    }
+    button:hover {
+      background: #45a049;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .result {
+      margin-top: 15px;
+      padding: 15px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 13px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .success {
+      background: #d4edda;
+      border: 1px solid #c3e6cb;
+      color: #155724;
+    }
+    .error {
+      background: #f8d7da;
+      border: 1px solid #f5c6cb;
+      color: #721c24;
+    }
+    .info {
+      background: #d1ecf1;
+      border: 1px solid #bee5eb;
+      color: #0c5460;
+    }
+    input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 600;
+      color: #555;
+    }
+    .status {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 3px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 10px;
+    }
+    .status.pass {
+      background: #d4edda;
+      color: #155724;
+    }
+    .status.fail {
+      background: #f8d7da;
+      color: #721c24;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧪 Burner Email Deployment Test</h1>
+    <p>Test the deployed edge functions to verify everything is working correctly.</p>
+
+    <div class="test-section">
+      <h3>Test 1: Generate Burner Email</h3>
+      <p>This will create a new burner email and verify the database schema is correct.</p>
+
+      <label for="realEmail">Your Real Email:</label>
+      <input type="email" id="realEmail" placeholder="your.email@example.com" value="test@example.com">
+
+      <button onclick="testGenerateEmail()">Generate Burner Email</button>
+      <div id="generateResult"></div>
+    </div>
+
+    <div class="test-section">
+      <h3>Test 2: List Burner Emails</h3>
+      <p>Fetch all burner emails for the installation to verify GET endpoint works.</p>
+
+      <button onclick="testListEmails()">List Emails</button>
+      <div id="listResult"></div>
+    </div>
+
+    <div class="test-section">
+      <h3>Test 3: Check Database Schema</h3>
+      <p>Verify that returned data has the correct field names.</p>
+
+      <button onclick="testSchema()">Check Schema</button>
+      <div id="schemaResult"></div>
+    </div>
+
+    <div class="test-section">
+      <h3>✅ Deployment Checklist</h3>
+      <p>Before the burner email system will work fully, ensure:</p>
+      <ul>
+        <li id="check-functions">Edge functions deployed <span class="status" id="status-functions">Pending</span></li>
+        <li id="check-dns">DNS MX record configured for burner.privaseer.co.uk <span class="status" id="status-dns">Pending</span></li>
+        <li id="check-resend">Resend domain verified <span class="status" id="status-resend">Pending</span></li>
+        <li id="check-webhook">Resend webhook pointing to inbound-email function <span class="status" id="status-webhook">Pending</span></li>
+        <li id="check-env">Environment variables set (EMAIL_PROVIDER, EMAIL_API_KEY) <span class="status" id="status-env">Pending</span></li>
+      </ul>
+      <p><strong>Note:</strong> This test can only verify the functions are deployed. DNS, Resend, and environment variable configuration must be done manually. See <strong>BURNER_EMAIL_SETUP.md</strong> for instructions.</p>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://0ec90b57d6e95fcbda19832f.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJib2x0IiwicmVmIjoiMGVjOTBiNTdkNmU5NWZjYmRhMTk4MzJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg4ODE1NzQsImV4cCI6MTc1ODg4MTU3NH0.9I8-U0x86Ak8t2DGaIk0HfvTSLsAyzdnz-Nw00mMkKw';
+    const INSTALLATION_ID = 'test-installation-' + Date.now();
+
+    function showResult(elementId, message, type) {
+      const element = document.getElementById(elementId);
+      element.innerHTML = `<div class="result ${type}">${message}</div>`;
+    }
+
+    async function testGenerateEmail() {
+      const realEmail = document.getElementById('realEmail').value;
+      if (!realEmail) {
+        showResult('generateResult', 'Please enter your real email address', 'error');
+        return;
+      }
+
+      showResult('generateResult', 'Testing...', 'info');
+
+      try {
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-burner-email`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            installationId: INSTALLATION_ID,
+            realEmail: realEmail,
+            domain: 'burner.privaseer.co.uk',
+            label: 'Test Email',
+            description: 'Generated from deployment test',
+            expiresInDays: 30
+          })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          const hasEmailAddress = data.email && 'email_address' in data.email;
+          const emailValue = data.email.email_address;
+
+          let message = `✅ Success!\n\n`;
+          message += `Status: ${response.status}\n`;
+          message += `Burner Email: ${emailValue}\n`;
+          message += `Real Email: ${data.email.real_email}\n`;
+          message += `Schema Check: ${hasEmailAddress ? '✅ PASS' : '❌ FAIL'}\n\n`;
+
+          if (hasEmailAddress) {
+            message += `✅ Database is using correct schema (email_address column)\n`;
+            document.getElementById('status-functions').textContent = 'Pass';
+            document.getElementById('status-functions').className = 'status pass';
+          } else {
+            message += `❌ Database schema mismatch detected\n`;
+            document.getElementById('status-functions').textContent = 'Fail';
+            document.getElementById('status-functions').className = 'status fail';
+          }
+
+          message += `\nFull Response:\n${JSON.stringify(data, null, 2)}`;
+
+          showResult('generateResult', message, hasEmailAddress ? 'success' : 'error');
+        } else {
+          showResult('generateResult', `❌ Error:\n${JSON.stringify(data, null, 2)}`, 'error');
+          document.getElementById('status-functions').textContent = 'Fail';
+          document.getElementById('status-functions').className = 'status fail';
+        }
+      } catch (error) {
+        showResult('generateResult', `❌ Request Failed:\n${error.message}`, 'error');
+        document.getElementById('status-functions').textContent = 'Fail';
+        document.getElementById('status-functions').className = 'status fail';
+      }
+    }
+
+    async function testListEmails() {
+      showResult('listResult', 'Testing...', 'info');
+
+      try {
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-burner-email?installationId=${INSTALLATION_ID}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          }
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          let message = `✅ Success!\n\n`;
+          message += `Status: ${response.status}\n`;
+          message += `Found ${data.emails?.length || 0} email(s)\n\n`;
+
+          if (data.emails && data.emails.length > 0) {
+            const hasEmailAddress = 'email_address' in data.emails[0];
+            message += `Schema Check: ${hasEmailAddress ? '✅ PASS' : '❌ FAIL'}\n\n`;
+
+            if (hasEmailAddress) {
+              message += `Sample Email:\n`;
+              message += `  Address: ${data.emails[0].email_address}\n`;
+              message += `  Real Email: ${data.emails[0].real_email}\n`;
+              message += `  Active: ${data.emails[0].is_active}\n`;
+            }
+          } else {
+            message += `No emails found. Run "Generate Burner Email" test first.\n`;
+          }
+
+          message += `\nFull Response:\n${JSON.stringify(data, null, 2)}`;
+
+          showResult('listResult', message, 'success');
+        } else {
+          showResult('listResult', `❌ Error:\n${JSON.stringify(data, null, 2)}`, 'error');
+        }
+      } catch (error) {
+        showResult('listResult', `❌ Request Failed:\n${error.message}`, 'error');
+      }
+    }
+
+    async function testSchema() {
+      showResult('schemaResult', 'Running schema check...', 'info');
+
+      try {
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-burner-email`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            installationId: 'schema-test-' + Date.now(),
+            realEmail: 'schema-test@example.com',
+            domain: 'burner.privaseer.co.uk'
+          })
+        });
+
+        const data = await response.json();
+
+        let message = '';
+        let isSuccess = true;
+
+        if (response.ok && data.success && data.email) {
+          message += `✅ Function executed successfully\n\n`;
+          message += `🔍 Schema Analysis:\n\n`;
+
+          const checks = [
+            { field: 'email_address', required: true },
+            { field: 'real_email', required: true },
+            { field: 'installation_id', required: true },
+            { field: 'is_active', required: true },
+            { field: 'created_at', required: true },
+            { field: 'email', required: false, shouldNotExist: true }
+          ];
+
+          checks.forEach(check => {
+            const exists = check.field in data.email;
+            if (check.shouldNotExist) {
+              if (!exists) {
+                message += `  ✅ '${check.field}' correctly NOT present\n`;
+              } else {
+                message += `  ❌ '${check.field}' should not exist (old schema)\n`;
+                isSuccess = false;
+              }
+            } else if (check.required) {
+              if (exists) {
+                message += `  ✅ '${check.field}' present\n`;
+              } else {
+                message += `  ❌ '${check.field}' missing\n`;
+                isSuccess = false;
+              }
+            }
+          });
+
+          message += `\n${isSuccess ? '✅' : '❌'} Schema Validation: ${isSuccess ? 'PASS' : 'FAIL'}\n`;
+
+          if (isSuccess) {
+            message += `\nThe database schema is correct and the edge function is properly deployed.`;
+          } else {
+            message += `\nThe function needs to be redeployed or the database migration needs to be run.`;
+          }
+
+          message += `\n\nReturned Fields:\n${JSON.stringify(Object.keys(data.email), null, 2)}`;
+
+        } else {
+          message = `❌ Function Error:\n${JSON.stringify(data, null, 2)}`;
+          isSuccess = false;
+        }
+
+        showResult('schemaResult', message, isSuccess ? 'success' : 'error');
+      } catch (error) {
+        showResult('schemaResult', `❌ Request Failed:\n${error.message}`, 'error');
+      }
+    }
+
+    window.addEventListener('load', () => {
+      showResult('generateResult', 'Click the button above to test', 'info');
+      showResult('listResult', 'Click the button above to test', 'info');
+      showResult('schemaResult', 'Click the button above to test', 'info');
+    });
+  </script>
+</body>
+</html>
