@@ -216,7 +216,7 @@
         const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/generate-burner-email`;
         
         // Generate a test installation ID
-        const testInstallationId = 'test-' + crypto.randomUUID();
+        const testInstallationId = crypto.randomUUID();
         let createdEmailId = null;
 
         document.getElementById('supabase-url').textContent = SUPABASE_URL;
