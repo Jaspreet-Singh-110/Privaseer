@@ -42,7 +42,34 @@ async function parseEmailPayload(req: Request): Promise<InboundEmailPayload> {
   const contentType = req.headers.get("content-type") || "";
 
   if (contentType.includes("application/json")) {
-    return await req.json();
+    const jsonPayload = await req.json();
+
+    // Check if this is a Resend webhook format
+    if (jsonPayload.type === "email.received" && jsonPayload.data) {
+      const data = jsonPayload.data;
+      // Resend sends 'to' as an array, get the first recipient
+      const recipient = Array.isArray(data.to) && data.to.length > 0
+        ? data.to[0]
+        : (data.to || "");
+
+      return {
+        recipient: recipient,
+        sender: data.from || "",
+        from: data.from || "",
+        subject: data.subject || "",
+        bodyPlain: data.text || data.bodyPlain || "",
+        bodyHtml: data.html || data.bodyHtml || "",
+        strippedText: data.strippedText || "",
+        strippedSignature: data.strippedSignature || "",
+        messageHeaders: data.messageHeaders || "",
+        timestamp: data.created_at
+          ? new Date(data.created_at).getTime()
+          : Date.now(),
+      };
+    }
+
+    // If not Resend format, return as-is (for other webhook formats)
+    return jsonPayload;
   }
 
   if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
