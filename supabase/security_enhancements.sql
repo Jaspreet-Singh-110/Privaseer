@@ -151,6 +151,7 @@ CREATE OR REPLACE FUNCTION log_security_event(
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = pg_catalog, public
 AS $$
 DECLARE
   audit_id uuid;
@@ -176,7 +177,11 @@ $$;
 
 -- Trigger to audit sensitive changes
 CREATE OR REPLACE FUNCTION audit_burner_email_changes()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
 BEGIN
   -- Log pause events
   IF (TG_OP = 'UPDATE' AND NEW.is_paused = true AND OLD.is_paused = false) THEN
@@ -232,7 +237,7 @@ BEGIN
     RETURN NEW;
   END IF;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
 -- Create audit trigger
 DO $$
@@ -253,6 +258,7 @@ CREATE OR REPLACE FUNCTION is_valid_email(email text)
 RETURNS boolean
 LANGUAGE plpgsql
 IMMUTABLE
+SET search_path = pg_catalog, public
 AS $$
 BEGIN
   RETURN email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$';
@@ -264,6 +270,7 @@ CREATE OR REPLACE FUNCTION sanitize_text_input(input text, max_length int DEFAUL
 RETURNS text
 LANGUAGE plpgsql
 IMMUTABLE
+SET search_path = pg_catalog, public
 AS $$
 BEGIN
   IF input IS NULL THEN

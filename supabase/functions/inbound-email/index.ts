@@ -1,3 +1,4 @@
+// supabase:verify_jwt=false
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { sanitizeEmail, generateSanitizationReport, sanitizeSubject } from "./email-sanitizer.ts";
@@ -38,7 +39,48 @@ interface BurnerEmailRecord {
   expires_at: string | null;
 }
 
-async function parseEmailPayload(req: Request): Promise<InboundEmailPayload> {
+async function fetchResendEmailContent(
+  emailId: string,
+  resendApiKey: string
+): Promise<{ html?: string; text?: string }> {
+  const tryFetch = async (path: string) => {
+    const resp = await fetch(`https://api.resend.com/${path}/${emailId}`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${resendApiKey}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    const bodyText = await resp.text();
+    if (!resp.ok) {
+      throw new Error(`${path} ${resp.status} - ${bodyText}`);
+    }
+
+    let json: any;
+    try {
+      json = JSON.parse(bodyText);
+    } catch {
+      throw new Error(`${path} returned non-JSON response`);
+    }
+
+    const data = json?.data ?? json;
+    return {
+      html: typeof data?.html === "string" ? data.html : undefined,
+      text: typeof data?.text === "string" ? data.text : undefined,
+    };
+  };
+
+  // Resend receiving API endpoint: /emails/receiving/{id}
+  console.log("Fetching full email content from Resend receiving API", { email_id: emailId });
+  return await tryFetch("emails/receiving");
+}
+
+async function parseEmailPayload(
+  req: Request,
+  emailProvider: string,
+  emailApiKey: string
+): Promise<InboundEmailPayload> {
   const contentType = req.headers.get("content-type") || "";
 
   if (contentType.includes("application/json")) {
@@ -50,13 +92,37 @@ async function parseEmailPayload(req: Request): Promise<InboundEmailPayload> {
         ? data.to[0]
         : (data.to || "");
 
+      let bodyPlain = data.text || data.bodyPlain || "";
+      let bodyHtml = data.html || data.bodyHtml || "";
+
+      // Resend's `email.received` webhook commonly omits the email body and only includes an `email_id`.
+      // In that case, fetch the full email content from Resend before sanitizing/forwarding.
+      if (
+        emailProvider === "resend" &&
+        typeof data.email_id === "string" &&
+        data.email_id.length > 0 &&
+        (!bodyPlain && !bodyHtml)
+      ) {
+        try {
+          console.log("Resend webhook missing body; fetching full email content", { email_id: data.email_id });
+          const full = await fetchResendEmailContent(data.email_id, emailApiKey);
+          bodyPlain = full.text || "";
+          bodyHtml = full.html || "";
+        } catch (err) {
+          console.error("Failed to fetch full email content from Resend; forwarding without body", {
+            email_id: data.email_id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
       return {
         recipient: recipient,
         sender: data.from || "",
         from: data.from || "",
         subject: data.subject || "",
-        bodyPlain: data.text || data.bodyPlain || "",
-        bodyHtml: data.html || data.bodyHtml || "",
+        bodyPlain,
+        bodyHtml,
         strippedText: data.strippedText || "",
         strippedSignature: data.strippedSignature || "",
         messageHeaders: data.messageHeaders || "",
@@ -158,10 +224,12 @@ async function forwardEmail(
     });
 
     if (emailProvider === "resend") {
+      // Extract sender username (part before @) for cleaner display
+      const senderName = payload.from.split('@')[0];
       const emailPayload = {
-        from: `Privaseer Burner <noreply@burner.privaseer.co.uk>`,
+        from: `${senderName} via Privaseer <forwarded@burner.privaseer.co.uk>`,
         to: targetEmail,
-        subject: `[Forwarded] ${cleanSubject}`,
+        subject: cleanSubject,
         text: sanitized.text + sanitizationReport,
         html: sanitized.html + sanitizationReport.replace(/\n/g, '<br>'),
         reply_to: payload.sender,
@@ -218,10 +286,12 @@ async function forwardEmail(
       const domain = Deno.env.get("MAILGUN_DOMAIN") || "burner.privaseer.co.uk";
       console.log("Using Mailgun with domain:", domain);
       
+      // Extract sender username (part before @) for cleaner display
+      const senderName = payload.from.split('@')[0];
       const mailgunPayload = new URLSearchParams({
-        from: `Privaseer Burner <noreply@burner.privaseer.co.uk>`,
+        from: `${senderName} via Privaseer <forwarded@burner.privaseer.co.uk>`,
         to: targetEmail,
-        subject: `[Forwarded] ${cleanSubject}`,
+        subject: cleanSubject,
         text: sanitized.text + sanitizationReport,
         html: sanitized.html + sanitizationReport.replace(/\n/g, '<br>'),
         "h:Reply-To": payload.sender,
@@ -379,7 +449,7 @@ Deno.serve(async (req: Request) => {
     }
 
     console.log("Parsing email payload...");
-    const rawPayload = await parseEmailPayload(req);
+    const rawPayload = await parseEmailPayload(req, emailProvider, emailApiKey);
     console.log("Raw payload received:", {
       recipient: rawPayload.recipient,
       sender: rawPayload.sender,

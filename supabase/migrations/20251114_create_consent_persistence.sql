@@ -145,7 +145,7 @@ CREATE POLICY "Users can read own CMP detections"
 CREATE OR REPLACE FUNCTION cleanup_old_consent_states()
 RETURNS void
 LANGUAGE plpgsql
-SET search_path = public, pg_temp
+SET search_path = pg_catalog, public
 AS $$
 BEGIN
   DELETE FROM consent_state

@@ -11,9 +11,9 @@
 --   in a different schema, causing the function to execute unintended code.
 -- - **Risk**: High, especially for `SECURITY DEFINER` functions, as it can lead
 --   to privilege escalation.
--- - **Solution**: All functions are altered to set `search_path = public, pg_temp`.
---   This forces them to resolve objects against the `public` schema first,
---   mitigating the risk.
+-- - **Solution**: All functions are altered to set `search_path = pg_catalog, public`.
+--   This pins name resolution to built-ins first, then your application schema,
+--   and avoids resolving caller-controlled temp objects (`pg_temp`).
 --
 -- ## Functions Altered
 -- 1. `cleanup_old_consent_states()`
@@ -32,17 +32,17 @@
 -- 14. `sanitize_text_input(text, int)`
 
 -- Apply the search_path fix to all public functions
-ALTER FUNCTION public.cleanup_old_consent_states() SET search_path = public, pg_temp;
-ALTER FUNCTION public.update_updated_at_column() SET search_path = public, pg_temp;
-ALTER FUNCTION public.increment_email_received(p_email_address text) SET search_path = public, pg_temp;
-ALTER FUNCTION public.increment_email_forwarded(p_burner_email_id uuid) SET search_path = public, pg_temp;
-ALTER FUNCTION public.cleanup_expired_burner_emails() SET search_path = public, pg_temp;
-ALTER FUNCTION public.check_rate_limit(p_burner_email_id uuid, p_hourly_limit int) SET search_path = public, pg_temp;
-ALTER FUNCTION public.detect_spam_spike(p_burner_email_id uuid) SET search_path = public, pg_temp;
-ALTER FUNCTION public.pause_burner_email(p_burner_email_id uuid, p_reason text) SET search_path = public, pg_temp;
-ALTER FUNCTION public.unpause_burner_email(p_burner_email_id uuid) SET search_path = public, pg_temp;
-ALTER FUNCTION public.get_rate_limit_stats(p_burner_email_id uuid) SET search_path = public, pg_temp;
-ALTER FUNCTION public.log_security_event(p_event_type text, p_burner_email_id uuid, p_details jsonb, p_ip_address inet, p_user_agent text) SET search_path = public, pg_temp;
-ALTER FUNCTION public.audit_burner_email_changes() SET search_path = public, pg_temp;
-ALTER FUNCTION public.is_valid_email(email text) SET search_path = public, pg_temp;
-ALTER FUNCTION public.sanitize_text_input(input text, max_length int) SET search_path = public, pg_temp;
+ALTER FUNCTION public.cleanup_old_consent_states() SET search_path = pg_catalog, public;
+ALTER FUNCTION public.update_updated_at_column() SET search_path = pg_catalog, public;
+ALTER FUNCTION public.increment_email_received(p_email_address text) SET search_path = pg_catalog, public;
+ALTER FUNCTION public.increment_email_forwarded(p_burner_email_id uuid) SET search_path = pg_catalog, public;
+ALTER FUNCTION public.cleanup_expired_burner_emails() SET search_path = pg_catalog, public;
+ALTER FUNCTION public.check_rate_limit(p_burner_email_id uuid, p_hourly_limit int) SET search_path = pg_catalog, public;
+ALTER FUNCTION public.detect_spam_spike(p_burner_email_id uuid) SET search_path = pg_catalog, public;
+ALTER FUNCTION public.pause_burner_email(p_burner_email_id uuid, p_reason text) SET search_path = pg_catalog, public;
+ALTER FUNCTION public.unpause_burner_email(p_burner_email_id uuid) SET search_path = pg_catalog, public;
+ALTER FUNCTION public.get_rate_limit_stats(p_burner_email_id uuid) SET search_path = pg_catalog, public;
+ALTER FUNCTION public.log_security_event(p_event_type text, p_burner_email_id uuid, p_details jsonb, p_ip_address inet, p_user_agent text) SET search_path = pg_catalog, public;
+ALTER FUNCTION public.audit_burner_email_changes() SET search_path = pg_catalog, public;
+ALTER FUNCTION public.is_valid_email(email text) SET search_path = pg_catalog, public;
+ALTER FUNCTION public.sanitize_text_input(input text, max_length int) SET search_path = pg_catalog, public;
