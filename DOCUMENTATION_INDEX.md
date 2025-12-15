@@ -9,7 +9,7 @@ This index helps you navigate the documentation for setting up external email fo
 ## Documentation Files
 
 ### 🚀 Start Here
-
+ 
 #### **QUICK_START.md**
 **Condensed setup checklist** (50 minutes)
 - Step-by-step instructions with exact values

@@ -11,7 +11,7 @@ Tools and commands to verify and troubleshoot the external email forwarding setu
 5. [Webhook Testing](#webhook-testing)
 6. [Log Analysis](#log-analysis)
 7. [Health Check Script](#health-check-script)
-
+ 
 ---
 
 ## DNS Verification
@@ -112,7 +112,7 @@ Send a test webhook payload to your Supabase function:
 # test-inbound-email.sh
 #!/bin/bash
 
-FUNCTION_URL="https://0ec90b57d6e95fcbda19832f.supabase.co/functions/v1/inbound-email"
+FUNCTION_URL="https://llffqxdhpgsqnpzeznaq.supabase.co/functions/v1/inbound-email"
 
 # Test payload (simulating Resend webhook)
 curl -X POST "$FUNCTION_URL" \
@@ -136,7 +136,7 @@ echo ""
 # test-inbound-email-form.sh
 #!/bin/bash
 
-FUNCTION_URL="https://0ec90b57d6e95fcbda19832f.supabase.co/functions/v1/inbound-email"
+FUNCTION_URL="https://llffqxdhpgsqnpzeznaq.supabase.co/functions/v1/inbound-email"
 
 curl -X POST "$FUNCTION_URL" \
   -H "Content-Type: application/x-www-form-urlencoded" \
@@ -393,7 +393,7 @@ echo ""
 # test-webhook.sh
 #!/bin/bash
 
-WEBHOOK_URL="https://0ec90b57d6e95fcbda19832f.supabase.co/functions/v1/inbound-email"
+WEBHOOK_URL="https://llffqxdhpgsqnpzeznaq.supabase.co/functions/v1/inbound-email"
 BURNER_EMAIL="YOUR_BURNER@burner.privaseer.co.uk"
 
 echo "Testing webhook with burner email: $BURNER_EMAIL"
@@ -427,7 +427,7 @@ echo ""
 # test-webhook-trackers.sh
 #!/bin/bash
 
-WEBHOOK_URL="https://0ec90b57d6e95fcbda19832f.supabase.co/functions/v1/inbound-email"
+WEBHOOK_URL="https://llffqxdhpgsqnpzeznaq.supabase.co/functions/v1/inbound-email"
 BURNER_EMAIL="YOUR_BURNER@burner.privaseer.co.uk"
 
 # Email with multiple tracking elements
@@ -529,7 +529,7 @@ echo ""
 
 # Configuration
 DOMAIN="burner.privaseer.co.uk"
-WEBHOOK_URL="https://0ec90b57d6e95fcbda19832f.supabase.co/functions/v1/inbound-email"
+WEBHOOK_URL="https://llffqxdhpgsqnpzeznaq.supabase.co/functions/v1/inbound-email"
 
 # Colors
 GREEN='\033[0;32m'

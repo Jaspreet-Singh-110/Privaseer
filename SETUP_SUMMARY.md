@@ -18,7 +18,7 @@ Three comprehensive guides have been created to help you complete the external s
 - Comprehensive troubleshooting section with solutions for common issues
 
 **Use this document first** to configure all external services.
-
+ 
 ### 2. DIAGNOSTIC_TOOLS.md
 **Tools and scripts for verification and troubleshooting**:
 - DNS verification commands
@@ -204,7 +204,7 @@ Three comprehensive guides have been created to help you complete the external s
 
 **Steps:**
 1. In Resend dashboard, go to Webhooks
-2. Add webhook URL: `https://0ec90b57d6e95fcbda19832f.supabase.co/functions/v1/inbound-email`
+2. Add webhook URL: `https://llffqxdhpgsqnpzeznaq.supabase.co/functions/v1/inbound-email`
 3. Subscribe to `email.received` event
 4. Enable webhook
 5. **Critical:** Configure inbound rule to forward to webhook
@@ -284,7 +284,7 @@ dig TXT _dmarc.burner.privaseer.co.uk
 ### Test Webhook Endpoint
 ```bash
 # Test that endpoint is accessible
-curl -X OPTIONS https://0ec90b57d6e95fcbda19832f.supabase.co/functions/v1/inbound-email
+curl -X OPTIONS https://llffqxdhpgsqnpzeznaq.supabase.co/functions/v1/inbound-email
 
 # Should return 200 OK
 ```

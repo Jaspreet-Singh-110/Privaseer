@@ -14,7 +14,7 @@ Complete guide for configuring Resend, Hostinger DNS, and webhooks to enable bur
 8. [Troubleshooting](#troubleshooting)
 
 ---
-
+ 
 ## Overview
 
 The Privaseer burner email system uses external email forwarding to receive emails and forward them to users' real addresses. The complete flow works as follows:
@@ -243,7 +243,7 @@ This ensures the new environment variables are loaded.
 
 Your webhook URL is:
 ```
-https://0ec90b57d6e95fcbda19832f.supabase.co/functions/v1/inbound-email
+https://llffqxdhpgsqnpzeznaq.supabase.co/functions/v1/inbound-email
 ```
 
 **URL Format:**
@@ -257,7 +257,7 @@ Where `[PROJECT_ID]` is from your `.env` file's `VITE_SUPABASE_URL`.
 
 1. In Resend dashboard, go to **Webhooks**
 2. Click **"Add Webhook"**
-3. **Endpoint URL**: `https://0ec90b57d6e95fcbda19832f.supabase.co/functions/v1/inbound-email`
+3. **Endpoint URL**: `https://llffqxdhpgsqnpzeznaq.supabase.co/functions/v1/inbound-email`
 4. **Events to Subscribe**: Select **"email.received"**
 5. **Status**: **Enabled**
 6. Click **"Create Webhook"**
@@ -271,7 +271,7 @@ Resend needs to know to forward emails to your webhook:
 3. Click **"Add Inbound Rule"**
 4. **Match Type**: **"All emails"** (or specify patterns if needed)
 5. **Forward To**: Select **"Webhook"**
-6. **Webhook URL**: `https://0ec90b57d6e95fcbda19832f.supabase.co/functions/v1/inbound-email`
+6. **Webhook URL**: `https://llffqxdhpgsqnpzeznaq.supabase.co/functions/v1/inbound-email`
 7. Click **"Save"**
 
 **IMPORTANT**: Without this inbound rule, emails will be received by Resend but NOT forwarded to your webhook!
@@ -708,7 +708,7 @@ After successful setup:
 
 **Webhook URL:**
 ```
-https://0ec90b57d6e95fcbda19832f.supabase.co/functions/v1/inbound-email
+https://llffqxdhpgsqnpzeznaq.supabase.co/functions/v1/inbound-email
 ```
 
 **Domain:**

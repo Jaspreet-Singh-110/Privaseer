@@ -13,7 +13,7 @@
 
 📋 **Copy this:** `re_________________________` (your API key)
 
----
+--- 
 
 ## Step 2: Hostinger DNS (15 min)
 
@@ -84,7 +84,7 @@ Check with: `dig MX burner.privaseer.co.uk`
 1. In Resend dashboard → Webhooks → Add Webhook
 2. **Endpoint URL:**
    ```
-   https://0ec90b57d6e95fcbda19832f.supabase.co/functions/v1/inbound-email
+   https://llffqxdhpgsqnpzeznaq.supabase.co/functions/v1/inbound-email
    ```
 3. **Events:** Select `email.received`
 4. **Status:** Enabled

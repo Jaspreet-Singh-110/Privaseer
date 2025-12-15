@@ -17,7 +17,7 @@ Procedures for operating, maintaining, and troubleshooting the Privaseer burner 
 ## System Overview
 
 ### Architecture
-
+ 
 ```
 ┌─────────────┐
 │   External  │
@@ -487,7 +487,7 @@ Run daily to ensure system is operational:
 
 4. **Test function manually**
    ```bash
-   curl https://0ec90b57d6e95fcbda19832f.supabase.co/functions/v1/inbound-email
+   curl https://llffqxdhpgsqnpzeznaq.supabase.co/functions/v1/inbound-email
    ```
    - If timeout, may be function issue
    - Check Supabase logs for errors
