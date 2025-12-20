@@ -206,6 +206,37 @@ npm run test:coverage
 - `supabase/security_enhancements.sql` hardens RLS policies, adds audit logging (`security_audit_log`), enforces email formatting, positive counters, and rate limits for burner-email tables
 - Migrations add consent persistence, feedback tables, burner email schema, and search-path fixes for edge functions
 
+### JWT Signing Keys (ES256)
+The burner email authentication flow now mandates asymmetric signing keys. Provision them outside of version control and store the private key only in secure secret managers:
+
+1. Generate a fresh ES256 key pair via the Supabase CLI:
+
+   ```bash
+   npx supabase gen signing-key --algorithm ES256
+   ```
+
+2. Copy the PEM-formatted outputs somewhere secure (do **not** commit them):
+
+   - `-----BEGIN PRIVATE KEY----- ... -----END PRIVATE KEY-----`
+   - `-----BEGIN PUBLIC KEY----- ... -----END PUBLIC KEY-----`
+
+3. Load the keys (and optional metadata) into your Supabase project secrets:
+
+   ```bash
+   supabase secrets set JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
+   supabase secrets set JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
+   supabase secrets set JWT_ISSUER="privaseer-burner-auth"     # optional override
+   supabase secrets set JWT_KEY_ID="burner-v1"                 # optional, helps with rotation
+   ```
+
+4. Remove the legacy shared secret once deployment succeeds:
+
+   ```bash
+   supabase secrets unset JWT_SECRET
+   ```
+
+> ⚠️ Never check PEM files or raw key strings into Git. If you need to regenerate keys, rotate by setting a new `JWT_KEY_ID`, updating both keys, then unsetting the old secrets.
+
 ## Maintenance and Extension
 
 ### Enhancement Opportunities

@@ -1,7 +1,7 @@
 import type { BurnerEmail } from '../types';
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
-import { SUPABASE } from '../utils/constants';
+import { SUPABASE, BURNER_AUTH } from '../utils/constants';
 import { Storage } from './storage';
 import { validateEmail } from '../utils/validation';
 
@@ -10,9 +10,14 @@ class BurnerEmailService {
   private supabaseUrl: string = SUPABASE.URL;
   private supabaseAnonKey: string = SUPABASE.ANON_KEY;
   private apiUrl: string;
+  private authUrl: string;
+  private cachedToken: string | null = null;
+  private tokenExpiry: number = 0;
+  private installationSecret: string | null = null;
 
   constructor() {
     this.apiUrl = `${this.supabaseUrl}/functions/v1/generate-burner-email`;
+    this.authUrl = `${this.supabaseUrl}${BURNER_AUTH.AUTH_ENDPOINT}`;
   }
 
   async initialize(): Promise<void> {
@@ -33,6 +38,109 @@ class BurnerEmailService {
     const newId = crypto.randomUUID();
     await chrome.storage.local.set({ installationId: newId });
     return newId;
+  }
+
+  private async getInstallationSecret(): Promise<string | null> {
+    if (this.installationSecret) {
+      return this.installationSecret;
+    }
+    const stored = await chrome.storage.local.get(BURNER_AUTH.SECRET_STORAGE_KEY);
+    if (stored && stored[BURNER_AUTH.SECRET_STORAGE_KEY]) {
+      this.installationSecret = stored[BURNER_AUTH.SECRET_STORAGE_KEY];
+      return this.installationSecret;
+    }
+    return null;
+  }
+
+  private async computeSignature(payload: string, secret: string): Promise<string> {
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(secret),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign'],
+    );
+    const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
+    const bytes = new Uint8Array(signature);
+    let binary = '';
+    bytes.forEach(b => (binary += String.fromCharCode(b)));
+    return btoa(binary);
+  }
+
+  private async requestAuthToken(): Promise<string> {
+    if (!this.installationId) {
+      this.installationId = await this.getOrCreateInstallationId();
+    }
+    if (!this.installationId) {
+      throw new Error('Installation ID unavailable');
+    }
+
+    const timestamp = Date.now();
+    const secret = await this.getInstallationSecret();
+    const signature = secret
+      ? await this.computeSignature(`${this.installationId}:${timestamp}`, secret)
+      : undefined;
+
+    const response = await fetch(this.authUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': this.supabaseAnonKey,
+      },
+      body: JSON.stringify({
+        installationId: this.installationId,
+        timestamp,
+        ...(signature ? { signature } : {}),
+      }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Auth token request failed (${response.status}): ${text}`);
+    }
+
+    const data = await response.json() as { token: string; expiresAt?: string; secret?: string };
+
+    if (data.secret) {
+      await chrome.storage.local.set({ [BURNER_AUTH.SECRET_STORAGE_KEY]: data.secret });
+      this.installationSecret = data.secret;
+    }
+
+    if (!data.token) {
+      throw new Error('Auth token missing in response');
+    }
+
+    const expiresAt = data.expiresAt ? new Date(data.expiresAt).getTime() : Date.now() + 10 * 60 * 1000;
+    this.cachedToken = data.token;
+    this.tokenExpiry = expiresAt;
+    return data.token;
+  }
+
+  private async getValidToken(forceRefresh = false): Promise<string> {
+    const buffer = BURNER_AUTH.TOKEN_REFRESH_BUFFER_MS;
+    if (!forceRefresh && this.cachedToken && (Date.now() + buffer) < this.tokenExpiry) {
+      return this.cachedToken;
+    }
+    return this.requestAuthToken();
+  }
+
+  private async authorizedFetch(url: string, initFactory: () => RequestInit, attempt = 0): Promise<Response> {
+    const token = await this.getValidToken(attempt > 0);
+    const init = initFactory();
+    const headers = new Headers(init.headers ?? {});
+    headers.set('Authorization', `Bearer ${token}`);
+    headers.set('apikey', this.supabaseAnonKey);
+    const nextInit: RequestInit = {
+      ...init,
+      headers,
+    };
+    const response = await fetch(url, nextInit);
+    if (response.status === 401 && attempt < BURNER_AUTH.MAX_TOKEN_RETRIES) {
+      this.cachedToken = null;
+      return this.authorizedFetch(url, initFactory, attempt + 1);
+    }
+    return response;
   }
 
   async generateEmail(domain: string, url?: string, label?: string): Promise<string> {
@@ -83,14 +191,14 @@ class BurnerEmailService {
         label: label || undefined,
       };
 
-      const response = await fetch(this.apiUrl, {
+      const payload = JSON.stringify(requestBody);
+      const response = await this.authorizedFetch(this.apiUrl, () => ({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.supabaseAnonKey}`,
         },
-        body: JSON.stringify(requestBody),
-      });
+        body: payload,
+      }));
 
       logger.debug('BurnerEmailService', 'Response received', { status: response.status, ok: response.ok });
 
@@ -143,14 +251,11 @@ class BurnerEmailService {
         await this.initialize();
       }
 
-      const response = await fetch(
+      const response = await this.authorizedFetch(
         `${this.apiUrl}?installationId=${this.installationId}`,
-        {
+        () => ({
           method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${this.supabaseAnonKey}`,
-          },
-        }
+        }),
       );
 
       const data = await response.json();
@@ -172,14 +277,11 @@ class BurnerEmailService {
         await this.initialize();
       }
 
-      const response = await fetch(
+      const response = await this.authorizedFetch(
         `${this.apiUrl}?emailId=${emailId}&installationId=${this.installationId}`,
-        {
+        () => ({
           method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${this.supabaseAnonKey}`,
-          },
-        }
+        }),
       );
 
       const data = await response.json();

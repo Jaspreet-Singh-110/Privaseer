@@ -1,6 +1,7 @@
 // @ts-nocheck - Deno Edge Function with npm: specifiers resolved at runtime
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import * as jose from "npm:jose@5";
 
 type DenoRuntime = {
   env: { get(key: string): string | undefined };
@@ -11,6 +12,26 @@ const denoRuntime = (globalThis as typeof globalThis & { Deno?: DenoRuntime }).D
 
 if (!denoRuntime) {
   throw new Error("Deno runtime is required for this function");
+}
+
+const supabaseUrl = denoRuntime.env.get("SUPABASE_URL");
+const supabaseKey = denoRuntime.env.get("SUPABASE_SERVICE_ROLE_KEY");
+const jwtPublicKeyJwkEnv = denoRuntime.env.get("JWT_PUBLIC_KEY");
+const jwtIssuer = denoRuntime.env.get("JWT_ISSUER") ?? "privaseer-burner-auth";
+const supabase = supabaseUrl && supabaseKey
+  ? createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } })
+  : null;
+
+let cachedPublicVerificationKey: jose.KeyLike | null = null;
+
+async function getPublicVerificationKey(): Promise<jose.KeyLike> {
+  if (cachedPublicVerificationKey) return cachedPublicVerificationKey;
+  if (!jwtPublicKeyJwkEnv) {
+    throw new Error("JWT public key not configured");
+  }
+  const jwk = JSON.parse(jwtPublicKeyJwkEnv);
+  cachedPublicVerificationKey = await jose.importJWK(jwk, "ES256");
+  return cachedPublicVerificationKey;
 }
 
 // ============= Inlined validation functions =============
@@ -63,14 +84,25 @@ function validateNumber(value: any, fieldName: string, options: { min?: number; 
   return { valid: true, sanitized: num };
 }
 
-function validateGenerateEmailRequest(body: any): ValidationResult {
+function validateGenerateEmailRequest(body: any, installationIdFromJwt?: string): ValidationResult {
   if (!body || typeof body !== 'object') return { valid: false, error: 'Request body must be an object' };
-  const installationIdValidation = validateUUID(body.installationId || '');
-  if (!installationIdValidation.valid) return { valid: false, error: `Installation ID: ${installationIdValidation.error}` };
+  
+  // installationId can come from JWT (preferred) or body (legacy support)
+  let installationId = installationIdFromJwt;
+  if (!installationId) {
+    const installationIdValidation = validateUUID(body.installationId || '');
+    if (!installationIdValidation.valid) return { valid: false, error: `Installation ID: ${installationIdValidation.error}` };
+    installationId = installationIdValidation.sanitized;
+  }
+  
   const realEmailValidation = validateEmail(body.realEmail || '');
   if (!realEmailValidation.valid) return { valid: false, error: `Real email: ${realEmailValidation.error}` };
-  const domainValidation = validateString(body.domain || '', 'Domain', { required: true, maxLength: 255 });
+  
+  // Accept both 'domain' and 'siteDomain' for compatibility
+  const domainValue = body.domain || body.siteDomain || '';
+  const domainValidation = validateString(domainValue, 'Domain', { required: true, maxLength: 255 });
   if (!domainValidation.valid) return { valid: false, error: domainValidation.error };
+  
   const urlValidation = validateString(body.url || '', 'URL', { maxLength: 2048 });
   if (!urlValidation.valid) return { valid: false, error: urlValidation.error };
   const labelValidation = validateString(body.label || '', 'Label', { maxLength: 255 });
@@ -82,7 +114,7 @@ function validateGenerateEmailRequest(body: any): ValidationResult {
   return {
     valid: true,
     sanitized: {
-      installationId: installationIdValidation.sanitized,
+      installationId,
       realEmail: realEmailValidation.sanitized,
       domain: domainValidation.sanitized,
       url: urlValidation.sanitized,
@@ -98,6 +130,74 @@ function createValidationErrorResponse(error: string): Response {
     status: 400,
     headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
   });
+}
+
+async function authenticateRequest(req: Request): Promise<{ installationId: string; claims: jose.JWTPayload }> {
+  if (!supabase) {
+    throw new Error("Supabase client not configured");
+  }
+  if (!jwtPublicKeyJwkEnv) {
+    throw new Error("JWT public key not configured");
+  }
+
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return Promise.reject(new Response(
+      JSON.stringify({ error: "Missing authorization" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    ));
+  }
+
+  const token = authHeader.slice(7);
+  try {
+    const verificationKey = await getPublicVerificationKey();
+    const { payload } = await jose.jwtVerify(token, verificationKey, {
+      algorithms: ["ES256"],
+      issuer: jwtIssuer,
+    });
+    const installationId = payload.sub as string;
+    if (!installationId) {
+      throw new Error("Token missing subject");
+    }
+    return { installationId, claims: payload };
+  } catch (error) {
+    console.error("JWT verification failed", error);
+    return Promise.reject(new Response(
+      JSON.stringify({ error: "Invalid authorization token" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    ));
+  }
+}
+
+async function enforceRateLimit(installationId: string) {
+  if (!supabase) return;
+  const { data, error } = await supabase.rpc("check_generation_limits", { p_installation_id: installationId });
+  if (error) {
+    throw error;
+  }
+  if (!data?.allowed) {
+    const reason = data?.reason === "hourly_limit"
+      ? "Hourly burner email limit reached"
+      : data?.reason === "daily_limit"
+        ? "Daily burner email limit reached"
+        : "Burner email generation temporarily blocked";
+    throw new Response(
+      JSON.stringify({ error: reason }),
+      { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+}
+
+async function recordGeneration(installationId: string) {
+  if (!supabase) return;
+  try {
+    const { error } = await supabase.rpc("log_generation_event", { p_installation_id: installationId });
+    if (error) {
+      console.error("Failed to log generation event", error);
+    }
+  } catch (err) {
+    console.error("Failed to log generation event", err);
+  }
 }
 
 // ============= Inlined word lists for Deno Deploy compatibility =============
@@ -427,20 +527,45 @@ denoRuntime.serve(async (req: Request) => {
     });
   }
 
+  let authContext: { installationId: string; claims: jose.JWTPayload };
   try {
-    const supabaseUrl = denoRuntime.env.get("SUPABASE_URL")!;
-    const supabaseKey = denoRuntime.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    authContext = await authenticateRequest(req);
+  } catch (response) {
+    if (response instanceof Response) {
+      return response;
+    }
+    console.error("Authentication error:", response);
+    return new Response(
+      JSON.stringify({ error: "Authentication failed" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
+  try {
+    if (!supabase) {
+      throw new Error("Supabase client unavailable");
+    }
 
     if (req.method === "POST") {
       const rawBody = await req.json();
 
-      const validation = validateGenerateEmailRequest(rawBody);
+      // Pass JWT's installationId to validation - no need to require it in body
+      const validation = validateGenerateEmailRequest(rawBody, authContext.installationId);
       if (!validation.valid) {
         return createValidationErrorResponse(validation.error!);
       }
 
       const body = validation.sanitized!;
+      // installationId now comes from JWT, so no mismatch check needed
+
+      try {
+        await enforceRateLimit(authContext.installationId);
+      } catch (error) {
+        if (error instanceof Response) {
+          return error;
+        }
+        throw error;
+      }
 
       let emailAddress = generateRandomEmail();
       let attempts = 0;
@@ -506,6 +631,8 @@ denoRuntime.serve(async (req: Request) => {
         );
       }
 
+      await recordGeneration(authContext.installationId);
+
       return new Response(
         JSON.stringify({ success: true, email: data }),
         {
@@ -524,6 +651,16 @@ denoRuntime.serve(async (req: Request) => {
           JSON.stringify({ error: "Missing installationId" }),
           {
             status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      if (installationId !== authContext.installationId) {
+        return new Response(
+          JSON.stringify({ error: "Installation mismatch" }),
+          {
+            status: 403,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           }
         );
@@ -565,6 +702,16 @@ denoRuntime.serve(async (req: Request) => {
           JSON.stringify({ error: "Missing emailId or installationId" }),
           {
             status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      if (installationId !== authContext.installationId) {
+        return new Response(
+          JSON.stringify({ error: "Installation mismatch" }),
+          {
+            status: 403,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           }
         );

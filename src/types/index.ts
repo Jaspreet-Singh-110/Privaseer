@@ -317,3 +317,11 @@ export interface BurnerEmail {
   times_used: number;
   created_at: string;
 }
+
+export type BurnerEmailError =
+  | 'disabled'
+  | 'no_real_email'
+  | 'auth_failed'
+  | 'rate_limited'
+  | 'blocked'
+  | 'unknown';

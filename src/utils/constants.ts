@@ -63,3 +63,10 @@ export const SUPABASE = {
   URL: 'https://llffqxdhpgsqnpzeznaq.supabase.co',
   ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxsZmZxeGRocGdzcW5wemV6bmFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA4NjMxNjIsImV4cCI6MjA3NjQzOTE2Mn0.Eaug9z-gFKPiD3vGI7yKXVUUwJMEMsfUnZ3SXj9SO4Y',
 } as const;
+
+export const BURNER_AUTH = {
+  TOKEN_REFRESH_BUFFER_MS: 60 * 1000,
+  MAX_TOKEN_RETRIES: 2,
+  AUTH_ENDPOINT: '/functions/v1/auth-token',
+  SECRET_STORAGE_KEY: 'installationSecret',
+} as const;
