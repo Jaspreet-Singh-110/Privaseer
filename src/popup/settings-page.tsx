@@ -187,7 +187,7 @@ export function SettingsPage({
 
       if (response.success) {
         setRealEmail(validation.sanitized!);
-        setRealEmailInput(validation.sanitized!);
+        setRealEmailInput('');
         logger.info('Settings', 'Real email saved successfully');
       } else {
         setRealEmailError(response.error || 'Failed to save email');

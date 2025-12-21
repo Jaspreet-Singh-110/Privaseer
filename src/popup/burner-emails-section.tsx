@@ -148,7 +148,7 @@ export function BurnerEmailsSection({ onOpenSettings, isActive = true }: BurnerE
 
       if (response.success) {
         setRealEmail(validation.sanitized!);
-        setRealEmailInput(validation.sanitized!);
+        setRealEmailInput('');
         logger.info('BurnerEmails', 'Real email saved successfully');
         
         // Reload feature state to ensure consistency after save
