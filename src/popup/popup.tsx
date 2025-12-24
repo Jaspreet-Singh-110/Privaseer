@@ -332,12 +332,14 @@ export function Popup() {
           </div>
         </div>
 
-        <ReportableSettingsPage
-          isOpen={showSettings}
-          onClose={() => setShowSettings(false)}
-          currentTab={currentTab}
-          onFeedbackSuccess={handleFeedbackSuccess}
-        />
+        {showSettings && (
+          <ReportableSettingsPage
+            isOpen={showSettings}
+            onClose={() => setShowSettings(false)}
+            currentTab={currentTab}
+            onFeedbackSuccess={handleFeedbackSuccess}
+          />
+        )}
 
         {showSuccessBanner && (
           <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in">
@@ -428,14 +430,15 @@ export function Popup() {
         </div>
       </div>
 
-      {activeTab === 'burner' ? (
+      {activeTab === 'burner' && (
         <div className="flex-1 overflow-y-auto">
           <BurnerEmailsSection 
             onOpenSettings={openSettingsToBurner}
-            isActive={activeTab === 'burner'}
+            isActive={true}
           />
         </div>
-      ) : (
+      )}
+      {activeTab === 'dashboard' && (
         <>
       <div className={`px-6 py-5 ${scoreBg} border-b border-gray-200`}>
 
@@ -499,25 +502,27 @@ export function Popup() {
         </>
       )}
 
-      <ReportableSettingsPage
-        isOpen={showSettings}
-        onClose={() => {
-          setShowSettings(false);
-          setSettingsDeepLink(null);
-          setHighlightBurnerToggle(false);
-          setReportingAlert(null);
-        }}
-        currentTab={currentTab}
-        onFeedbackSuccess={handleFeedbackSuccess}
-        deepLinkSection={settingsDeepLink}
-        highlightBurnerToggle={highlightBurnerToggle}
-        onBurnerHighlightComplete={() => {
-          setHighlightBurnerToggle(false);
-          setSettingsDeepLink(null);
-        }}
-        reportContext={reportingAlert}
-        onReportClear={() => setReportingAlert(null)}
-      />
+      {showSettings && (
+        <ReportableSettingsPage
+          isOpen={showSettings}
+          onClose={() => {
+            setShowSettings(false);
+            setSettingsDeepLink(null);
+            setHighlightBurnerToggle(false);
+            setReportingAlert(null);
+          }}
+          currentTab={currentTab}
+          onFeedbackSuccess={handleFeedbackSuccess}
+          deepLinkSection={settingsDeepLink}
+          highlightBurnerToggle={highlightBurnerToggle}
+          onBurnerHighlightComplete={() => {
+            setHighlightBurnerToggle(false);
+            setSettingsDeepLink(null);
+          }}
+          reportContext={reportingAlert}
+          onReportClear={() => setReportingAlert(null)}
+        />
+      )}
 
       {showSuccessBanner && (
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in">

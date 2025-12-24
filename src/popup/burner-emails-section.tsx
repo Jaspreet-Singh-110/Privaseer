@@ -69,13 +69,8 @@ export function BurnerEmailsSection({ onOpenSettings, isActive = true }: BurnerE
   // This handles the case where settings were changed in another tab/section.
   // We deliberately avoid re-running when internal state changes to prevent loops.
   /* eslint-disable react-hooks/exhaustive-deps */
-  useEffect(() => {
-    if (isActive) {
-      logger.info('BurnerEmails', 'Tab became active, reloading state', { currentFeatureEnabled: isFeatureEnabled });
-      loadFeatureState();
-      loadRealEmail();
-    }
-  }, [isActive]);
+  // Removed isActive effect - component now only mounts when active
+  // Data loads on mount via the initial useEffect
   /* eslint-enable react-hooks/exhaustive-deps */
 
   const loadFeatureState = async () => {
@@ -112,7 +107,7 @@ export function BurnerEmailsSection({ onOpenSettings, isActive = true }: BurnerE
         const email = response.email || null;
         logger.info('BurnerEmails', 'loadRealEmail: Setting email state', { email: email ? 'present' : 'empty' });
         setRealEmail(email);
-        setRealEmailInput(email || '');
+        // Don't set realEmailInput - let user control it
       } else {
         logger.warn('BurnerEmails', 'loadRealEmail: Response was not successful', { response });
       }

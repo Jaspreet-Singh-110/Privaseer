@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { X, MessageSquare, Send, Info, Palette, Mail, ChevronRight, ArrowLeft, Sun, Moon, Monitor, BarChart2 } from 'lucide-react';
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
 import { ThemeManager } from '../utils/theme-manager';
 import { validateEmail } from '../utils/validation';
-import type { Alert as AlertType } from '../types';
+import type { Alert as AlertType, AllSettingsResponse } from '../types';
 
 export type SettingsSection = 'menu' | 'feedback' | 'theme' | 'burner-services' | 'telemetry' | 'about';
 type ThemeOption = 'light' | 'dark' | 'system';
@@ -38,7 +38,7 @@ export function SettingsPage({
   const [selectedTheme, setSelectedTheme] = useState<ThemeOption>('system');
   const [isNavigatingForward, setIsNavigatingForward] = useState(true);
   const [isApplyingTheme, setIsApplyingTheme] = useState(false);
-  const [isBurnerEmailEnabled, setIsBurnerEmailEnabled] = useState(true);
+  const [isBurnerEmailEnabled, setIsBurnerEmailEnabled] = useState(false);
   const [isTogglingBurnerEmail, setIsTogglingBurnerEmail] = useState(false);
   const [shouldHighlightBurnerToggle, setShouldHighlightBurnerToggle] = useState(false);
   const [isTelemetryEnabled, setIsTelemetryEnabled] = useState(false);
@@ -50,19 +50,40 @@ export function SettingsPage({
   const burnerToggleRef = useRef<HTMLButtonElement | null>(null);
   const isTogglingRef = useRef(false);
 
-  // Run once on mount to register listeners; helper functions intentionally excluded to avoid ref churn.
-  /* eslint-disable react-hooks/exhaustive-deps */
-  useEffect(() => {
-    loadCurrentTheme();
-    loadBurnerEmailSetting();
-    loadTelemetrySetting();
-    loadRealEmail();
+  const loadAllSettings = useCallback(async (options?: { skipBurnerUpdate?: boolean }) => {
+    const shouldSkipBurner = options?.skipBurnerUpdate || isTogglingRef.current;
 
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'GET_ALL_SETTINGS' });
+      if (response.success && response.settings) {
+        const { theme, burnerEmailEnabled, telemetryEnabled, realEmail } = response.settings as AllSettingsResponse;
+
+        setSelectedTheme(theme ?? 'system');
+        setIsTelemetryEnabled(Boolean(telemetryEnabled));
+
+        if (!shouldSkipBurner) {
+          setIsBurnerEmailEnabled(Boolean(burnerEmailEnabled));
+        } else {
+          logger.debug('Settings', 'loadAllSettings: Skipped burner update due to toggle/highlight');
+        }
+
+        const email = realEmail || '';
+        setRealEmail(email);
+        // Don't set realEmailInput - let user control it
+      } else {
+        logger.warn('Settings', 'loadAllSettings: Response was not successful', { response });
+      }
+    } catch (error) {
+      logger.error('Settings', 'Failed to load settings', toError(error));
+    }
+  }, []);
+
+  // Run once on mount to register listeners
+  useEffect(() => {
     const messageListener = (message: { type: string }) => {
       if (message.type === 'STATE_UPDATE') {
-        logger.debug('Settings', 'STATE_UPDATE received, reloading burner email setting');
-        loadBurnerEmailSetting();
-        // Don't reload email - let user control the input
+        logger.debug('Settings', 'STATE_UPDATE received, reloading settings');
+        loadAllSettings({ skipBurnerUpdate: isTogglingRef.current });
       }
     };
 
@@ -71,100 +92,31 @@ export function SettingsPage({
     return () => {
       chrome.runtime.onMessage.removeListener(messageListener);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Reload state when settings modal opens to ensure consistency.
   // Refetch only when modal visibility/deep-link inputs change.
-  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (isOpen) {
-      logger.info('Settings', 'Modal opened, reloading state', { currentBurnerEnabled: isBurnerEmailEnabled });
+      logger.info('Settings', 'Modal opened, reloading state');
 
-      // When arriving via burner deep-link (highlightBurnerToggle), skip the initial
-      // burner setting fetch to avoid immediately overwriting the user's intent.
-      if (!highlightBurnerToggle) {
-        loadBurnerEmailSetting();
-      } else {
-        logger.info('Settings', 'Modal opened via deep-link, skipping initial burner setting fetch');
-      }
-
-      loadRealEmail();
+      // When arriving via burner deep-link (highlightBurnerToggle), skip updating burner state
+      // to avoid immediately overwriting the user's intent.
+      loadAllSettings({ skipBurnerUpdate: highlightBurnerToggle || isTogglingRef.current });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, highlightBurnerToggle]);
-  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Reload burner email setting when navigating to burner-services section.
   // Restrict to section/nav changes to avoid redundant fetch loops.
-  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (isOpen && activeSection === 'burner-services' && !highlightBurnerToggle) {
-      logger.info('Settings', 'Navigated to burner-services, reloading state', { currentBurnerEnabled: isBurnerEmailEnabled });
-      loadBurnerEmailSetting();
-      // Don't reload email - it's already loaded when modal opened
+      logger.info('Settings', 'Navigated to burner-services, reloading state');
+      loadAllSettings({ skipBurnerUpdate: isTogglingRef.current });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, activeSection, highlightBurnerToggle]);
-  /* eslint-enable react-hooks/exhaustive-deps */
-
-  const loadCurrentTheme = async () => {
-    try {
-      const response = await chrome.runtime.sendMessage({ type: 'GET_THEME' });
-      if (response.success && response.theme) {
-        setSelectedTheme(response.theme);
-      }
-    } catch (error) {
-      logger.error('Settings', 'Failed to load current theme', toError(error));
-    }
-  };
-
-  const loadBurnerEmailSetting = async () => {
-    // If a toggle is in progress, don't fetch. The toggle handler is the source of truth.
-    if (isTogglingRef.current) {
-      logger.debug('Settings', 'loadBurnerEmailSetting: Skipped fetch, toggle in progress');
-      return;
-    }
-    try {
-      const response = await chrome.runtime.sendMessage({ type: 'GET_BURNER_EMAIL_SETTING' });
-      if (response.success) {
-        logger.info('Settings', 'loadBurnerEmailSetting: Setting isBurnerEmailEnabled state', { enabled: response.enabled });
-        // Only update state if it's different, to avoid unnecessary re-renders
-        if (response.enabled !== isBurnerEmailEnabled) {
-          setIsBurnerEmailEnabled(response.enabled);
-        }
-      } else {
-        logger.warn('Settings', 'loadBurnerEmailSetting: Response was not successful', { response });
-      }
-    } catch (error) {
-      logger.error('Settings', 'Failed to load burner email setting', toError(error));
-    }
-  };
-
-  const loadTelemetrySetting = async () => {
-    try {
-      const response = await chrome.runtime.sendMessage({ type: 'GET_TELEMETRY_SETTING' });
-      if (response.success) {
-        setIsTelemetryEnabled(response.enabled);
-      }
-    } catch (error) {
-      logger.error('Settings', 'Failed to load telemetry setting', toError(error));
-    }
-  };
-
-  const loadRealEmail = async () => {
-    try {
-      const response = await chrome.runtime.sendMessage({ type: 'GET_REAL_EMAIL' });
-      if (response.success) {
-        const email = response.email || '';
-        logger.info('Settings', 'loadRealEmail: Setting email state', { email: email ? 'present' : 'empty' });
-        setRealEmail(email);
-        setRealEmailInput(email);
-      } else {
-        logger.warn('Settings', 'loadRealEmail: Response was not successful', { response });
-      }
-    } catch (error) {
-      logger.error('Settings', 'Failed to load real email', toError(error));
-    }
-  };
 
   const handleSaveRealEmail = async () => {
     if (isSavingRealEmail) return;
@@ -268,11 +220,9 @@ export function SettingsPage({
         // The service worker has confirmed the new state. We can be confident in this value.
         logger.info('Settings', 'Burner email setting updated successfully', { verifiedValue: response.enabled });
         setIsBurnerEmailEnabled(response.enabled);
-        
-        // After successfully enabling, also reload the real email
-        if (response.enabled) {
-          await loadRealEmail();
-        }
+
+        // Refresh all settings (email, telemetry, theme) without overwriting the optimistic toggle while it's in-flight
+        await loadAllSettings({ skipBurnerUpdate: true });
       } else {
         // If the update fails, roll back to the previous state
         logger.error('Settings', 'Failed to update burner email setting, rolling back UI', new Error(response.error || 'Unknown error'));
@@ -309,11 +259,11 @@ export function SettingsPage({
         logger.info('Settings', 'Telemetry setting updated', { previousValue: isTelemetryEnabled, newValue });
       } else {
         logger.error('Settings', 'Failed to update telemetry setting', new Error(response.error || 'Unknown error'), { attemptedValue: newValue, previousValue: isTelemetryEnabled });
-        await loadTelemetrySetting();
+        await loadAllSettings({ skipBurnerUpdate: isTogglingRef.current });
       }
     } catch (error) {
       logger.error('Settings', 'Failed to toggle telemetry setting', toError(error), { attemptedValue: newValue, previousValue: isTelemetryEnabled });
-      await loadTelemetrySetting();
+      await loadAllSettings({ skipBurnerUpdate: isTogglingRef.current });
     } finally {
       setIsTogglingTelemetry(false);
     }
@@ -336,11 +286,11 @@ export function SettingsPage({
         logger.info('Settings', 'Theme updated successfully', { theme });
       } else {
         logger.error('Settings', 'Failed to set theme', new Error(response.error || 'Unknown error'));
-        await loadCurrentTheme();
+        await loadAllSettings({ skipBurnerUpdate: isTogglingRef.current });
       }
     } catch (error) {
       logger.error('Settings', 'Failed to apply theme', toError(error));
-      await loadCurrentTheme();
+      await loadAllSettings({ skipBurnerUpdate: isTogglingRef.current });
     } finally {
       setIsApplyingTheme(false);
     }
@@ -469,10 +419,10 @@ export function SettingsPage({
 
   return (
     <div
-      className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      className="absolute inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
       onClick={handleBackdropClick}
     >
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md transform transition-all animate-fade-in">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md">
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
           <div className="flex items-center gap-2">
             {activeSection !== 'menu' && (

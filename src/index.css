@@ -28,7 +28,8 @@
 
 @layer utilities {
   .animate-fade-in {
-    animation: fadeIn 0.3s ease-out;
+    animation: fadeIn 0.2s ease-out;
+    will-change: opacity, transform;
   }
 
   @keyframes fadeIn {
@@ -43,7 +44,8 @@
   }
 
   .animate-slide-in-right {
-    animation: slideInRight 0.3s ease-out;
+    animation: slideInRight 0.15s ease-out;
+    will-change: opacity, transform;
   }
 
   @keyframes slideInRight {
@@ -58,7 +60,8 @@
   }
 
   .animate-slide-in-left {
-    animation: slideInLeft 0.3s ease-out;
+    animation: slideInLeft 0.15s ease-out;
+    will-change: opacity, transform;
   }
 
   @keyframes slideInLeft {

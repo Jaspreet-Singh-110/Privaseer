@@ -380,6 +380,35 @@ function setupMessageHandlers(): void {
   });
 
   /**
+   * Returns all user-facing settings in a single roundtrip to minimize UI latency.
+   *
+   * Payload: none
+   * Response: { success, settings: { theme, burnerEmailEnabled, telemetryEnabled, realEmail } }
+   */
+  messageBus.on('GET_ALL_SETTINGS', async () => {
+    try {
+      const data = await Storage.get();
+      const theme = data.settings.theme ?? 'system';
+      const burnerEmailEnabled = data.settings.burnerEmailEnabled ?? false;
+      const telemetryEnabled = data.settings.telemetryEnabled ?? false;
+      const realEmail = data.realEmail ?? null;
+
+      return {
+        success: true,
+        settings: {
+          theme,
+          burnerEmailEnabled,
+          telemetryEnabled,
+          realEmail,
+        },
+      };
+    } catch (error) {
+      logger.error('ServiceWorker', 'Failed to get all settings', toError(error));
+      return { success: false, error: 'Failed to get settings' };
+    }
+  });
+
+  /**
    * Responds to burner email setting queries from UI contexts.
    *
    * Behavior:

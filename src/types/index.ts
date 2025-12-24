@@ -173,6 +173,7 @@ export interface StorageData {
 export type MessageType =
   | 'STATE_UPDATE'
   | 'GET_STATE'
+  | 'GET_ALL_SETTINGS'
   | 'TOGGLE_PROTECTION'
   | 'CONSENT_SCAN_RESULT'
   | 'GET_TRACKER_INFO'
@@ -202,6 +203,13 @@ export type MessageType =
   | 'THEME_CHANGED'
   | 'GET_REAL_EMAIL'
   | 'SET_REAL_EMAIL';
+
+export interface AllSettingsResponse {
+  theme: 'light' | 'dark' | 'system';
+  burnerEmailEnabled: boolean;
+  telemetryEnabled: boolean;
+  realEmail: string | null;
+}
 
 // Message data types for type-safe messaging
 export interface GetTrackerInfoData {
@@ -249,6 +257,7 @@ export interface TabSummary {
 export interface MessageDataMap {
   STATE_UPDATE: undefined;
   GET_STATE: undefined;
+  GET_ALL_SETTINGS: undefined;
   TOGGLE_PROTECTION: undefined;
   CONSENT_SCAN_RESULT: ConsentScanResult;
   GET_TRACKER_INFO: GetTrackerInfoData;

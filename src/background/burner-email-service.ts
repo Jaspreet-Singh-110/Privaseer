@@ -14,6 +14,9 @@ class BurnerEmailService {
   private cachedToken: string | null = null;
   private tokenExpiry: number = 0;
   private installationSecret: string | null = null;
+  private cachedEmails: BurnerEmail[] | null = null;
+  private emailsCacheExpiry: number = 0;
+  private readonly EMAILS_CACHE_TTL = 30000; // 30 seconds
 
   constructor() {
     this.apiUrl = `${this.supabaseUrl}/functions/v1/generate-burner-email`;
@@ -236,6 +239,10 @@ class BurnerEmailService {
       }
 
       logger.info('BurnerEmailService', 'Success! Generated email');
+      
+      // Invalidate email cache after generation
+      this.cachedEmails = null;
+      this.emailsCacheExpiry = 0;
 
       return data.email.email_address;
     } catch (error) {
@@ -245,8 +252,14 @@ class BurnerEmailService {
     }
   }
 
-  async getEmails(): Promise<BurnerEmail[]> {
+  async getEmails(forceRefresh = false): Promise<BurnerEmail[]> {
     try {
+      // Return cached emails if still valid
+      if (!forceRefresh && this.cachedEmails && Date.now() < this.emailsCacheExpiry) {
+        logger.debug('BurnerEmailService', 'Returning cached emails', { count: this.cachedEmails.length });
+        return this.cachedEmails;
+      }
+
       if (!this.installationId) {
         await this.initialize();
       }
@@ -264,7 +277,14 @@ class BurnerEmailService {
         throw new Error(data.error || 'Failed to fetch burner emails');
       }
 
-      return data.emails || [];
+      const emails = data.emails || [];
+      
+      // Cache the emails
+      this.cachedEmails = emails;
+      this.emailsCacheExpiry = Date.now() + this.EMAILS_CACHE_TTL;
+      logger.debug('BurnerEmailService', 'Emails cached', { count: emails.length, ttl: this.EMAILS_CACHE_TTL });
+
+      return emails;
     } catch (error) {
       logger.error('BurnerEmailService', 'Failed to fetch burner emails', toError(error));
       throw error;
@@ -291,6 +311,10 @@ class BurnerEmailService {
       }
 
       logger.info('BurnerEmailService', 'Burner email deleted', { emailId });
+      
+      // Invalidate email cache after deletion
+      this.cachedEmails = null;
+      this.emailsCacheExpiry = 0;
     } catch (error) {
       logger.error('BurnerEmailService', 'Failed to delete burner email', toError(error));
       throw error;
