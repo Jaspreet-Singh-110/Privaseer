@@ -33,7 +33,7 @@ interface BurnerEmailsSectionProps {
  * <BurnerEmailsSection onOpenSettings={() => setShowSettings(true)} />
  * ```
  */
-export function BurnerEmailsSection({ onOpenSettings, isActive = true }: BurnerEmailsSectionProps = {}) {
+export function BurnerEmailsSection({ onOpenSettings }: BurnerEmailsSectionProps = {}) {
   // Emails persist across feature toggles: once fetched they remain in state and storage
   // so users can resume accessing them even if the feature is later disabled
   const [emails, setEmails] = useState<BurnerEmail[]>([]);
@@ -68,10 +68,8 @@ export function BurnerEmailsSection({ onOpenSettings, isActive = true }: BurnerE
   // Reload state when the tab becomes active to ensure consistency
   // This handles the case where settings were changed in another tab/section.
   // We deliberately avoid re-running when internal state changes to prevent loops.
-  /* eslint-disable react-hooks/exhaustive-deps */
   // Removed isActive effect - component now only mounts when active
   // Data loads on mount via the initial useEffect
-  /* eslint-enable react-hooks/exhaustive-deps */
 
   const loadFeatureState = async () => {
     try {

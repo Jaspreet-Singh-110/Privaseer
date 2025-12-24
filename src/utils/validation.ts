@@ -98,13 +98,11 @@ interface PayloadValidationResult<T> {
   sanitized?: T;
 }
 
-export interface FeedbackValidationResult
-  extends PayloadValidationResult<{ feedbackText: string; url?: string; domain?: string }> {}
+export type FeedbackValidationResult = PayloadValidationResult<{ feedbackText: string; url?: string; domain?: string }>;
 
-export interface EventValidationResult
-  extends PayloadValidationResult<{ eventType: string; eventData?: Record<string, unknown> }> {}
+export type EventValidationResult = PayloadValidationResult<{ eventType: string; eventData?: Record<string, unknown> }>;
 
-export interface ScoreValidationResult extends PayloadValidationResult<{ score: number }> {}
+export type ScoreValidationResult = PayloadValidationResult<{ score: number }>;
 
 export function validateFeedbackPayload(data: unknown): FeedbackValidationResult {
   if (!isPlainObject(data)) {

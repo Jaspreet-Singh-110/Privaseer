@@ -47,17 +47,21 @@ describe('Settings Page - Burner Email Toggle', () => {
     
     // Mock initial state - burner email is disabled
     mockSendMessage.mockImplementation((message) => {
-      if (message.type === 'GET_BURNER_EMAIL_SETTING') {
-        return Promise.resolve({ success: true, enabled: false });
+      if (message.type === 'GET_ALL_SETTINGS') {
+        return Promise.resolve({ 
+          success: true, 
+          settings: {
+            burnerEmailEnabled: false,
+            telemetryEnabled: false,
+            protectionEnabled: true
+          }
+        });
       }
       if (message.type === 'GET_REAL_EMAIL') {
         return Promise.resolve({ success: true, email: '' });
       }
       if (message.type === 'GET_THEME') {
         return Promise.resolve({ success: true, theme: 'system' });
-      }
-      if (message.type === 'GET_TELEMETRY_SETTING') {
-        return Promise.resolve({ success: true, enabled: false });
       }
       return Promise.resolve({ success: true });
     });
@@ -77,7 +81,7 @@ describe('Settings Page - Burner Email Toggle', () => {
 
     // Wait for initial load
     await waitFor(() => {
-      expect(mockSendMessage).toHaveBeenCalledWith({ type: 'GET_BURNER_EMAIL_SETTING' });
+      expect(mockSendMessage).toHaveBeenCalledWith({ type: 'GET_ALL_SETTINGS' });
     });
 
     // Find the email input - it should be disabled initially
@@ -92,11 +96,21 @@ describe('Settings Page - Burner Email Toggle', () => {
       if (message.type === 'SET_BURNER_EMAIL_SETTING') {
         return Promise.resolve({ success: true, enabled: true });
       }
-      if (message.type === 'GET_BURNER_EMAIL_SETTING') {
-        return Promise.resolve({ success: true, enabled: true });
+      if (message.type === 'GET_ALL_SETTINGS') {
+        return Promise.resolve({ 
+          success: true, 
+          settings: {
+            burnerEmailEnabled: true,
+            telemetryEnabled: false,
+            protectionEnabled: true
+          }
+        });
       }
       if (message.type === 'GET_REAL_EMAIL') {
         return Promise.resolve({ success: true, email: '' });
+      }
+      if (message.type === 'GET_THEME') {
+        return Promise.resolve({ success: true, theme: 'system' });
       }
       return Promise.resolve({ success: true });
     });
@@ -127,17 +141,21 @@ describe('Settings Page - Burner Email Toggle', () => {
     
     // Mock initial state - burner email is enabled
     mockSendMessage.mockImplementation((message) => {
-      if (message.type === 'GET_BURNER_EMAIL_SETTING') {
-        return Promise.resolve({ success: true, enabled: true });
+      if (message.type === 'GET_ALL_SETTINGS') {
+        return Promise.resolve({ 
+          success: true, 
+          settings: {
+            burnerEmailEnabled: true,
+            telemetryEnabled: false,
+            protectionEnabled: true
+          }
+        });
       }
       if (message.type === 'GET_REAL_EMAIL') {
         return Promise.resolve({ success: true, email: 'test@example.com' });
       }
       if (message.type === 'GET_THEME') {
         return Promise.resolve({ success: true, theme: 'system' });
-      }
-      if (message.type === 'GET_TELEMETRY_SETTING') {
-        return Promise.resolve({ success: true, enabled: false });
       }
       return Promise.resolve({ success: true });
     });
@@ -157,7 +175,7 @@ describe('Settings Page - Burner Email Toggle', () => {
 
     // Wait for initial load
     await waitFor(() => {
-      expect(mockSendMessage).toHaveBeenCalledWith({ type: 'GET_BURNER_EMAIL_SETTING' });
+      expect(mockSendMessage).toHaveBeenCalledWith({ type: 'GET_ALL_SETTINGS' });
     });
 
     // Find the email input - it should be enabled initially
@@ -172,11 +190,21 @@ describe('Settings Page - Burner Email Toggle', () => {
       if (message.type === 'SET_BURNER_EMAIL_SETTING') {
         return Promise.resolve({ success: true, enabled: false });
       }
-      if (message.type === 'GET_BURNER_EMAIL_SETTING') {
-        return Promise.resolve({ success: true, enabled: false });
+      if (message.type === 'GET_ALL_SETTINGS') {
+        return Promise.resolve({ 
+          success: true, 
+          settings: {
+            burnerEmailEnabled: false,
+            telemetryEnabled: false,
+            protectionEnabled: true
+          }
+        });
       }
       if (message.type === 'GET_REAL_EMAIL') {
         return Promise.resolve({ success: true, email: 'test@example.com' });
+      }
+      if (message.type === 'GET_THEME') {
+        return Promise.resolve({ success: true, theme: 'system' });
       }
       return Promise.resolve({ success: true });
     });
@@ -208,17 +236,21 @@ describe('Settings Page - Burner Email Toggle', () => {
         currentEnabled = (message.data as any).enabled;
         return Promise.resolve({ success: true, enabled: currentEnabled });
       }
-      if (message.type === 'GET_BURNER_EMAIL_SETTING') {
-        return Promise.resolve({ success: true, enabled: currentEnabled });
+      if (message.type === 'GET_ALL_SETTINGS') {
+        return Promise.resolve({ 
+          success: true, 
+          settings: {
+            burnerEmailEnabled: currentEnabled,
+            telemetryEnabled: false,
+            protectionEnabled: true
+          }
+        });
       }
       if (message.type === 'GET_REAL_EMAIL') {
         return Promise.resolve({ success: true, email: '' });
       }
       if (message.type === 'GET_THEME') {
         return Promise.resolve({ success: true, theme: 'system' });
-      }
-      if (message.type === 'GET_TELEMETRY_SETTING') {
-        return Promise.resolve({ success: true, enabled: false });
       }
       return Promise.resolve({ success: true });
     });
@@ -238,7 +270,7 @@ describe('Settings Page - Burner Email Toggle', () => {
 
     // Wait for initial load
     await waitFor(() => {
-      expect(mockSendMessage).toHaveBeenCalledWith({ type: 'GET_BURNER_EMAIL_SETTING' });
+      expect(mockSendMessage).toHaveBeenCalledWith({ type: 'GET_ALL_SETTINGS' });
     });
 
     const toggleButton = screen.getByLabelText('Toggle burner email protection');

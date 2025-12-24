@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateRateLimitResponse, shouldAutoNotify } from "../../../../supabase/functions/inbound-email/rate-limiter.ts";
+import { generateRateLimitResponse, shouldAutoNotify } from "../../../../supabase/functions/inbound-email/rate-limiter";
 
 describe('rate-limiter', () => {
   it('generateRateLimitResponse - paused', () => {

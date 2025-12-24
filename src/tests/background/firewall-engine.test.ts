@@ -90,7 +90,7 @@ describe('FirewallEngine post consent violation detection', () => {
     expect(emitMock).toHaveBeenCalledWith('POST_CONSENT_VIOLATION', {
       domain: 'example.com',
       trackerCount: 1,
-      trackers: ['tracker.example'],
+      trackers: new Set(['tracker.example']),
     });
   });
 
