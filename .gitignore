@@ -29,3 +29,6 @@ supabase/.temp/
 
 # Bolt.new
 .bolt/
+
+# Test coverage reports
+coverage/
