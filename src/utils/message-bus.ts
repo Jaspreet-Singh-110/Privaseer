@@ -12,6 +12,7 @@ type PendingRequest = {
 const VALID_MESSAGE_TYPES = new Set<MessageType>([
   'STATE_UPDATE',
   'GET_STATE',
+  'GET_ALL_SETTINGS',
   'TOGGLE_PROTECTION',
   'CONSENT_SCAN_RESULT',
   'GET_TRACKER_INFO',

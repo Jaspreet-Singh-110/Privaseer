@@ -35,6 +35,11 @@ interface EventMap {
   ALERT_ADDED: {
     alert: Alert;
   };
+  POST_CONSENT_VIOLATION: {
+    domain: string;
+    trackerCount: number;
+    trackers: Set<string>;
+  };
 }
 
 type EventType = keyof EventMap;

@@ -297,7 +297,7 @@ export class FirewallEngine {
     backgroundEvents.emit('POST_CONSENT_VIOLATION', {
       domain: siteDomain,
       trackerCount: entry.count,
-      trackers: entry.trackers,
+      trackers: new Set(entry.trackers),
     });
   }
 

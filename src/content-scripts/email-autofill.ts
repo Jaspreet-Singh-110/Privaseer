@@ -268,7 +268,7 @@ class EmailAutofill {
 
       while (retries <= maxRetries) {
         try {
-          logger.debug(`Sending GENERATE_BURNER_EMAIL message (attempt ${retries + 1}/${maxRetries + 1})`);
+          logger.debug('EmailAutofill', `Sending GENERATE_BURNER_EMAIL message (attempt ${retries + 1}/${maxRetries + 1})`);
           const sanitizedUrl = sanitizeUrlForBurner(window.location.href);
           response = await chrome.runtime.sendMessage({
             type: 'GENERATE_BURNER_EMAIL',
@@ -281,9 +281,9 @@ class EmailAutofill {
           break;
         } catch (err) {
           const error = toError(err);
-          logger.error('Message send error:', { error: error.message });
+          logger.error('EmailAutofill', 'Message send error', error, { errorMessage: error.message });
           if (error.message.includes('Receiving end does not exist') && retries < maxRetries) {
-            logger.debug(`Service worker asleep, retrying in 500ms...`);
+            logger.debug('EmailAutofill', `Service worker asleep, retrying in 500ms...`);
             retries++;
             await new Promise(resolve => setTimeout(resolve, 500));
           } else {

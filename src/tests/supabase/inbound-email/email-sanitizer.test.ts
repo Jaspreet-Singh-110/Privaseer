@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sanitizeEmail, sanitizeSubject, generateSanitizationReport } from "../../../../supabase/functions/inbound-email/email-sanitizer.ts";
+import { sanitizeEmail, sanitizeSubject, generateSanitizationReport } from "../../../../supabase/functions/inbound-email/email-sanitizer";
 
 describe('email-sanitizer', () => {
   it('sanitizeEmail - removes 1x1 tracking pixels', () => {

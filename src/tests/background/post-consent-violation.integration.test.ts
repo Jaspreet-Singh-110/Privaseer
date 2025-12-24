@@ -289,7 +289,7 @@ describe('Post-consent violation aggregation flow', () => {
     expect(backgroundEvents.emit).toHaveBeenCalledWith('POST_CONSENT_VIOLATION', {
       domain: 'news.example',
       trackerCount: 1,
-      trackers: ['tracker.alpha.com'],
+      trackers: new Set(['tracker.alpha.com']),
     });
   });
 

@@ -109,7 +109,7 @@ class TabManager {
 
     messageBus.broadcast('TAB_UPDATED', {
       tabId,
-      changeInfo,
+      changeInfo: changeInfo as Record<string, unknown>,
       tab: this.tabs.get(tabId),
     });
   }
