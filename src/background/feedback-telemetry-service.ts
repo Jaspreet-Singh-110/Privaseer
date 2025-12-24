@@ -167,7 +167,7 @@ class FeedbackTelemetryService {
 
   async getInstallationId(): Promise<string> {
     if (!this.installationId) {
-      await this.initialize();
+      this.installationId = await this.getOrCreateInstallationId();
     }
     return this.installationId!;
   }

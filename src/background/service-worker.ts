@@ -10,13 +10,15 @@ import { tabManager } from '../utils/tab-manager';
 import { backgroundEvents } from './event-emitter';
 import { toError, isGetTrackerInfoData, isConsentScanResult } from '../utils/type-guards';
 import { sanitizeUrl } from '../utils/sanitizer';
-import { BADGE, TIME, CONSENT_VIOLATION } from '../utils/constants';
+import { BADGE, TIME, CONSENT_VIOLATION, SUPABASE } from '../utils/constants';
 import { validateComplianceScore, validateEventPayload, validateFeedbackPayload } from '../utils/validation';
 
 let isInitialized = false;
 let initializationPromise: Promise<void> | null = null;
 const consentAlertCache = new Map<string, number>(); // Track consent alerts by domain
 const consentRejectionCache = new Map<string, { timestamp: number; tabId?: number }>();
+
+const CONSENT_PERSIST_ENDPOINT = `${SUPABASE.URL}/functions/v1/persist-consent-state`;
 
 export function getConsentRejection(domain: string): { timestamp: number; tabId?: number } | null {
   const entry = consentRejectionCache.get(domain);
@@ -138,7 +140,6 @@ function setupMessageHandlers(): void {
     }
 
     if (!result.isCompliant) {
-
       // Check if we've already alerted about this domain recently (within 5 minutes)
       const lastAlertTime = consentAlertCache.get(domain);
       const now = Date.now();
@@ -202,6 +203,41 @@ function setupMessageHandlers(): void {
       });
 
       messageBus.broadcast('STATE_UPDATE');
+    }
+    // Persist consent state to Supabase (save even if CMP is unknown, as long as we have detection data)
+    if (result.cmpDetection) {
+      try {
+        const installationId = await feedbackTelemetryService.getInstallationId();
+
+        const response = await fetch(CONSENT_PERSIST_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${SUPABASE.ANON_KEY}`,
+          },
+          body: JSON.stringify({
+            installationId,
+            domain,
+            cmpType: result.cmpDetection.cmpType,
+            consentStatus: result.cmpDetection.consentStatus || 'unknown',
+            hasRejectButton: result.hasRejectButton,
+            isCompliant: result.isCompliant,
+            cookieNames: result.cmpDetection.cookieNames || [],
+            tcfVersion: result.cmpDetection.tcfVersion,
+            detectionMethod: result.cmpDetection.detectionMethod,
+            confidenceScore: result.cmpDetection.confidenceScore,
+          }),
+        });
+
+        if (response.ok) {
+          logger.info('ServiceWorker', 'Consent state persisted to Supabase', { domain, cmpType: result.cmpDetection.cmpType });
+        } else {
+          const errorText = await response.text();
+          logger.warn('ServiceWorker', 'Failed to persist consent state', { domain, status: response.status, error: errorText });
+        }
+      } catch (error) {
+        logger.error('ServiceWorker', 'Error persisting consent state', toError(error), { domain });
+      }
     }
 
     return { success: true };
