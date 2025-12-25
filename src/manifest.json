@@ -57,6 +57,10 @@
       "_comment_backup_wars": "\"resources\": [\"data/privacy-rules.json\", \"data/tracker-lists.json\", \"data/blocking-rules.json\"], \"matches\": [\"<all_urls>\"]",
       "resources": ["data/privacy-rules.json"],
       "matches": ["http://*/*", "https://*/*"]
+    },
+    {
+      "resources": ["src/welcome/welcome.html"],
+      "matches": ["<all_urls>"]
     }
   ]
 }

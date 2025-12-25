@@ -10,6 +10,7 @@ export default defineConfig({
       manifest: './src/manifest.json',
       disableAutoLaunch: true,
       skipManifestValidation: true,
+      additionalInputs: ['src/welcome/welcome.html'],
     }),
   ],
   optimizeDeps: {

@@ -10,7 +10,7 @@ import { tabManager } from '../utils/tab-manager';
 import { backgroundEvents } from './event-emitter';
 import { toError, isGetTrackerInfoData, isConsentScanResult } from '../utils/type-guards';
 import { sanitizeUrl } from '../utils/sanitizer';
-import { BADGE, TIME, CONSENT_VIOLATION, SUPABASE } from '../utils/constants';
+import { BADGE, TIME, CONSENT_VIOLATION, SUPABASE, ONBOARDING } from '../utils/constants';
 import { validateComplianceScore, validateEventPayload, validateFeedbackPayload } from '../utils/validation';
 
 let isInitialized = false;
@@ -204,8 +204,13 @@ function setupMessageHandlers(): void {
 
       messageBus.broadcast('STATE_UPDATE');
     }
-    // Persist consent state to Supabase (save even if CMP is unknown, as long as we have detection data)
-    if (result.cmpDetection) {
+    // Persist consent state to Supabase when we have meaningful consent data
+    // Save when: (1) Known CMP detected, OR (2) Cookie banner found, OR (3) Has persisted consent
+    if (
+      result.cmpDetection?.detected ||      // Known CMP detected (OneTrust, Cookiebot, etc.)
+      result.hasBanner ||                   // Cookie banner found (even if CMP unknown)
+      result.hasPersistedConsent            // User already made consent choice
+    ) {
       try {
         const installationId = await feedbackTelemetryService.getInstallationId();
 
@@ -590,6 +595,49 @@ function setupMessageHandlers(): void {
       return { success: false, error: 'Failed to record compliance score' };
     }
   });
+
+  messageBus.on('GET_ONBOARDING_STATE', async () => {
+    try {
+      const onboarding = await Storage.getOnboardingState();
+      return { success: true, onboarding };
+    } catch (error) {
+      logger.error('ServiceWorker', 'Failed to get onboarding state', toError(error));
+      return { success: false, error: 'Failed to get onboarding state' };
+    }
+  });
+
+  messageBus.on('SET_ONBOARDING_STEP', async (data: unknown) => {
+    try {
+      const { step } = data as { step: number };
+      const onboarding = await Storage.setOnboardingStep(step);
+      return { success: true, onboarding };
+    } catch (error) {
+      logger.error('ServiceWorker', 'Failed to set onboarding step', toError(error));
+      return { success: false, error: 'Failed to set onboarding step' };
+    }
+  });
+
+  messageBus.on('COMPLETE_ONBOARDING', async (data: unknown) => {
+    try {
+      const { emailConfigured } = (data || {}) as { emailConfigured?: boolean };
+      const onboarding = await Storage.completeOnboarding(emailConfigured);
+      return { success: true, onboarding };
+    } catch (error) {
+      logger.error('ServiceWorker', 'Failed to complete onboarding', toError(error));
+      return { success: false, error: 'Failed to complete onboarding' };
+    }
+  });
+
+  messageBus.on('SKIP_ONBOARDING', async (data: unknown) => {
+    try {
+      const { atStep } = data as { atStep: number };
+      const onboarding = await Storage.skipOnboarding(atStep);
+      return { success: true, onboarding };
+    } catch (error) {
+      logger.error('ServiceWorker', 'Failed to skip onboarding', toError(error));
+      return { success: false, error: 'Failed to skip onboarding' };
+    }
+  });
 }
 
 function setupStorageChangeListener(): void {
@@ -681,6 +729,29 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     feedbackTelemetryService.trackEvent({
       eventType: 'extension_installed',
     }).catch(err => logger.debug('ServiceWorker', 'Telemetry failed', err));
+
+    try {
+      const data = await Storage.get();
+      if (!data.onboarding?.hasCompletedOnboarding) {
+        setTimeout(() => {
+          chrome.tabs.create(
+            {
+              url: chrome.runtime.getURL(ONBOARDING.WELCOME_PAGE_PATH),
+              active: true,
+            },
+            () => {
+              if (chrome.runtime.lastError) {
+                logger.warn('ServiceWorker', 'Failed to open welcome page', {
+                  error: chrome.runtime.lastError.message,
+                });
+              }
+            }
+          );
+        }, ONBOARDING.AUTO_OPEN_DELAY_MS);
+      }
+    } catch (error) {
+      logger.warn('ServiceWorker', 'Unable to evaluate onboarding state on install', toError(error));
+    }
   } else if (details.reason === 'update') {
     feedbackTelemetryService.trackEvent({
       eventType: 'extension_updated',

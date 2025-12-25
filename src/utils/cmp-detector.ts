@@ -248,7 +248,15 @@ function getCookiesByPattern(patterns: string[]): string[] {
 function getCookieValue(name: string): string | null {
   const cookies = document.cookie.split(';');
   for (const cookie of cookies) {
-    const [cookieName, cookieValue] = cookie.trim().split('=');
+    const trimmed = cookie.trim();
+    const separatorIndex = trimmed.indexOf('=');
+    if (separatorIndex === -1) {
+      continue;
+    }
+
+    const cookieName = trimmed.slice(0, separatorIndex);
+    const cookieValue = trimmed.slice(separatorIndex + 1);
+
     if (cookieName === name) {
       return decodeURIComponent(cookieValue);
     }
@@ -261,16 +269,16 @@ function parseOneTrustConsent(cookieValue: string): 'accepted' | 'rejected' | 'p
     if (cookieValue.includes('groups=')) {
       const groupsMatch = cookieValue.match(/groups=([^&]+)/);
       if (groupsMatch) {
-        const groups = groupsMatch[1];
-        const activeGroups = groups.split('%2C').filter(g => g.includes('%3A1'));
+        const groups = decodeURIComponent(groupsMatch[1]);
+        const groupEntries = groups.split(',');
+        const activeGroups = groupEntries.filter(g => g.includes(':1'));
 
         if (activeGroups.length === 0) {
           return 'rejected';
         }
 
-        if (groups.includes('%3A1')) {
-          return groups.includes('%3A0') ? 'partial' : 'accepted';
-        }
+        const hasRejected = groupEntries.some(g => g.includes(':0'));
+        return hasRejected ? 'partial' : 'accepted';
       }
     }
 

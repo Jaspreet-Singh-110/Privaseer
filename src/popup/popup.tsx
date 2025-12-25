@@ -1,12 +1,13 @@
 import { useEffect, useState, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Shield, ShieldOff, Activity, AlertTriangle, CheckCircle2, XCircle, Info, Mail, Settings } from 'lucide-react';
-import type { StorageData, Alert as AlertType, Message } from '../types';
+import type { StorageData, Alert as AlertType, Message, OnboardingState } from '../types';
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
 import { BurnerEmailsSection } from './burner-emails-section';
 import { SettingsPage, type SettingsSection, type SettingsPageProps } from './settings-page';
 import { ThemeManager } from '../utils/theme-manager';
+import { ONBOARDING } from '../utils/constants';
 import '../index.css';
 
 type ReportableSettingsPageProps = SettingsPageProps & {
@@ -137,14 +138,17 @@ export function Popup() {
   const [settingsDeepLink, setSettingsDeepLink] = useState<SettingsSection | null>(null);
   const [highlightBurnerToggle, setHighlightBurnerToggle] = useState(false);
   const [reportingAlert, setReportingAlert] = useState<AlertType | null>(null);
+  const [onboardingState, setOnboardingState] = useState<OnboardingState | null>(null);
 
   useEffect(() => {
     checkCurrentTab();
     loadData();
+    loadOnboardingState();
 
     const listener = (message: Message) => {
       if (message.type === 'STATE_UPDATE') {
         loadData();
+        loadOnboardingState();
       } else if (message.type === 'THEME_CHANGED') {
         const { theme } = message.data as { theme: 'light' | 'dark' | 'system' };
         if (theme) {
@@ -216,6 +220,35 @@ export function Popup() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadOnboardingState = async () => {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'GET_ONBOARDING_STATE' });
+      if (response?.success && response.onboarding) {
+        setOnboardingState(response.onboarding);
+      }
+    } catch (error) {
+      logger.error('Popup', 'Failed to load onboarding state', toError(error));
+    }
+  };
+
+  const openWelcomeGuide = () => {
+    chrome.tabs.create(
+      {
+        url: chrome.runtime.getURL(ONBOARDING.WELCOME_PAGE_PATH),
+        active: true,
+      },
+      () => {
+        if (chrome.runtime.lastError) {
+          logger.warn('Popup', 'Unable to open welcome guide', {
+            error: chrome.runtime.lastError.message,
+          });
+        } else {
+          window.close();
+        }
+      }
+    );
   };
 
   const openSettingsToBurner = () => {
@@ -429,6 +462,23 @@ export function Popup() {
           </button>
         </div>
       </div>
+
+      {!onboardingState?.hasCompletedOnboarding && (
+        <div className="mx-6 mt-4 flex items-center justify-between rounded-lg border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-900 shadow-sm dark:border-sky-900/50 dark:bg-sky-900/30 dark:text-sky-100">
+          <div>
+            <p className="font-semibold">Complete setup</p>
+            <p className="text-xs text-sky-700 dark:text-sky-300">
+              Finish the 2-minute welcome tour to unlock tips and shortcuts.
+            </p>
+          </div>
+          <button
+            onClick={openWelcomeGuide}
+            className="rounded-md bg-sky-600 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white shadow hover:bg-sky-500"
+          >
+            Resume
+          </button>
+        </div>
+      )}
 
       {activeTab === 'burner' && (
         <div className="flex-1 overflow-y-auto">

@@ -40,6 +40,13 @@ export const CONSENT_VIOLATION = {
   AGGREGATION_DELAY_MS: 2000,
 } as const;
 
+export const ONBOARDING = {
+  TOTAL_STEPS: 6,
+  AUTO_OPEN_DELAY_MS: 500,
+  REMINDER_THRESHOLD_DAYS: 7,
+  WELCOME_PAGE_PATH: 'src/welcome/welcome.html',
+} as const;
+
 export const CONSENT_BANNER = {
   MAX_TEXT_LENGTH: 2000,
   BUTTON_SIZE_PROMINENCE_THRESHOLD: 1.5,

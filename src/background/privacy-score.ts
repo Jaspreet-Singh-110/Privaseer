@@ -5,6 +5,7 @@ import { toError } from '../utils/type-guards';
 import { BADGE, TIME, PRIVACY_SCORE } from '../utils/constants';
 import { shouldPenalizeTracker } from '../utils/consent-validator';
 import { calculateDecayedPenalty, calculateDecayFactor } from '../utils/penalty-decay';
+import type { DailyMetricsSnapshot, StorageData, TrackerData } from '../types';
 
 export class PrivacyScoreManager {
   private static listenersSetup = false;
@@ -13,6 +14,8 @@ export class PrivacyScoreManager {
   private static readonly NON_COMPLIANT_PENALTY = PRIVACY_SCORE.NON_COMPLIANT_PENALTY;
   private static readonly COOLDOWN_MS = TIME.ONE_DAY_MS;
   private static readonly CLEANUP_THRESHOLD = TIME.ONE_WEEK_MS;
+  private static readonly HISTORY_LIMIT = 30;
+  private static readonly SNAPSHOT_LIMIT = 30;
 
   // Track penalized domains with timestamps (domain -> timestamp)
   private static penalizedDomains = new Map<string, number>();
@@ -114,14 +117,13 @@ export class PrivacyScoreManager {
       const oldScore = data.privacyScore.current;
       // Apply time-decayed risk-weighted penalty
       const penalty = this.TRACKER_PENALTY * decayedPenalty;
-      const newScore = oldScore + penalty;
+      const unclampedNewScore = oldScore + penalty;
 
-      // Emit score update event
-      backgroundEvents.emit('SCORE_UPDATED', {
+      const newScore = await this.updateScoreWithReason(
         oldScore,
-        newScore,
-        reason: `Tracker blocked: ${domain} (weight: ${riskWeight.toFixed(2)}, decay: ${(decayFactor * 100).toFixed(0)}%)`,
-      });
+        unclampedNewScore,
+        `Tracker blocked: ${domain} (weight: ${riskWeight.toFixed(2)}, decay: ${(decayFactor * 100).toFixed(0)}%)`
+      );
 
       // Cleanup old entries periodically (every 100 penalties)
       if (this.penalizedDomains.size % 100 === 0) {
@@ -165,14 +167,11 @@ export class PrivacyScoreManager {
     try {
       const data = await Storage.get();
       const oldScore = data.privacyScore.current;
-      const newScore = oldScore + this.CLEAN_SITE_REWARD;
-
-      // Emit score update event
-      backgroundEvents.emit('SCORE_UPDATED', {
+      const newScore = await this.updateScoreWithReason(
         oldScore,
-        newScore,
-        reason: 'Clean site detected',
-      });
+        oldScore + this.CLEAN_SITE_REWARD,
+        'Clean site detected'
+      );
 
       await Storage.recordCleanSite();
       return newScore;
@@ -200,14 +199,11 @@ export class PrivacyScoreManager {
       const data = await Storage.get();
       const oldScore = data.privacyScore.current;
       const penalty = this.NON_COMPLIANT_PENALTY * severityMultiplier;
-      const newScore = oldScore + penalty;
-
-      // Emit score update event
-      backgroundEvents.emit('SCORE_UPDATED', {
+      const newScore = await this.updateScoreWithReason(
         oldScore,
-        newScore,
-        reason: `Non-compliant cookie banner detected (severity: ${severityMultiplier}x)`,
-      });
+        oldScore + penalty,
+        `Non-compliant cookie banner detected (severity: ${severityMultiplier}x)`
+      );
 
       await Storage.recordNonCompliantSite();
       return newScore;
@@ -238,5 +234,93 @@ export class PrivacyScoreManager {
     if (score >= 60) return 'Good';
     if (score >= 40) return 'Fair';
     return 'Poor';
+  }
+
+  static async recalculateFromTrackers(): Promise<number> {
+    const data = await Storage.get();
+    const trackers = Object.values(data.trackers || {}) as TrackerData[];
+
+    const totalPenaltyMagnitude = trackers.reduce((sum, tracker) => {
+      const riskMultiplier = tracker.isHighRisk ? 2 : 1;
+      return sum + Math.abs(this.TRACKER_PENALTY) * riskMultiplier * tracker.blockedCount;
+    }, 0);
+
+    const oldScore = data.privacyScore.current;
+    const recalculatedScore = PRIVACY_SCORE.MAX - totalPenaltyMagnitude;
+
+    return this.updateScoreWithReason(
+      oldScore,
+      recalculatedScore,
+      'Recalculated from tracker history'
+    );
+  }
+
+  static async addHistoryEntry(date: string, score: number, trackersBlocked: number): Promise<void> {
+    const data = await Storage.get();
+    const history = data.privacyScore.history || [];
+
+    history.unshift({ date, score, trackersBlocked });
+    data.privacyScore.history = history.slice(0, this.HISTORY_LIMIT);
+
+    await Storage.save(data);
+  }
+
+  static async createDailySnapshot(): Promise<void> {
+    const data = await Storage.get();
+    const snapshot = this.buildDailySnapshot(data);
+
+    if (!data.dailySnapshots) {
+      data.dailySnapshots = [];
+    }
+
+    data.dailySnapshots.unshift(snapshot);
+    data.dailySnapshots = data.dailySnapshots.slice(0, this.SNAPSHOT_LIMIT);
+
+    await Storage.save(data);
+  }
+
+  private static buildDailySnapshot(data: StorageData): DailyMetricsSnapshot {
+    const trackersByCategory: Record<string, number> = {};
+
+    for (const tracker of Object.values(data.trackers || {})) {
+      const { category, blockedCount } = tracker as TrackerData;
+      trackersByCategory[category] = (trackersByCategory[category] || 0) + blockedCount;
+    }
+
+    const snapshotDate = new Date(data.lastReset || Date.now()).toISOString().split('T')[0];
+
+    return {
+      date: snapshotDate,
+      privacyScore: data.privacyScore.current,
+      trackersBlocked: data.privacyScore.daily.trackersBlocked,
+      trackersByCategory,
+      cleanSitesVisited: data.privacyScore.daily.cleanSitesVisited,
+      nonCompliantSites: data.privacyScore.daily.nonCompliantSites,
+      complianceScores: data.complianceScores || [],
+      burnerEmailsGenerated: data.burnerEmailStats?.generated ?? 0,
+      burnerEmailsForwarded: data.burnerEmailStats?.forwarded ?? 0,
+    };
+  }
+
+  private static clampScore(score: number): number {
+    return Math.max(PRIVACY_SCORE.MIN, Math.min(PRIVACY_SCORE.MAX, score));
+  }
+
+  private static async updateScoreWithReason(
+    oldScore: number,
+    newScore: number,
+    reason: string
+  ): Promise<number> {
+    const clampedScore = this.clampScore(newScore);
+
+    backgroundEvents.emit('SCORE_UPDATED', {
+      oldScore,
+      newScore: clampedScore,
+      reason,
+    });
+
+    await Storage.updateScore(clampedScore);
+
+    return clampedScore;
   }
 }

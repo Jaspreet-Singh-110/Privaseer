@@ -168,6 +168,15 @@ export interface StorageData {
   };
   complianceScores?: number[];
   realEmail?: string; // User's real email for forwarding
+  onboarding: OnboardingState;
+}
+
+export interface OnboardingState {
+  hasCompletedOnboarding: boolean;
+  currentStep: number;
+  completedAt?: number;
+  skippedAt?: number;
+  emailConfigured?: boolean;
 }
 
 export type MessageType =
@@ -202,7 +211,11 @@ export type MessageType =
   | 'GET_THEME'
   | 'THEME_CHANGED'
   | 'GET_REAL_EMAIL'
-  | 'SET_REAL_EMAIL';
+  | 'SET_REAL_EMAIL'
+  | 'GET_ONBOARDING_STATE'
+  | 'SET_ONBOARDING_STEP'
+  | 'COMPLETE_ONBOARDING'
+  | 'SKIP_ONBOARDING';
 
 export interface AllSettingsResponse {
   theme: 'light' | 'dark' | 'system';
@@ -287,6 +300,10 @@ export interface MessageDataMap {
   THEME_CHANGED: { theme: 'light' | 'dark' | 'system' };
   TRACK_EVENT: { eventType: string; eventData?: Record<string, unknown> };
   RECORD_COMPLIANCE_SCORE: { score: number };
+  GET_ONBOARDING_STATE: undefined;
+  SET_ONBOARDING_STEP: { step: number };
+  COMPLETE_ONBOARDING: { emailConfigured?: boolean };
+  SKIP_ONBOARDING: { atStep: number };
 }
 
 export interface Message<T extends MessageType = MessageType> {

@@ -1,8 +1,19 @@
-import type { StorageData, Alert, LocalConsentState, DailyMetricsSnapshot } from '../types';
+import type {
+  StorageData,
+  Alert,
+  LocalConsentState,
+  DailyMetricsSnapshot,
+  OnboardingState,
+} from '../types';
 import { logger } from '../utils/logger';
 import { backgroundEvents } from './event-emitter';
 import { toError } from '../utils/type-guards';
-import { TIME, DAILY_RECOVERY, STORAGE_RETRY } from '../utils/constants';
+import { TIME, DAILY_RECOVERY, STORAGE_RETRY, ONBOARDING } from '../utils/constants';
+
+const DEFAULT_ONBOARDING_STATE: OnboardingState = {
+  hasCompletedOnboarding: false,
+  currentStep: 0,
+};
 
 const DEFAULT_STORAGE_DATA: StorageData = {
   privacyScore: {
@@ -33,6 +44,7 @@ const DEFAULT_STORAGE_DATA: StorageData = {
     forwarded: 0,
   },
   complianceScores: [],
+  onboarding: { ...DEFAULT_ONBOARDING_STATE },
 };
 
 export class Storage {
@@ -50,10 +62,12 @@ export class Storage {
       if (!data || !data.privacyData) {
         // Use deep copy to avoid mutating the DEFAULT_STORAGE_DATA constant
         const defaultData = JSON.parse(JSON.stringify(DEFAULT_STORAGE_DATA));
+        this.ensureOnboardingState(defaultData);
         await this.save(defaultData);
         this.cache = defaultData;
       } else {
         this.cache = data.privacyData;
+        this.ensureOnboardingState(this.cache);
         await this.checkDailyReset();
       }
 
@@ -621,5 +635,74 @@ export class Storage {
       previousEmail: previousEmail ? maskEmail(previousEmail) : null,
       newEmail: maskEmail(data.realEmail),
     });
+  }
+
+  static async getOnboardingState(): Promise<OnboardingState> {
+    const data = await this.get();
+    return { ...data.onboarding };
+  }
+
+  static async setOnboardingStep(step: number): Promise<OnboardingState> {
+    const normalizedStep = Math.max(0, Math.min(ONBOARDING.TOTAL_STEPS - 1, step));
+    return this.updateOnboardingState({
+      currentStep: normalizedStep,
+      hasCompletedOnboarding: false,
+    });
+  }
+
+  static async completeOnboarding(emailConfigured?: boolean): Promise<OnboardingState> {
+    return this.updateOnboardingState({
+      hasCompletedOnboarding: true,
+      currentStep: ONBOARDING.TOTAL_STEPS - 1,
+      completedAt: Date.now(),
+      emailConfigured: emailConfigured ?? undefined,
+    });
+  }
+
+  static async skipOnboarding(atStep: number): Promise<OnboardingState> {
+    const normalizedStep = Math.max(0, Math.min(ONBOARDING.TOTAL_STEPS - 1, atStep));
+    return this.updateOnboardingState({
+      hasCompletedOnboarding: true,
+      skippedAt: Date.now(),
+      currentStep: normalizedStep,
+    });
+  }
+
+  private static async updateOnboardingState(
+    partial: Partial<OnboardingState>
+  ): Promise<OnboardingState> {
+    const data = await this.get();
+    const normalized = this.normalizeOnboardingState({
+      ...data.onboarding,
+      ...partial,
+    });
+    data.onboarding = normalized;
+    await this.save(data);
+    return normalized;
+  }
+
+  private static ensureOnboardingState(data: StorageData): void {
+    if (!data.onboarding) {
+      data.onboarding = { ...DEFAULT_ONBOARDING_STATE };
+      return;
+    }
+
+    data.onboarding = this.normalizeOnboardingState(data.onboarding);
+  }
+
+  private static normalizeOnboardingState(state: Partial<OnboardingState>): OnboardingState {
+    const normalizedStep =
+      typeof state.currentStep === 'number'
+        ? Math.max(0, Math.min(ONBOARDING.TOTAL_STEPS - 1, state.currentStep))
+        : 0;
+
+    return {
+      hasCompletedOnboarding: Boolean(state.hasCompletedOnboarding),
+      currentStep: normalizedStep,
+      completedAt: state.completedAt,
+      skippedAt: state.skippedAt,
+      emailConfigured:
+        typeof state.emailConfigured === 'boolean' ? state.emailConfigured : undefined,
+    };
   }
 }

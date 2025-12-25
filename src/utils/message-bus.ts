@@ -42,6 +42,10 @@ const VALID_MESSAGE_TYPES = new Set<MessageType>([
   'THEME_CHANGED',
   'GET_REAL_EMAIL',
   'SET_REAL_EMAIL',
+  'GET_ONBOARDING_STATE',
+  'SET_ONBOARDING_STEP',
+  'COMPLETE_ONBOARDING',
+  'SKIP_ONBOARDING',
 ]);
 
 const payloadValidators: Partial<Record<MessageType, (payload: unknown) => boolean>> = {
@@ -69,6 +73,15 @@ const payloadValidators: Partial<Record<MessageType, (payload: unknown) => boole
     isObject(data) && typeof (data as { tabId?: unknown }).tabId === 'number',
   TAB_REMOVED: (data): data is MessageDataMap['TAB_REMOVED'] =>
     isObject(data) && typeof (data as { tabId?: unknown }).tabId === 'number',
+  SET_ONBOARDING_STEP: (data): data is MessageDataMap['SET_ONBOARDING_STEP'] =>
+    isObject(data) && typeof (data as { step?: unknown }).step === 'number',
+  COMPLETE_ONBOARDING: (data): data is MessageDataMap['COMPLETE_ONBOARDING'] =>
+    !data ||
+    (isObject(data) &&
+      (((data as { emailConfigured?: unknown }).emailConfigured === undefined) ||
+        typeof (data as { emailConfigured?: unknown }).emailConfigured === 'boolean')),
+  SKIP_ONBOARDING: (data): data is MessageDataMap['SKIP_ONBOARDING'] =>
+    isObject(data) && typeof (data as { atStep?: unknown }).atStep === 'number',
 };
 
 function isValidMessageType(type: unknown): type is MessageType {
