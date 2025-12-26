@@ -10,7 +10,6 @@ export function WelcomeStep({ theme }: StepContentProps): JSX.Element {
   const bodyClass = isDark ? 'text-gray-300' : 'text-gray-700';
   const cardBg = isDark ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white shadow-sm';
   const iconColor = isDark ? 'text-blue-400' : 'text-blue-600';
-  const subtext = isDark ? 'text-gray-500' : 'text-gray-600';
 
   return (
     <section className="flex flex-col gap-6">

@@ -169,7 +169,7 @@ export function Popup() {
       chrome.runtime.onMessage.removeListener(listener);
       clearInterval(interval);
     };
-  }, [data]);
+  }, []); // Empty deps - only run once on mount to prevent re-render loop
 
   useEffect(() => {
     initializeTheme();

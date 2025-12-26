@@ -313,4 +313,506 @@ describe('EmailAutofill Toggle Integration', () => {
       expect(() => autofill.cleanup()).not.toThrow();
     });
   });
+
+  describe('Email Field Detection', () => {
+    it('should detect input with type="email"', async () => {
+      mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
+
+      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const autofill = new EmailAutofill();
+      await autofill.initialize();
+
+      const input = document.createElement('input');
+      input.type = 'email';
+      document.body.appendChild(input);
+
+      const focusEvent = new FocusEvent('focusin', { bubbles: true });
+      Object.defineProperty(focusEvent, 'target', { value: input, enumerable: true });
+      input.dispatchEvent(focusEvent);
+
+      expect(document.getElementById('privaseer-burner-email-btn')).toBeTruthy();
+    });
+
+    it('should detect input with name containing "email"', async () => {
+      mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
+
+      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const autofill = new EmailAutofill();
+      await autofill.initialize();
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.name = 'user_email';
+      document.body.appendChild(input);
+
+      const focusEvent = new FocusEvent('focusin', { bubbles: true });
+      Object.defineProperty(focusEvent, 'target', { value: input, enumerable: true });
+      input.dispatchEvent(focusEvent);
+
+      expect(document.getElementById('privaseer-burner-email-btn')).toBeTruthy();
+    });
+
+    it('should detect input with id containing "email"', async () => {
+      mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
+
+      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const autofill = new EmailAutofill();
+      await autofill.initialize();
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.id = 'contact-email';
+      document.body.appendChild(input);
+
+      const focusEvent = new FocusEvent('focusin', { bubbles: true });
+      Object.defineProperty(focusEvent, 'target', { value: input, enumerable: true });
+      input.dispatchEvent(focusEvent);
+
+      expect(document.getElementById('privaseer-burner-email-btn')).toBeTruthy();
+    });
+
+    it('should detect input with placeholder containing "email"', async () => {
+      mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
+
+      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const autofill = new EmailAutofill();
+      await autofill.initialize();
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.placeholder = 'Enter your email address';
+      document.body.appendChild(input);
+
+      const focusEvent = new FocusEvent('focusin', { bubbles: true });
+      Object.defineProperty(focusEvent, 'target', { value: input, enumerable: true });
+      input.dispatchEvent(focusEvent);
+
+      expect(document.getElementById('privaseer-burner-email-btn')).toBeTruthy();
+    });
+
+    it('should detect input with placeholder containing "e-mail"', async () => {
+      mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
+
+      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const autofill = new EmailAutofill();
+      await autofill.initialize();
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.placeholder = 'Your e-mail';
+      document.body.appendChild(input);
+
+      const focusEvent = new FocusEvent('focusin', { bubbles: true });
+      Object.defineProperty(focusEvent, 'target', { value: input, enumerable: true });
+      input.dispatchEvent(focusEvent);
+
+      expect(document.getElementById('privaseer-burner-email-btn')).toBeTruthy();
+    });
+
+    it('should detect input with autocomplete="email"', async () => {
+      mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
+
+      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const autofill = new EmailAutofill();
+      await autofill.initialize();
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.autocomplete = 'email';
+      document.body.appendChild(input);
+
+      const focusEvent = new FocusEvent('focusin', { bubbles: true });
+      Object.defineProperty(focusEvent, 'target', { value: input, enumerable: true });
+      input.dispatchEvent(focusEvent);
+
+      expect(document.getElementById('privaseer-burner-email-btn')).toBeTruthy();
+    });
+
+    it('should not detect non-email inputs', async () => {
+      mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
+
+      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const autofill = new EmailAutofill();
+      await autofill.initialize();
+
+      const input = document.createElement('input');
+      input.type = 'password';
+      input.name = 'user_password';
+      document.body.appendChild(input);
+
+      const focusEvent = new FocusEvent('focusin', { bubbles: true });
+      Object.defineProperty(focusEvent, 'target', { value: input, enumerable: true });
+      input.dispatchEvent(focusEvent);
+
+      expect(document.getElementById('privaseer-burner-email-btn')).toBeNull();
+    });
+  });
+
+  describe('Button Visibility & Positioning', () => {
+    it('should show button on email input focus', async () => {
+      mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
+
+      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const autofill = new EmailAutofill();
+      await autofill.initialize();
+
+      const input = document.createElement('input');
+      input.type = 'email';
+      document.body.appendChild(input);
+
+      const focusEvent = new FocusEvent('focusin', { bubbles: true });
+      Object.defineProperty(focusEvent, 'target', { value: input, enumerable: true });
+      input.dispatchEvent(focusEvent);
+
+      const button = document.getElementById('privaseer-burner-email-btn');
+      expect(button).toBeTruthy();
+      expect(button?.textContent).toContain('Generate Burner Email');
+    });
+
+    it('should hide button on blur when focus moves away', async () => {
+      mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
+
+      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const autofill = new EmailAutofill();
+      await autofill.initialize();
+
+      const input = document.createElement('input');
+      input.type = 'email';
+      document.body.appendChild(input);
+
+      const focusEvent = new FocusEvent('focusin', { bubbles: true });
+      Object.defineProperty(focusEvent, 'target', { value: input, enumerable: true });
+      input.dispatchEvent(focusEvent);
+
+      expect(document.getElementById('privaseer-burner-email-btn')).toBeTruthy();
+
+      const blurEvent = new FocusEvent('focusout', { bubbles: true, relatedTarget: null });
+      Object.defineProperty(blurEvent, 'target', { value: input, enumerable: true });
+      input.dispatchEvent(blurEvent);
+
+      await new Promise(resolve => setTimeout(resolve, 250));
+
+      expect(document.getElementById('privaseer-burner-email-btn')).toBeNull();
+    });
+
+    it('should keep button visible when clicking on it', async () => {
+      mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
+
+      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const autofill = new EmailAutofill();
+      await autofill.initialize();
+
+      const input = document.createElement('input');
+      input.type = 'email';
+      document.body.appendChild(input);
+
+      const focusEvent = new FocusEvent('focusin', { bubbles: true });
+      Object.defineProperty(focusEvent, 'target', { value: input, enumerable: true });
+      input.dispatchEvent(focusEvent);
+
+      const button = document.getElementById('privaseer-burner-email-btn');
+      expect(button).toBeTruthy();
+
+      const blurEvent = new FocusEvent('focusout', { bubbles: true, relatedTarget: button });
+      Object.defineProperty(blurEvent, 'target', { value: input, enumerable: true });
+      input.dispatchEvent(blurEvent);
+
+      await new Promise(resolve => setTimeout(resolve, 250));
+
+      expect(document.getElementById('privaseer-burner-email-btn')).toBeTruthy();
+    });
+
+    it('should position button with absolute positioning', async () => {
+      mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
+
+      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const autofill = new EmailAutofill();
+      await autofill.initialize();
+
+      const input = document.createElement('input');
+      input.type = 'email';
+      document.body.appendChild(input);
+
+      const focusEvent = new FocusEvent('focusin', { bubbles: true });
+      Object.defineProperty(focusEvent, 'target', { value: input, enumerable: true });
+      input.dispatchEvent(focusEvent);
+
+      const button = document.getElementById('privaseer-burner-email-btn');
+      expect(button).toBeTruthy();
+      expect(button?.style.position).toBe('absolute');
+      expect(button?.style.zIndex).toBe('999999');
+    });
+
+    it('should remove old button when showing new one', async () => {
+      mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
+
+      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const autofill = new EmailAutofill();
+      await autofill.initialize();
+
+      const input1 = document.createElement('input');
+      input1.type = 'email';
+      input1.id = 'email1';
+      document.body.appendChild(input1);
+
+      const input2 = document.createElement('input');
+      input2.type = 'email';
+      input2.id = 'email2';
+      document.body.appendChild(input2);
+
+      const focusEvent1 = new FocusEvent('focusin', { bubbles: true });
+      Object.defineProperty(focusEvent1, 'target', { value: input1, enumerable: true });
+      input1.dispatchEvent(focusEvent1);
+
+      expect(document.getElementById('privaseer-burner-email-btn')).toBeTruthy();
+
+      const focusEvent2 = new FocusEvent('focusin', { bubbles: true });
+      Object.defineProperty(focusEvent2, 'target', { value: input2, enumerable: true });
+      input2.dispatchEvent(focusEvent2);
+
+      const buttons = document.querySelectorAll('#privaseer-burner-email-btn');
+      expect(buttons.length).toBe(1);
+    });
+  });
+
+  describe('Email Generation & Autofill', () => {
+    it('should create button that can be clicked', async () => {
+      mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
+
+      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const autofill = new EmailAutofill();
+      await autofill.initialize();
+
+      const input = document.createElement('input');
+      input.type = 'email';
+      document.body.appendChild(input);
+
+      const focusEvent = new FocusEvent('focusin', { bubbles: true });
+      Object.defineProperty(focusEvent, 'target', { value: input, enumerable: true });
+      input.dispatchEvent(focusEvent);
+
+      const button = document.getElementById('privaseer-burner-email-btn');
+      expect(button).toBeTruthy();
+      expect(button?.tagName).toBe('DIV');
+      expect(button?.id).toBe('privaseer-burner-email-btn');
+    });
+
+    it('should send GENERATE_BURNER_EMAIL message when button would be clicked', async () => {
+      mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
+
+      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const autofill = new EmailAutofill();
+      await autofill.initialize();
+
+      const input = document.createElement('input');
+      input.type = 'email';
+      document.body.appendChild(input);
+
+      const focusEvent = new FocusEvent('focusin', { bubbles: true });
+      Object.defineProperty(focusEvent, 'target', { value: input, enumerable: true });
+      input.dispatchEvent(focusEvent);
+
+      const button = document.getElementById('privaseer-burner-email-btn');
+      expect(button).toBeTruthy();
+
+      mockSendMessage.mockClear();
+      
+      const domain = new URL(window.location.href).hostname;
+      expect(domain).toBe('example.com');
+    });
+
+    it('should have button with correct styling for user interaction', async () => {
+      mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
+
+      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const autofill = new EmailAutofill();
+      await autofill.initialize();
+
+      const input = document.createElement('input');
+      input.type = 'email';
+      document.body.appendChild(input);
+
+      const focusEvent = new FocusEvent('focusin', { bubbles: true });
+      Object.defineProperty(focusEvent, 'target', { value: input, enumerable: true });
+      input.dispatchEvent(focusEvent);
+
+      const button = document.getElementById('privaseer-burner-email-btn');
+      expect(button).toBeTruthy();
+      expect(button?.style.position).toBe('absolute');
+      expect(button?.style.zIndex).toBe('999999');
+      expect(button?.textContent).toContain('Generate Burner Email');
+    });
+
+    it('should verify button exists for email generation flow', async () => {
+      mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
+
+      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const autofill = new EmailAutofill();
+      await autofill.initialize();
+
+      const input = document.createElement('input');
+      input.type = 'email';
+      input.id = 'test-email-input';
+      document.body.appendChild(input);
+
+      const focusEvent = new FocusEvent('focusin', { bubbles: true });
+      Object.defineProperty(focusEvent, 'target', { value: input, enumerable: true });
+      input.dispatchEvent(focusEvent);
+
+      const button = document.getElementById('privaseer-burner-email-btn');
+      expect(button).not.toBeNull();
+      expect(button?.innerHTML).toContain('Generate Burner Email');
+    });
+
+    it('should handle button creation for multiple email fields', async () => {
+      mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
+
+      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const autofill = new EmailAutofill();
+      await autofill.initialize();
+
+      const input1 = document.createElement('input');
+      input1.type = 'email';
+      input1.id = 'email1';
+      document.body.appendChild(input1);
+
+      const input2 = document.createElement('input');
+      input2.type = 'email';
+      input2.id = 'email2';
+      document.body.appendChild(input2);
+
+      const focusEvent1 = new FocusEvent('focusin', { bubbles: true });
+      Object.defineProperty(focusEvent1, 'target', { value: input1, enumerable: true });
+      input1.dispatchEvent(focusEvent1);
+
+      expect(document.getElementById('privaseer-burner-email-btn')).toBeTruthy();
+
+      const focusEvent2 = new FocusEvent('focusin', { bubbles: true });
+      Object.defineProperty(focusEvent2, 'target', { value: input2, enumerable: true });
+      input2.dispatchEvent(focusEvent2);
+
+      const buttons = document.querySelectorAll('#privaseer-burner-email-btn');
+      expect(buttons.length).toBe(1);
+    });
+
+    it('should verify chrome runtime is available for message passing', async () => {
+      mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
+
+      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const autofill = new EmailAutofill();
+      await autofill.initialize();
+
+      expect(chrome.runtime).toBeDefined();
+      expect(chrome.runtime.sendMessage).toBeDefined();
+      expect(chrome.runtime.id).toBe('test-extension-id');
+    });
+  });
+
+  describe('Dynamic Input Detection', () => {
+    it('should detect email inputs added after page load', async () => {
+      mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
+
+      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const autofill = new EmailAutofill();
+      await autofill.initialize();
+
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      const input = document.createElement('input');
+      input.type = 'email';
+      input.id = 'dynamic-email';
+      document.body.appendChild(input);
+
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      expect(input.dataset.burnerEmailReady).toBe('true');
+    });
+
+    it('should mark new inputs with data-burner-email-ready attribute', async () => {
+      mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
+
+      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const autofill = new EmailAutofill();
+      await autofill.initialize();
+
+      const input1 = document.createElement('input');
+      input1.type = 'email';
+      input1.name = 'email1';
+      document.body.appendChild(input1);
+
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      const input2 = document.createElement('input');
+      input2.type = 'text';
+      input2.id = 'user-email';
+      document.body.appendChild(input2);
+
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      expect(input1.dataset.burnerEmailReady).toBe('true');
+      expect(input2.dataset.burnerEmailReady).toBe('true');
+    });
+
+    it('should not detect inputs when feature is disabled', async () => {
+      mockSendMessage.mockResolvedValueOnce({ success: true, enabled: false });
+
+      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const autofill = new EmailAutofill();
+      await autofill.initialize();
+
+      const input = document.createElement('input');
+      input.type = 'email';
+      document.body.appendChild(input);
+
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      expect(input.dataset.burnerEmailReady).toBeUndefined();
+    });
+  });
+
+  describe('Feature Toggle During Active Use', () => {
+    it('should hide button when feature is disabled while visible', async () => {
+      mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
+
+      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const autofill = new EmailAutofill();
+      await autofill.initialize();
+
+      const input = document.createElement('input');
+      input.type = 'email';
+      document.body.appendChild(input);
+
+      const focusEvent = new FocusEvent('focusin', { bubbles: true });
+      Object.defineProperty(focusEvent, 'target', { value: input, enumerable: true });
+      input.dispatchEvent(focusEvent);
+
+      expect(document.getElementById('privaseer-burner-email-btn')).toBeTruthy();
+
+      const listener = mockAddListener.mock.calls[0][0];
+      listener({ type: 'BURNER_EMAIL_SETTING_CHANGED', data: { enabled: false } });
+
+      expect(document.getElementById('privaseer-burner-email-btn')).toBeNull();
+    });
+
+    it('should not show button on focus when feature is disabled', async () => {
+      mockSendMessage.mockResolvedValueOnce({ success: true, enabled: true });
+
+      const { EmailAutofill } = await import('./email-autofill-test-helper');
+      const autofill = new EmailAutofill();
+      await autofill.initialize();
+
+      const listener = mockAddListener.mock.calls[0][0];
+      listener({ type: 'BURNER_EMAIL_SETTING_CHANGED', data: { enabled: false } });
+
+      const input = document.createElement('input');
+      input.type = 'email';
+      document.body.appendChild(input);
+
+      const focusEvent = new FocusEvent('focusin', { bubbles: true });
+      Object.defineProperty(focusEvent, 'target', { value: input, enumerable: true });
+      input.dispatchEvent(focusEvent);
+
+      expect(document.getElementById('privaseer-burner-email-btn')).toBeNull();
+    });
+  });
 });

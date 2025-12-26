@@ -8,11 +8,11 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/tests/setup.ts'],
-    // Use threads pool instead of forks to avoid EPERM worker cleanup issues on macOS
-    pool: 'threads',
+    // Use forks pool instead of threads to avoid memory issues
+    pool: 'forks',
     poolOptions: {
-      threads: {
-        singleThread: false,
+      forks: {
+        singleFork: false,
       },
     },
     coverage: {

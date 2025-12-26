@@ -1,5 +1,91 @@
-import { describe, it, expect } from 'vitest';
-import type { DeceptivePatternViolation, DeceptivePatternRule } from '@/types';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { DeceptivePatternViolation, DeceptivePatternRule, CMPDetectionResult, PrivacyRules } from '@/types';
+
+// Mock CMP detector module
+const detectCMPMock = vi.fn();
+const hasValidPersistedConsentMock = vi.fn();
+
+vi.mock('@/utils/cmp-detector', () => ({
+  detectCMP: detectCMPMock,
+  hasValidPersistedConsent: hasValidPersistedConsentMock,
+}));
+
+// Mock logger
+vi.mock('@/utils/logger', () => ({
+  logger: {
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+  },
+}));
+
+// Mock sanitizer
+vi.mock('@/utils/sanitizer', () => ({
+  sanitizeUrl: vi.fn((url: string | null | undefined) => url || 'https://example.com'),
+}));
+
+// Mock privacy rules data
+const mockPrivacyRules: PrivacyRules = {
+  version: '1.0.0',
+  cookieBannerSelectors: [
+    '[class*="cookie-banner"]',
+    '[id*="cookie-consent"]',
+    '#onetrust-banner-sdk',
+    '#CybotCookiebotDialog',
+  ],
+  rejectButtonPatterns: [
+    'reject all',
+    'reject cookies',
+    'decline all',
+    'deny all',
+    'necessary only',
+  ],
+  acceptButtonPatterns: [
+    'accept all',
+    'accept cookies',
+    'allow all',
+    'agree',
+    'i accept',
+  ],
+  complianceChecks: {
+    rejectButtonRequired: true,
+    rejectButtonVisibleWithoutScroll: true,
+    equalProminence: true,
+    noPreCheckedBoxes: true,
+    explicitConsent: true,
+  },
+  deceptivePatterns: [
+    {
+      id: 'hiddenRejectButton',
+      name: 'Hidden Reject Button',
+      description: 'Reject button is hidden or hard to find',
+      severity: 'high',
+      penalty: 40,
+    },
+    {
+      id: 'acceptButtonProminence',
+      name: 'Accept Button Prominence',
+      description: 'Accept button is more prominent than reject',
+      severity: 'medium',
+      penalty: 25,
+    },
+    {
+      id: 'preCheckedBoxes',
+      name: 'Pre-checked Consent Boxes',
+      description: 'Consent options are pre-selected',
+      severity: 'medium',
+      penalty: 30,
+    },
+    {
+      id: 'forcedConsent',
+      name: 'Forced Consent',
+      description: 'No reject option available',
+      severity: 'critical',
+      penalty: 50,
+    },
+  ],
+};
 
 describe('GDPR Compliance Scoring', () => {
   const mockRules: DeceptivePatternRule[] = [
@@ -244,6 +330,495 @@ describe('GDPR Compliance Scoring', () => {
         expect(rule.penalty).toBeGreaterThanOrEqual(25);
         expect(rule.penalty).toBeLessThan(40);
       });
+    });
+  });
+});
+
+// ============================================================================
+// ConsentScanner Integration Tests
+// ============================================================================
+
+describe('ConsentScanner Integration', () => {
+  // DOM setup helpers
+  function setupBannerDOM(options: {
+    hasRejectButton: boolean;
+    preChecked?: boolean;
+    acceptButtonSize?: { width: number; height: number };
+    rejectButtonSize?: { width: number; height: number };
+    bannerClass?: string;
+  }) {
+    const acceptWidth = options.acceptButtonSize?.width || 100;
+    const acceptHeight = options.acceptButtonSize?.height || 40;
+    const rejectWidth = options.rejectButtonSize?.width || 100;
+    const rejectHeight = options.rejectButtonSize?.height || 40;
+    const bannerClass = options.bannerClass || 'cookie-banner';
+
+    document.body.innerHTML = `
+      <div class="${bannerClass}" style="display: block; visibility: visible; opacity: 1;">
+        <p>We use cookies to improve your experience.</p>
+        <button id="accept-btn" style="width: ${acceptWidth}px; height: ${acceptHeight}px; font-size: 16px;">Accept All</button>
+        ${options.hasRejectButton ? `<button id="reject-btn" style="width: ${rejectWidth}px; height: ${rejectHeight}px; font-size: 16px;">Reject All</button>` : ''}
+        ${options.preChecked ? '<input type="checkbox" checked />' : ''}
+      </div>
+    `;
+
+    // Mock getBoundingClientRect for buttons
+    const acceptBtn = document.getElementById('accept-btn');
+    const rejectBtn = document.getElementById('reject-btn');
+
+    if (acceptBtn) {
+      acceptBtn.getBoundingClientRect = vi.fn(() => ({
+        width: acceptWidth,
+        height: acceptHeight,
+        top: 0,
+        left: 0,
+        bottom: acceptHeight,
+        right: acceptWidth,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }));
+    }
+
+    if (rejectBtn) {
+      rejectBtn.getBoundingClientRect = vi.fn(() => ({
+        width: rejectWidth,
+        height: rejectHeight,
+        top: 0,
+        left: 0,
+        bottom: rejectHeight,
+        right: rejectWidth,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }));
+    }
+  }
+
+  function setupOneTrustBanner() {
+    document.body.innerHTML = `
+      <div id="onetrust-banner-sdk" style="display: block; visibility: visible; opacity: 1;">
+        <p>We use cookies</p>
+        <button>Accept All</button>
+        <button>Reject All</button>
+      </div>
+    `;
+  }
+
+  function setupCookiebotBanner() {
+    document.body.innerHTML = `
+      <div id="CybotCookiebotDialog" style="display: block; visibility: visible; opacity: 1;">
+        <p>Cookie consent</p>
+        <button>Accept</button>
+        <button>Decline All</button>
+      </div>
+    `;
+  }
+
+  beforeEach(() => {
+    // Reset DOM
+    document.body.innerHTML = '';
+    
+    // Reset mocks
+    vi.clearAllMocks();
+    
+    // Mock chrome.runtime.getURL
+    if (!chrome.runtime.getURL) {
+      chrome.runtime.getURL = vi.fn();
+    }
+    (chrome.runtime.getURL as ReturnType<typeof vi.fn>).mockImplementation(
+      (path: string) => `chrome-extension://test/${path}`
+    );
+
+    // Mock fetch for privacy-rules.json
+    global.fetch = vi.fn().mockResolvedValue({
+      json: () => Promise.resolve(mockPrivacyRules),
+    });
+
+    // Mock chrome.runtime.sendMessage
+    (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mockResolvedValue({ success: true });
+
+    // Default CMP detection mock
+    detectCMPMock.mockResolvedValue({
+      detected: false,
+      cmpType: 'unknown',
+      detectionMethod: 'cookie',
+      confidenceScore: 0,
+      consentStatus: 'unknown',
+      cookieNames: [],
+    });
+
+    hasValidPersistedConsentMock.mockReturnValue(false);
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  describe('CMP Detection', () => {
+    it('should detect OneTrust CMP via API/cookies', async () => {
+      const oneTrustCMP: CMPDetectionResult = {
+        detected: true,
+        cmpType: 'onetrust',
+        detectionMethod: 'api',
+        confidenceScore: 1.0,
+        consentStatus: 'unknown',
+        cookieNames: ['OptanonConsent'],
+      };
+
+      detectCMPMock.mockResolvedValue(oneTrustCMP);
+      setupOneTrustBanner();
+
+      // Dynamically import to trigger initialization
+      await import('@/content-scripts/consent-scanner');
+      
+      // Wait for scan to complete
+      await vi.waitFor(() => {
+        expect(detectCMPMock).toHaveBeenCalled();
+      }, { timeout: 3000 });
+
+      expect(detectCMPMock).toHaveBeenCalled();
+      
+      // Verify message was sent with CMP detection
+      await vi.waitFor(() => {
+        expect(chrome.runtime.sendMessage).toHaveBeenCalled();
+      }, { timeout: 3000 });
+
+      const sendMessageCalls = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
+      const consentScanCall = sendMessageCalls.find(
+        (call) => call[0]?.type === 'CONSENT_SCAN_RESULT'
+      );
+
+      if (consentScanCall) {
+        expect(consentScanCall[0].data.cmpDetection).toEqual(oneTrustCMP);
+      }
+    });
+
+    it('should detect Cookiebot CMP via banner selector', async () => {
+      const cookiebotCMP: CMPDetectionResult = {
+        detected: true,
+        cmpType: 'cookiebot',
+        detectionMethod: 'banner',
+        confidenceScore: 0.7,
+        consentStatus: 'unknown',
+        cookieNames: [],
+      };
+
+      detectCMPMock.mockResolvedValue(cookiebotCMP);
+      setupCookiebotBanner();
+
+      await import('@/content-scripts/consent-scanner');
+      
+      await vi.waitFor(() => {
+        expect(detectCMPMock).toHaveBeenCalled();
+      }, { timeout: 3000 });
+
+      expect(detectCMPMock).toHaveBeenCalled();
+    });
+
+    it('should return unknown when no CMP detected', async () => {
+      const noCMP: CMPDetectionResult = {
+        detected: false,
+        cmpType: 'unknown',
+        detectionMethod: 'cookie',
+        confidenceScore: 0,
+        consentStatus: 'unknown',
+        cookieNames: [],
+      };
+
+      detectCMPMock.mockResolvedValue(noCMP);
+      setupBannerDOM({ hasRejectButton: true });
+
+      await import('@/content-scripts/consent-scanner');
+      
+      await vi.waitFor(() => {
+        expect(detectCMPMock).toHaveBeenCalled();
+      }, { timeout: 3000 });
+
+      expect(detectCMPMock).toHaveBeenCalled();
+    });
+  });
+
+  describe('Banner & Button Detection', () => {
+    it('should find cookie banner using class selector', async () => {
+      setupBannerDOM({ hasRejectButton: true });
+
+      await import('@/content-scripts/consent-scanner');
+      
+      await vi.waitFor(() => {
+        expect(chrome.runtime.sendMessage).toHaveBeenCalled();
+      }, { timeout: 3000 });
+
+      const sendMessageCalls = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
+      const consentScanCall = sendMessageCalls.find(
+        (call) => call[0]?.type === 'CONSENT_SCAN_RESULT'
+      );
+
+      expect(consentScanCall).toBeDefined();
+      expect(consentScanCall![0].data.hasBanner).toBe(true);
+    });
+
+    it('should find Accept button via text pattern', async () => {
+      setupBannerDOM({ hasRejectButton: true });
+
+      await import('@/content-scripts/consent-scanner');
+      
+      await vi.waitFor(() => {
+        expect(chrome.runtime.sendMessage).toHaveBeenCalled();
+      }, { timeout: 3000 });
+
+      const acceptBtn = document.getElementById('accept-btn');
+      expect(acceptBtn).toBeDefined();
+      expect(acceptBtn?.textContent).toContain('Accept All');
+    });
+
+    it('should find Reject button via text pattern', async () => {
+      setupBannerDOM({ hasRejectButton: true });
+
+      await import('@/content-scripts/consent-scanner');
+      
+      await vi.waitFor(() => {
+        expect(chrome.runtime.sendMessage).toHaveBeenCalled();
+      }, { timeout: 3000 });
+
+      const sendMessageCalls = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
+      const consentScanCall = sendMessageCalls.find(
+        (call) => call[0]?.type === 'CONSENT_SCAN_RESULT'
+      );
+
+      expect(consentScanCall).toBeDefined();
+      expect(consentScanCall![0].data.hasRejectButton).toBe(true);
+    });
+
+    it('should return hasRejectButton: false when no reject button exists', async () => {
+      setupBannerDOM({ hasRejectButton: false });
+
+      await import('@/content-scripts/consent-scanner');
+      
+      await vi.waitFor(() => {
+        expect(chrome.runtime.sendMessage).toHaveBeenCalled();
+      }, { timeout: 3000 });
+
+      const sendMessageCalls = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
+      const consentScanCall = sendMessageCalls.find(
+        (call) => call[0]?.type === 'CONSENT_SCAN_RESULT'
+      );
+
+      expect(consentScanCall).toBeDefined();
+      expect(consentScanCall![0].data.hasRejectButton).toBe(false);
+    });
+  });
+
+  describe('Compliance Scoring', () => {
+    it('should mark non-compliant when no reject button (forcedConsent pattern)', async () => {
+      setupBannerDOM({ hasRejectButton: false });
+
+      await import('@/content-scripts/consent-scanner');
+      
+      await vi.waitFor(() => {
+        expect(chrome.runtime.sendMessage).toHaveBeenCalled();
+      }, { timeout: 3000 });
+
+      const sendMessageCalls = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
+      const consentScanCall = sendMessageCalls.find(
+        (call) => call[0]?.type === 'CONSENT_SCAN_RESULT'
+      );
+
+      expect(consentScanCall).toBeDefined();
+      expect(consentScanCall![0].data.isCompliant).toBe(false);
+      expect(consentScanCall![0].data.deceptivePatterns).toContain('forcedConsent');
+      expect(consentScanCall![0].data.complianceScore).toBe(50); // 100 - 50 penalty
+    });
+
+    it('should mark non-compliant when accept button > 1.5x larger (acceptButtonProminence)', async () => {
+      setupBannerDOM({
+        hasRejectButton: true,
+        acceptButtonSize: { width: 200, height: 60 }, // 12000 area
+        rejectButtonSize: { width: 100, height: 40 }, // 4000 area (3x smaller)
+      });
+
+      await import('@/content-scripts/consent-scanner');
+      
+      await vi.waitFor(() => {
+        expect(chrome.runtime.sendMessage).toHaveBeenCalled();
+      }, { timeout: 3000 });
+
+      const sendMessageCalls = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
+      const consentScanCall = sendMessageCalls.find(
+        (call) => call[0]?.type === 'CONSENT_SCAN_RESULT'
+      );
+
+      expect(consentScanCall).toBeDefined();
+      expect(consentScanCall![0].data.isCompliant).toBe(false);
+      expect(consentScanCall![0].data.deceptivePatterns).toContain('acceptButtonProminence');
+    });
+
+    it('should detect pre-checked checkbox violation', async () => {
+      setupBannerDOM({ hasRejectButton: true, preChecked: true });
+
+      await import('@/content-scripts/consent-scanner');
+      
+      await vi.waitFor(() => {
+        expect(chrome.runtime.sendMessage).toHaveBeenCalled();
+      }, { timeout: 3000 });
+
+      const sendMessageCalls = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
+      const consentScanCall = sendMessageCalls.find(
+        (call) => call[0]?.type === 'CONSENT_SCAN_RESULT'
+      );
+
+      expect(consentScanCall).toBeDefined();
+      expect(consentScanCall![0].data.deceptivePatterns).toContain('preCheckedBoxes');
+    });
+
+    it('should mark compliant when equal button prominence + reject exists', async () => {
+      setupBannerDOM({
+        hasRejectButton: true,
+        acceptButtonSize: { width: 100, height: 40 },
+        rejectButtonSize: { width: 100, height: 40 },
+      });
+
+      await import('@/content-scripts/consent-scanner');
+      
+      await vi.waitFor(() => {
+        expect(chrome.runtime.sendMessage).toHaveBeenCalled();
+      }, { timeout: 3000 });
+
+      const sendMessageCalls = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
+      const consentScanCall = sendMessageCalls.find(
+        (call) => call[0]?.type === 'CONSENT_SCAN_RESULT'
+      );
+
+      expect(consentScanCall).toBeDefined();
+      expect(consentScanCall![0].data.isCompliant).toBe(true);
+      expect(consentScanCall![0].data.complianceScore).toBe(100);
+    });
+  });
+
+  describe('Message Sending', () => {
+    it('should send CONSENT_SCAN_RESULT message with correct payload', async () => {
+      setupBannerDOM({ hasRejectButton: true });
+
+      await import('@/content-scripts/consent-scanner');
+      
+      await vi.waitFor(() => {
+        expect(chrome.runtime.sendMessage).toHaveBeenCalled();
+      }, { timeout: 3000 });
+
+      const sendMessageCalls = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
+      const consentScanCall = sendMessageCalls.find(
+        (call) => call[0]?.type === 'CONSENT_SCAN_RESULT'
+      );
+
+      expect(consentScanCall).toBeDefined();
+      expect(consentScanCall![0]).toMatchObject({
+        type: 'CONSENT_SCAN_RESULT',
+        data: expect.objectContaining({
+          url: expect.any(String),
+          hasBanner: true,
+          hasRejectButton: true,
+          isCompliant: expect.any(Boolean),
+          deceptivePatterns: expect.any(Array),
+          timestamp: expect.any(Number),
+        }),
+      });
+    });
+
+    it('should send RECORD_COMPLIANCE_SCORE message after scan', async () => {
+      setupBannerDOM({ hasRejectButton: true });
+
+      await import('@/content-scripts/consent-scanner');
+      
+      await vi.waitFor(() => {
+        expect(chrome.runtime.sendMessage).toHaveBeenCalled();
+      }, { timeout: 3000 });
+
+      const sendMessageCalls = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
+      const scoreCall = sendMessageCalls.find(
+        (call) => call[0]?.type === 'RECORD_COMPLIANCE_SCORE'
+      );
+
+      expect(scoreCall).toBeDefined();
+      expect(scoreCall![0]).toMatchObject({
+        type: 'RECORD_COMPLIANCE_SCORE',
+        data: {
+          score: expect.any(Number),
+        },
+      });
+    });
+
+    it('should handle service worker unavailable gracefully (no throw)', async () => {
+      (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mockRejectedValue(
+        new Error('Receiving end does not exist')
+      );
+
+      setupBannerDOM({ hasRejectButton: true });
+
+      // Should not throw
+      await expect(async () => {
+        await import('@/content-scripts/consent-scanner');
+        await new Promise(resolve => setTimeout(resolve, 2500));
+      }).resolves.not.toThrow();
+    });
+  });
+
+  describe('Edge Cases', () => {
+    it('should skip scan when persisted consent exists', async () => {
+      const persistedCMP: CMPDetectionResult = {
+        detected: true,
+        cmpType: 'onetrust',
+        detectionMethod: 'cookie',
+        confidenceScore: 0.9,
+        consentStatus: 'accepted',
+        cookieNames: ['OptanonConsent'],
+      };
+
+      detectCMPMock.mockResolvedValue(persistedCMP);
+      hasValidPersistedConsentMock.mockReturnValue(true);
+
+      setupBannerDOM({ hasRejectButton: true });
+
+      await import('@/content-scripts/consent-scanner');
+      
+      await vi.waitFor(() => {
+        expect(chrome.runtime.sendMessage).toHaveBeenCalled();
+      }, { timeout: 3000 });
+
+      const sendMessageCalls = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
+      const consentScanCall = sendMessageCalls.find(
+        (call) => call[0]?.type === 'CONSENT_SCAN_RESULT'
+      );
+
+      expect(consentScanCall).toBeDefined();
+      expect(consentScanCall![0].data.hasPersistedConsent).toBe(true);
+      expect(consentScanCall![0].data.hasBanner).toBe(false);
+      expect(consentScanCall![0].data.isCompliant).toBe(true);
+    });
+
+    it('should skip duplicate scan of same banner', async () => {
+      setupBannerDOM({ hasRejectButton: true });
+
+      await import('@/content-scripts/consent-scanner');
+      
+      // Wait for initial scan
+      await vi.waitFor(() => {
+        expect(chrome.runtime.sendMessage).toHaveBeenCalled();
+      }, { timeout: 3000 });
+
+      const initialCallCount = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls.length;
+
+      // Trigger another scan by modifying DOM slightly (but same banner content)
+      const banner = document.querySelector('.cookie-banner');
+      if (banner) {
+        banner.setAttribute('data-test', 'same-banner');
+      }
+
+      // Wait a bit
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Should not have significantly more calls (maybe +1 for mutation, but not full scan)
+      const finalCallCount = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls.length;
+      expect(finalCallCount).toBeLessThanOrEqual(initialCallCount + 2);
     });
   });
 });

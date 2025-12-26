@@ -53,7 +53,7 @@ export function ProtectionStep({ theme }: StepContentProps): JSX.Element {
         <article className={`rounded-2xl border ${cardBorder} ${cardBgSecondary} p-5`}>
           <p className={`text-xs uppercase tracking-[0.2em] ${chipText}`}>Live simulation</p>
           <div className="mt-4 space-y-3">
-            {['analytics-beacon.js', 'fingerprint-pro.js', 'pixel-ads.js'].map((script, idx) => (
+            {['analytics-beacon.js', 'fingerprint-pro.js', 'pixel-ads.js'].map((script) => (
               <div
                 key={script}
                 className={`flex items-center justify-between rounded-2xl border ${

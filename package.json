@@ -9,10 +9,10 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
-    "test": "vitest",
-    "test:ui": "vitest --ui",
-    "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test": "NODE_OPTIONS='--max-old-space-size=4096' vitest",
+    "test:ui": "NODE_OPTIONS='--max-old-space-size=4096' vitest --ui",
+    "test:run": "NODE_OPTIONS='--max-old-space-size=4096' vitest run",
+    "test:coverage": "NODE_OPTIONS='--max-old-space-size=4096' vitest run --coverage"
   },
   "dependencies": {
     "lucide-react": "^0.344.0",

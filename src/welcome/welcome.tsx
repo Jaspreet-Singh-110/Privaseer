@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { OnboardingState, AllSettingsResponse } from '../types';
+import type { AllSettingsResponse } from '../types';
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
 import '../index.css';
@@ -52,7 +52,6 @@ function WelcomeApp(): JSX.Element {
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [onboarding, setOnboarding] = useState<OnboardingState | null>(null);
   const [emailConfigured, setEmailConfigured] = useState(false);
 
   const totalSteps = steps.length;
@@ -91,7 +90,6 @@ function WelcomeApp(): JSX.Element {
         ]);
 
         if (onboardingResponse?.success && onboardingResponse.onboarding) {
-          setOnboarding(onboardingResponse.onboarding);
           setCurrentStep(
             Math.min(
               totalSteps - 1,
