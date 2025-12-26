@@ -215,7 +215,7 @@ vi.mock('@/utils/message-bus', () => ({
 }));
 
 const getHandler = (type: MessageType): Handler => {
-  const handler = (messageBus as typeof messageBus & { handlers: typeof messageHandlers }).handlers.get(type);
+  const handler = ((messageBus as any).handlers as typeof messageHandlers).get(type);
   if (!handler) {
     throw new Error(`Handler for ${type} was not registered`);
   }

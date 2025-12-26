@@ -196,7 +196,7 @@ describe('EmailAutofill Toggle Integration', () => {
       input.type = 'email';
       document.body.appendChild(input);
 
-      autofill.showBurnerEmailButton(input);
+      (autofill as any).showBurnerEmailButton(input);
       expect(document.getElementById('privaseer-burner-email-btn')).toBeTruthy();
 
       autofill.disable();
@@ -264,7 +264,7 @@ describe('EmailAutofill Toggle Integration', () => {
       input.type = 'email';
       document.body.appendChild(input);
 
-      autofill.showBurnerEmailButton(input);
+      (autofill as any).showBurnerEmailButton(input);
       expect(document.getElementById('privaseer-burner-email-btn')).toBeTruthy();
 
       autofill.cleanup();

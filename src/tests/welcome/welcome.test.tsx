@@ -1,9 +1,9 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, it, beforeEach, expect, vi } from 'vitest';
+import { describe, it, beforeEach, expect, vi, type Mock } from 'vitest';
 import { WelcomeApp } from '@/welcome/welcome';
 
-const sendMessageMock = chrome.runtime.sendMessage as unknown as vi.Mock;
+const sendMessageMock = chrome.runtime.sendMessage as unknown as Mock;
 
 describe('WelcomeApp', () => {
   beforeEach(() => {

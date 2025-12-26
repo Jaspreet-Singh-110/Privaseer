@@ -35,7 +35,7 @@ class ConsentScanner {
     }
   }
 
-  private async scanPage(): Promise<void> {
+  async scanPage(): Promise<void> {
     if (!this.rules || !document.body) return;
 
     try {
@@ -354,9 +354,22 @@ class ConsentScanner {
 
     return true;
   }
+
+  /**
+   * Resets scanner state for testing purposes.
+   * Clears scanned banners and cancels pending scans.
+   */
+  reset(): void {
+    this.scannedBanners.clear();
+    if (this.scanTimeout) {
+      clearTimeout(this.scanTimeout);
+      this.scanTimeout = null;
+    }
+    this.rules = null;
+  }
 }
 
-const scanner = new ConsentScanner();
+export const scanner = new ConsentScanner();
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => scanner.initialize());
 } else {

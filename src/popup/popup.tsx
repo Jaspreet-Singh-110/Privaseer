@@ -169,6 +169,7 @@ export function Popup() {
       chrome.runtime.onMessage.removeListener(listener);
       clearInterval(interval);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps - only run once on mount to prevent re-render loop
 
   useEffect(() => {

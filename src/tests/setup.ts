@@ -17,19 +17,19 @@ global.chrome = {
   },
   storage: {
     local: {
-      get: vi.fn((keys, callback) => callback?.({})),
-      set: vi.fn((items, callback) => callback?.()),
-      remove: vi.fn((keys, callback) => callback?.()),
+      get: vi.fn((_keys, callback) => callback?.({})),
+      set: vi.fn((_items, callback) => callback?.()),
+      remove: vi.fn((_keys, callback) => callback?.()),
       clear: vi.fn((callback) => callback?.()),
     },
     sync: {
-      get: vi.fn((keys, callback) => callback?.({})),
-      set: vi.fn((items, callback) => callback?.()),
+      get: vi.fn((_keys, callback) => callback?.({})),
+      set: vi.fn((_items, callback) => callback?.()),
     },
   },
   tabs: {
-    query: vi.fn((queryInfo, callback) => callback?.([])),
-    get: vi.fn((tabId, callback) => callback?.({})),
+    query: vi.fn((_queryInfo, callback) => callback?.([])),
+    get: vi.fn((_tabId, callback) => callback?.({})),
     sendMessage: vi.fn(),
     onCreated: {
       addListener: vi.fn(),
@@ -49,7 +49,7 @@ global.chrome = {
     },
   },
   declarativeNetRequest: {
-    updateDynamicRules: vi.fn((options, callback) => callback?.()),
+    updateDynamicRules: vi.fn((_options, callback) => callback?.()),
     getDynamicRules: vi.fn((callback) => callback?.([])),
     updateEnabledRulesets: vi.fn(),
     getEnabledRulesets: vi.fn(),

@@ -110,21 +110,21 @@ describe('BurnerEmailService', () => {
 
   describe('Installation ID management', () => {
     it('creates new installation ID when none exists', async () => {
-      const uuidSpy = vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue('generated-id');
+      const uuidSpy = vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue('12345678-1234-1234-1234-123456789012' as `${string}-${string}-${string}-${string}-${string}`);
       chromeStorageGet.mockResolvedValue({});
 
       const id = await service.getOrCreateInstallationId();
 
-      expect(id).toBe('generated-id');
+      expect(id).toBe('12345678-1234-1234-1234-123456789012');
       expect(uuidSpy).toHaveBeenCalledTimes(1);
-      expect(chromeStorageSet).toHaveBeenCalledWith({ installationId: 'generated-id' });
+      expect(chromeStorageSet).toHaveBeenCalledWith({ installationId: '12345678-1234-1234-1234-123456789012' });
 
       uuidSpy.mockRestore();
     });
 
     it('returns stored installation ID when it already exists', async () => {
-      const uuidSpy = vi.spyOn(globalThis.crypto, 'randomUUID');
       chromeStorageGet.mockResolvedValue({ installationId: 'existing-id' });
+      const uuidSpy = vi.spyOn(globalThis.crypto, 'randomUUID');
 
       const id = await service.getOrCreateInstallationId();
 
@@ -189,7 +189,7 @@ describe('BurnerEmailService', () => {
     it('omits URL when it exceeds 2048 characters', async () => {
       const authorizedFetchSpy = vi
         .spyOn(service as unknown as Record<string, any>, 'authorizedFetch')
-        .mockImplementation(async (_url, initFactory) => {
+        .mockImplementation(async (_url, _initFactory) => {
           return jsonResponse({
             success: true,
             email: { email_address: 'burner@example.com' },
@@ -213,7 +213,7 @@ describe('BurnerEmailService', () => {
       storageMocks.getRealEmail.mockResolvedValue('User@Example.COM');
       const authorizedFetchSpy = vi
         .spyOn(service as unknown as Record<string, any>, 'authorizedFetch')
-        .mockImplementation(async (_url, initFactory) => {
+        .mockImplementation(async (_url, _initFactory) => {
           return jsonResponse({
             success: true,
             email: { email_address: 'burner@example.com' },
@@ -234,7 +234,7 @@ describe('BurnerEmailService', () => {
     it('includes optional label in the request payload', async () => {
       const authorizedFetchSpy = vi
         .spyOn(service as unknown as Record<string, any>, 'authorizedFetch')
-        .mockImplementation(async (_url, initFactory) => {
+        .mockImplementation(async (_url, _initFactory) => {
           return jsonResponse({
             success: true,
             email: { email_address: 'label@example.com' },
@@ -266,7 +266,7 @@ describe('BurnerEmailService', () => {
       service.emailsCacheExpiry = Date.now() + 10000;
 
       const authorizedFetchSpy = vi
-        .spyOn(service as unknown as Record<string, unknown>, 'authorizedFetch')
+        .spyOn(service as any, 'authorizedFetch')
         .mockImplementation(async () => {
           return jsonResponse({
             success: true,
@@ -432,7 +432,7 @@ describe('BurnerEmailService', () => {
 
     it('handles malformed JSON responses from the API', async () => {
       const authorizedFetchSpy = vi
-        .spyOn(service as unknown as Record<string, unknown>, 'authorizedFetch')
+        .spyOn(service as any, 'authorizedFetch')
         .mockResolvedValue(new Response('not-json', { status: 200 }));
 
       await expect(service.generateEmail('example.com')).rejects.toThrow(

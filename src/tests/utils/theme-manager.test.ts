@@ -28,12 +28,12 @@ describe('ThemeManager', () => {
 
   describe('detectSystemTheme', () => {
     it('should detect light theme when system prefers light', () => {
-      mockMediaQueryList.matches = false;
+      Object.defineProperty(mockMediaQueryList, 'matches', { value: false, writable: true });
       expect(ThemeManager.detectSystemTheme()).toBe('light');
     });
 
     it('should detect dark theme when system prefers dark', () => {
-      mockMediaQueryList.matches = true;
+      Object.defineProperty(mockMediaQueryList, 'matches', { value: true, writable: true });
       expect(ThemeManager.detectSystemTheme()).toBe('dark');
     });
   });
@@ -48,10 +48,10 @@ describe('ThemeManager', () => {
     });
 
     it('should return system theme when preference is system', () => {
-      mockMediaQueryList.matches = true;
+      Object.defineProperty(mockMediaQueryList, 'matches', { value: true, writable: true });
       expect(ThemeManager.getEffectiveTheme('system')).toBe('dark');
 
-      mockMediaQueryList.matches = false;
+      Object.defineProperty(mockMediaQueryList, 'matches', { value: false, writable: true });
       expect(ThemeManager.getEffectiveTheme('system')).toBe('light');
     });
   });
@@ -81,7 +81,7 @@ describe('ThemeManager', () => {
     });
 
     it('should apply system theme and start listening when preference is system', () => {
-      mockMediaQueryList.matches = true;
+      Object.defineProperty(mockMediaQueryList, 'matches', { value: true, writable: true });
       ThemeManager.initialize('system');
       expect(document.documentElement.classList.contains('dark')).toBe(true);
       expect(mockMediaQueryList.addEventListener).toHaveBeenCalledWith('change', expect.any(Function));
@@ -198,7 +198,7 @@ describe('ThemeManager', () => {
     });
 
     it('should return system theme when preference is system', () => {
-      mockMediaQueryList.matches = true;
+      Object.defineProperty(mockMediaQueryList, 'matches', { value: true, writable: true });
       ThemeManager.initialize('system');
       expect(ThemeManager.getCurrentEffectiveTheme()).toBe('dark');
     });

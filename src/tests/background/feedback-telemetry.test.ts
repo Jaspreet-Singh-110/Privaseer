@@ -30,7 +30,7 @@ describe('FeedbackTelemetryService', () => {
     storedInstallationId = null;
 
     mockFetch = vi.fn();
-    global.fetch = mockFetch;
+    global.fetch = mockFetch as any;
 
     global.chrome = {
       storage: {

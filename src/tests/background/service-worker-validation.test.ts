@@ -54,7 +54,7 @@ describe('Service Worker Feature State Enforcement', () => {
     it('should allow generation when feature is enabled', async () => {
       await Storage.setBurnerEmailEnabled(true);
 
-      const handler = async (data: { domain: string }) => {
+      const handler = async (_data: { domain: string }) => {
         const isEnabled = await Storage.getBurnerEmailEnabled();
 
         if (!isEnabled) {
@@ -73,7 +73,7 @@ describe('Service Worker Feature State Enforcement', () => {
     it('should block generation when feature is disabled', async () => {
       await Storage.setBurnerEmailEnabled(false);
 
-      const handler = async (data: { domain: string }) => {
+      const handler = async (_data: { domain: string }) => {
         const isEnabled = await Storage.getBurnerEmailEnabled();
 
         if (!isEnabled) {
@@ -93,7 +93,7 @@ describe('Service Worker Feature State Enforcement', () => {
       const getBurnerEmailEnabledSpy = vi.spyOn(Storage, 'getBurnerEmailEnabled');
       await Storage.setBurnerEmailEnabled(true);
 
-      const handler = async (data: { domain: string }) => {
+      const handler = async (_data: { domain: string }) => {
         const isEnabled = await Storage.getBurnerEmailEnabled();
 
         if (!isEnabled) {
@@ -111,7 +111,7 @@ describe('Service Worker Feature State Enforcement', () => {
     it('should return specific error message when disabled', async () => {
       await Storage.setBurnerEmailEnabled(false);
 
-      const handler = async (data: { domain: string }) => {
+      const handler = async (_data: { domain: string }) => {
         const isEnabled = await Storage.getBurnerEmailEnabled();
 
         if (!isEnabled) {
@@ -130,7 +130,7 @@ describe('Service Worker Feature State Enforcement', () => {
     it('should respect toggle changes', async () => {
       await Storage.setBurnerEmailEnabled(false);
 
-      const handler = async (data: { domain: string }) => {
+      const handler = async (_data: { domain: string }) => {
         const isEnabled = await Storage.getBurnerEmailEnabled();
 
         if (!isEnabled) {
@@ -212,7 +212,7 @@ describe('Service Worker Feature State Enforcement', () => {
     it('should allow deleting emails when feature is enabled', async () => {
       await Storage.setBurnerEmailEnabled(true);
 
-      const handler = async (data: { emailId: string }) => {
+      const handler = async (_data: { emailId: string }) => {
         return { success: true };
       };
 
@@ -224,7 +224,7 @@ describe('Service Worker Feature State Enforcement', () => {
     it('should allow deleting emails when feature is disabled', async () => {
       await Storage.setBurnerEmailEnabled(false);
 
-      const handler = async (data: { emailId: string }) => {
+      const handler = async (_data: { emailId: string }) => {
         return { success: true };
       };
 
@@ -237,7 +237,7 @@ describe('Service Worker Feature State Enforcement', () => {
       const getBurnerEmailEnabledSpy = vi.spyOn(Storage, 'getBurnerEmailEnabled');
       await Storage.setBurnerEmailEnabled(false);
 
-      const handler = async (data: { emailId: string }) => {
+      const handler = async (_data: { emailId: string }) => {
         return { success: true };
       };
 
@@ -251,7 +251,7 @@ describe('Service Worker Feature State Enforcement', () => {
     it('should enforce state only on generation', async () => {
       await Storage.setBurnerEmailEnabled(false);
 
-      const generateHandler = async (data: { domain: string }) => {
+      const generateHandler = async (_data: { domain: string }) => {
         const isEnabled = await Storage.getBurnerEmailEnabled();
         if (!isEnabled) {
           return { success: false, error: 'Burner email feature is disabled' };
@@ -263,7 +263,7 @@ describe('Service Worker Feature State Enforcement', () => {
         return { success: true, emails: [] };
       };
 
-      const deleteHandler = async (data: { emailId: string }) => {
+      const deleteHandler = async (_data: { emailId: string }) => {
         return { success: true };
       };
 
@@ -279,7 +279,7 @@ describe('Service Worker Feature State Enforcement', () => {
     it('should allow all operations when enabled', async () => {
       await Storage.setBurnerEmailEnabled(true);
 
-      const generateHandler = async (data: { domain: string }) => {
+      const generateHandler = async (_data: { domain: string }) => {
         const isEnabled = await Storage.getBurnerEmailEnabled();
         if (!isEnabled) {
           return { success: false, error: 'Burner email feature is disabled' };
@@ -291,7 +291,7 @@ describe('Service Worker Feature State Enforcement', () => {
         return { success: true, emails: [] };
       };
 
-      const deleteHandler = async (data: { emailId: string }) => {
+      const deleteHandler = async (_data: { emailId: string }) => {
         return { success: true };
       };
 
@@ -307,7 +307,7 @@ describe('Service Worker Feature State Enforcement', () => {
     it('should respond immediately when generation is blocked', async () => {
       await Storage.setBurnerEmailEnabled(false);
 
-      const handler = async (data: { domain: string }) => {
+      const handler = async (_data: { domain: string }) => {
         const isEnabled = await Storage.getBurnerEmailEnabled();
         if (!isEnabled) {
           return { success: false, error: 'Burner email feature is disabled' };
@@ -328,7 +328,7 @@ describe('Service Worker Feature State Enforcement', () => {
     it('should handle storage errors gracefully', async () => {
       vi.spyOn(Storage, 'getBurnerEmailEnabled').mockRejectedValueOnce(new Error('Storage error'));
 
-      const handler = async (data: { domain: string }) => {
+      const handler = async (_data: { domain: string }) => {
         try {
           const isEnabled = await Storage.getBurnerEmailEnabled();
           if (!isEnabled) {
@@ -348,7 +348,7 @@ describe('Service Worker Feature State Enforcement', () => {
     it('should default to blocking on storage errors', async () => {
       vi.spyOn(Storage, 'getBurnerEmailEnabled').mockRejectedValueOnce(new Error('Storage error'));
 
-      const handler = async (data: { domain: string }) => {
+      const handler = async (_data: { domain: string }) => {
         try {
           const isEnabled = await Storage.getBurnerEmailEnabled();
           if (!isEnabled) {

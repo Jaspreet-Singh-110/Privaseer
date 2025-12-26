@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { Storage } from '@/background/storage';
 
 describe('Storage', () => {
@@ -35,7 +35,8 @@ describe('Storage', () => {
     const initialCount = initialData.alerts.length;
 
     const alert = {
-      type: 'tracker' as const,
+      id: `alert-${Date.now()}`,
+      type: 'tracker_blocked' as const,
       severity: 'high' as const,
       domain: `tracker-${Date.now()}.com`,
       message: 'Tracker blocked',

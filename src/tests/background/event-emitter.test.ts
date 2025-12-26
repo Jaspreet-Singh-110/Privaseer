@@ -22,18 +22,18 @@ describe('EventEmitter', () => {
     backgroundEvents.on('SCORE_UPDATED', callback1);
     backgroundEvents.on('SCORE_UPDATED', callback2);
 
-    backgroundEvents.emit('SCORE_UPDATED', { newScore: 85 });
+    backgroundEvents.emit('SCORE_UPDATED', { oldScore: 80, newScore: 85, reason: 'test' });
 
-    expect(callback1).toHaveBeenCalledWith({ newScore: 85 });
-    expect(callback2).toHaveBeenCalledWith({ newScore: 85 });
+    expect(callback1).toHaveBeenCalledWith({ oldScore: 80, newScore: 85, reason: 'test' });
+    expect(callback2).toHaveBeenCalledWith({ oldScore: 80, newScore: 85, reason: 'test' });
   });
 
   it('should remove listeners', () => {
     const callback = vi.fn();
-    backgroundEvents.on('ALERT_CREATED', callback);
-    backgroundEvents.off('ALERT_CREATED', callback);
+    backgroundEvents.on('CLEAN_SITE_DETECTED', callback);
+    backgroundEvents.off('CLEAN_SITE_DETECTED', callback);
 
-    backgroundEvents.emit('ALERT_CREATED', {});
+    backgroundEvents.emit('CLEAN_SITE_DETECTED', { domain: 'example.com', tabId: 1, url: 'https://example.com' });
 
     expect(callback).not.toHaveBeenCalled();
   });

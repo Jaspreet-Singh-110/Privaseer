@@ -69,7 +69,7 @@ describe('Service Worker Message Handlers', () => {
         sendMessage: vi.fn().mockResolvedValue(undefined),
       },
       tabs: {
-        query: vi.fn().mockImplementation((queryInfo, callback) => {
+        query: vi.fn().mockImplementation((_queryInfo, callback) => {
           callback?.([]);
           return Promise.resolve([]);
         }),
@@ -340,7 +340,7 @@ describe('Service Worker Message Handlers', () => {
 
     it('broadcasts STATE_UPDATE after success', async () => {
       await Storage.setBurnerEmailEnabled(true);
-      const setRealEmailSpy = vi.spyOn(Storage, 'setRealEmail').mockResolvedValue(undefined);
+      vi.spyOn(Storage, 'setRealEmail').mockResolvedValue(undefined);
 
       const handler = async (data: unknown) => {
         try {

@@ -1,6 +1,5 @@
-import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BurnerEmailsSection } from '../../popup/burner-emails-section';
 import type { BurnerEmail } from '../../types';
@@ -60,7 +59,7 @@ describe('BurnerEmailsSection', () => {
         configurable: true,
       });
     } else {
-      global.navigator.clipboard.writeText = mockClipboardWriteText;
+      global.navigator.clipboard.writeText = mockClipboardWriteText as any;
     }
   });
 
@@ -597,7 +596,7 @@ describe('BurnerEmailsSection', () => {
       render(<BurnerEmailsSection />);
 
       // Loading skeleton should be visible
-      const loadingElement = screen.getByText((content, element) => {
+      const loadingElement = screen.getByText((_content, element) => {
         return element?.classList.contains('animate-pulse') ?? false;
       });
       expect(loadingElement).toBeInTheDocument();

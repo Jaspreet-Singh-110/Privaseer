@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { JSDOM } from 'jsdom';
 import { Storage } from '@/background/storage';
 import { messageBus } from '@/utils/message-bus';
 
@@ -76,7 +75,7 @@ describe('Burner Email Toggle - Integration Tests', () => {
       return Promise.resolve(response);
     });
 
-    mockTabsSendMessage = vi.fn().mockImplementation((tabId, message, callback) => {
+    mockTabsSendMessage = vi.fn().mockImplementation((_tabId, message, callback) => {
       // Simulate sending to content scripts
       contentScriptInstances.forEach(instance => {
         if (message.type === 'BURNER_EMAIL_SETTING_CHANGED') {
@@ -166,7 +165,7 @@ describe('Burner Email Toggle - Integration Tests', () => {
       }
     });
 
-    messageBus.on('GENERATE_BURNER_EMAIL', async (data: unknown) => {
+    messageBus.on('GENERATE_BURNER_EMAIL', async (_data: unknown) => {
       try {
         const isEnabled = await Storage.getBurnerEmailEnabled();
 
@@ -174,7 +173,7 @@ describe('Burner Email Toggle - Integration Tests', () => {
           return { success: false, error: 'Burner email feature is disabled' };
         }
 
-        const { domain } = data as { domain: string };
+        // const { domain } = data as { domain: string };
         return { success: true, email: `test@burner.privaseer.io` };
       } catch (error) {
         return { success: false, error: 'Failed to generate burner email' };
@@ -463,7 +462,7 @@ describe('Burner Email Toggle - Integration Tests', () => {
     it('should show existing emails in popup when feature is disabled', async () => {
       await Storage.setBurnerEmailEnabled(false);
 
-      const popup = await createPopupInstance();
+      await createPopupInstance();
 
       // Simulate fetching emails
       const emailsResult = await chrome.runtime.sendMessage({ type: 'GET_BURNER_EMAILS' });

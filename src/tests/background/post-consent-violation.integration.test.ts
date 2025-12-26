@@ -26,7 +26,7 @@ const storageData = vi.hoisted(() => ({
     burnerEmailEnabled: true,
     telemetryEnabled: false,
   },
-  alerts: [],
+  alerts: [] as any[],
   trackers: {},
   privacyScore: {
     current: 92,
@@ -43,7 +43,7 @@ const storageData = vi.hoisted(() => ({
 }));
 
 const mockChrome = () => {
-  const tabsQuery = vi.fn((query?: unknown, callback?: (tabs: chrome.tabs.Tab[]) => void) => {
+  const tabsQuery = vi.fn((_query?: unknown, callback?: (tabs: chrome.tabs.Tab[]) => void) => {
     const tabs = [{ id: 1, url: 'https://news.example/home' }] as chrome.tabs.Tab[];
     if (typeof callback === 'function') {
       callback(tabs);
@@ -102,7 +102,7 @@ const mockChrome = () => {
 };
 
 const chromeMock = mockChrome();
-(globalThis as unknown as { chrome: typeof chrome }).chrome = chromeMock as typeof chrome;
+(globalThis as any).chrome = chromeMock;
 
 vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
   json: async () => ({
@@ -135,7 +135,7 @@ vi.mock('@/background/storage', () => ({
     initialize: vi.fn().mockResolvedValue(undefined),
     get: vi.fn().mockResolvedValue(storageData),
     getFresh: vi.fn().mockResolvedValue(storageData),
-    addAlert: vi.fn().mockImplementation(async (alert) => {
+    addAlert: vi.fn().mockImplementation(async (alert: any) => {
       storageData.alerts.push(alert);
     }),
     clearAlerts: vi.fn().mockResolvedValue(undefined),
@@ -208,18 +208,16 @@ vi.mock('@/utils/message-bus', () => ({
 vi.mock('@/background/firewall-engine', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/background/firewall-engine')>();
   actual.FirewallEngine.initialize = vi.fn().mockResolvedValue(undefined);
-  actual.FirewallEngine.enableBlocking = vi.fn().mockResolvedValue(undefined);
-  actual.FirewallEngine.disableBlocking = vi.fn().mockResolvedValue(undefined);
+  (actual.FirewallEngine as any).enableBlocking = vi.fn().mockResolvedValue(undefined);
+  (actual.FirewallEngine as any).disableBlocking = vi.fn().mockResolvedValue(undefined);
   actual.FirewallEngine.updateCurrentTabBadge = vi.fn().mockResolvedValue(undefined);
   actual.FirewallEngine.clearTabTimer = vi.fn();
   actual.FirewallEngine.cleanup = vi.fn();
   return actual;
 });
 
-type MockedMessageBus = typeof messageBus & { handlers: typeof messageHandlers };
-
 const getConsentScanHandler = () =>
-  (messageBus as MockedMessageBus).handlers.get('CONSENT_SCAN_RESULT') as
+  ((messageBus as any).handlers.get('CONSENT_SCAN_RESULT')) as
     | ((data: ConsentScanResult, sender: chrome.runtime.MessageSender) => Promise<unknown>)
     | undefined;
 

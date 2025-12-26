@@ -27,7 +27,6 @@ vi.mock('@/background/feedback-telemetry-service', () => ({
 }));
 
 describe('Burner Email Toggle - Comprehensive Tests', () => {
-  let mockSendMessage: ReturnType<typeof vi.fn>;
   let mockTabsSendMessage: ReturnType<typeof vi.fn>;
   let mockTabsQuery: ReturnType<typeof vi.fn>;
   let mockRuntimeSendMessage: ReturnType<typeof vi.fn>;
@@ -39,7 +38,6 @@ describe('Burner Email Toggle - Comprehensive Tests', () => {
     (Storage as any).saveTimer = null;
     (Storage as any).isSaving = false;
 
-    mockSendMessage = vi.fn().mockResolvedValue(undefined);
     mockTabsSendMessage = vi.fn().mockResolvedValue(undefined);
     mockTabsQuery = vi.fn().mockResolvedValue([
       { id: 1, url: 'https://example.com' },
@@ -104,7 +102,7 @@ describe('Burner Email Toggle - Comprehensive Tests', () => {
       }
     });
 
-    messageBus.on('GENERATE_BURNER_EMAIL', async (data: unknown) => {
+    messageBus.on('GENERATE_BURNER_EMAIL', async (_data: unknown) => {
       try {
         const isEnabled = await Storage.getBurnerEmailEnabled();
 
@@ -112,7 +110,7 @@ describe('Burner Email Toggle - Comprehensive Tests', () => {
           return { success: false, error: 'Burner email feature is disabled' };
         }
 
-        const { domain } = data as { domain: string };
+        // const { domain } = data as { domain: string };
         return { success: true, email: `test@burner.privaseer.io` };
       } catch (error) {
         return { success: false, error: 'Failed to generate burner email' };
@@ -522,9 +520,9 @@ describe('Burner Email Toggle - Comprehensive Tests', () => {
         new Error('Storage get failed')
       );
 
-      const handler = messageBus.handlers.get('GET_BURNER_EMAIL_SETTING');
+      const handler = (messageBus as any).handlers.get('GET_BURNER_EMAIL_SETTING');
       if (handler && handler.length > 0) {
-        const result = await handler[0](undefined, {} as any);
+        const result = await handler[0](undefined, {} as any) as any;
 
         expect(result.success).toBe(false);
         expect(result.error).toBeDefined();
@@ -537,9 +535,9 @@ describe('Burner Email Toggle - Comprehensive Tests', () => {
         new Error('Storage set failed')
       );
 
-      const handler = messageBus.handlers.get('SET_BURNER_EMAIL_SETTING');
+      const handler = (messageBus as any).handlers.get('SET_BURNER_EMAIL_SETTING');
       if (handler && handler.length > 0) {
-        const result = await handler[0]({ enabled: true }, {} as any);
+        const result = await handler[0]({ enabled: true }, {} as any) as any;
 
         expect(result.success).toBe(false);
         expect(result.error).toBeDefined();
@@ -567,9 +565,9 @@ describe('Burner Email Toggle - Comprehensive Tests', () => {
     it('should handle broadcast failures without breaking flow', async () => {
       mockRuntimeSendMessage.mockRejectedValue(new Error('Broadcast failed'));
 
-      const handler = messageBus.handlers.get('SET_BURNER_EMAIL_SETTING');
+      const handler = (messageBus as any).handlers.get('SET_BURNER_EMAIL_SETTING');
       if (handler && handler.length > 0) {
-        const result = await handler[0]({ enabled: false }, {} as any);
+        const result = await handler[0]({ enabled: false }, {} as any) as any;
 
         // Should still succeed even if broadcast fails
         expect(result.success).toBe(true);

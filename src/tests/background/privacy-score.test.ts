@@ -96,6 +96,7 @@ function createStorageData(): StorageData {
     dailySnapshots: [],
     burnerEmailStats: { generated: 0, forwarded: 0 },
     complianceScores: [],
+    onboarding: { hasCompletedOnboarding: false, currentStep: 0 },
   };
 }
 

@@ -223,19 +223,19 @@ function setupMessageHandlers(): void {
           body: JSON.stringify({
             installationId,
             domain,
-            cmpType: result.cmpDetection.cmpType,
-            consentStatus: result.cmpDetection.consentStatus || 'unknown',
+            cmpType: result.cmpDetection?.cmpType || 'unknown',
+            consentStatus: result.cmpDetection?.consentStatus || 'unknown',
             hasRejectButton: result.hasRejectButton,
             isCompliant: result.isCompliant,
-            cookieNames: result.cmpDetection.cookieNames || [],
-            tcfVersion: result.cmpDetection.tcfVersion,
-            detectionMethod: result.cmpDetection.detectionMethod,
-            confidenceScore: result.cmpDetection.confidenceScore,
+            cookieNames: result.cmpDetection?.cookieNames || [],
+            tcfVersion: result.cmpDetection?.tcfVersion,
+            detectionMethod: result.cmpDetection?.detectionMethod || 'banner',
+            confidenceScore: result.cmpDetection?.confidenceScore || 0,
           }),
         });
 
         if (response.ok) {
-          logger.info('ServiceWorker', 'Consent state persisted to Supabase', { domain, cmpType: result.cmpDetection.cmpType });
+          logger.info('ServiceWorker', 'Consent state persisted to Supabase', { domain, cmpType: result.cmpDetection?.cmpType || 'unknown' });
         } else {
           const errorText = await response.text();
           logger.warn('ServiceWorker', 'Failed to persist consent state', { domain, status: response.status, error: errorText });

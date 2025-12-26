@@ -67,7 +67,9 @@ export class Storage {
         this.cache = defaultData;
       } else {
         this.cache = data.privacyData;
-        this.ensureOnboardingState(this.cache);
+        if (this.cache) {
+          this.ensureOnboardingState(this.cache);
+        }
         await this.checkDailyReset();
       }
 
