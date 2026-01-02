@@ -550,11 +550,11 @@ describe('ConsentScanner Integration', () => {
 
       detectCMPMock.mockResolvedValue(oneTrustCMP);
       setupOneTrustBanner();
-      
+
       // Initialize and scan after DOM setup
       await scanner.initialize();
       await scanner.scanPage();
-
+      
       expect(detectCMPMock).toHaveBeenCalled();
       
       // Verify message was sent with CMP detection
@@ -809,7 +809,7 @@ describe('ConsentScanner Integration', () => {
 
       // Initialize and scan
       await scanner.initialize();
-      
+
       // Should not throw
       await expect(scanner.scanPage()).resolves.not.toThrow();
     });
