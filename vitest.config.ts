@@ -2,41 +2,66 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
 
-export default defineConfig({
-  plugins: [react()],
-  test: {
-    globals: true,
-    environment: 'jsdom',
-    setupFiles: ['./src/tests/setup.ts'],
-    // Use forks pool instead of threads to avoid memory issues
-    pool: 'forks',
-    poolOptions: {
-      forks: {
-        singleFork: false,
+export default defineConfig(() => {
+  const isStryker = process.env.STRYKER_MUTATION === '1';
+
+  return {
+    plugins: [react({ jsxRuntime: 'automatic' })],
+    esbuild: {
+      sourcemap: isStryker ? false : undefined,
+    },
+    build: {
+      sourcemap: isStryker ? false : undefined,
+      rollupOptions: isStryker ? {
+        output: {
+          sourcemap: false,
+        }
+      } : undefined,
+    },
+    optimizeDeps: {
+      esbuildOptions: {
+        sourcemap: isStryker ? false : undefined,
       },
     },
-    coverage: {
-      provider: 'v8',
-      reporter: ['text', 'json', 'html', 'lcov'],
-      include: ['src/**/*.ts', 'src/**/*.tsx'],
-      exclude: [
-        'src/**/*.test.ts',
-        'src/**/*.test.tsx',
-        'src/tests/**',
-        'src/vite-env.d.ts',
-        'src/manifest.json',
-      ],
-      thresholds: {
-        lines: 18,
-        functions: 18,
-        branches: 18,
-        statements: 18,
+    test: {
+      globals: true,
+      environment: 'jsdom',
+      setupFiles: isStryker
+        ? ['./src/tests/stryker-vite-shim.ts', './src/tests/setup.ts']
+        : ['./src/tests/setup.ts'],
+      // Use threads pool for Stryker to avoid birpc race conditions
+      pool: isStryker ? 'threads' : 'forks',
+      poolOptions: {
+        forks: {
+          singleFork: false,
+        },
+        threads: {
+          singleThread: isStryker ? true : false,
+        },
+      },
+      coverage: {
+        provider: 'v8',
+        reporter: ['text', 'json', 'html', 'lcov'],
+        include: ['src/**/*.ts', 'src/**/*.tsx'],
+        exclude: [
+          'src/**/*.test.ts',
+          'src/**/*.test.tsx',
+          'src/tests/**',
+          'src/vite-env.d.ts',
+          'src/manifest.json',
+        ],
+        thresholds: {
+          lines: 40,
+          functions: 40,
+          branches: 30,
+          statements: 40,
+        },
       },
     },
-  },
-  resolve: {
-    alias: {
-      '@': resolve(__dirname, './src'),
+    resolve: {
+      alias: {
+        '@': resolve(__dirname, './src'),
+      },
     },
-  },
+  };
 });
