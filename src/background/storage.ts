@@ -5,6 +5,7 @@ import type {
   DailyMetricsSnapshot,
   OnboardingState,
   DailyCreditMetrics,
+  AllowlistEntry,
 } from '../types';
 import { logger } from '../utils/logger';
 import { backgroundEvents } from './event-emitter';
@@ -51,6 +52,7 @@ const DEFAULT_STORAGE_DATA: StorageData = {
   lastReset: Date.now(),
   penalizedDomains: {},
   consentStates: {},
+  allowlist: {},
   domainOccurrences: {},
   dailySnapshots: [],
   burnerEmailStats: {
@@ -475,6 +477,29 @@ export class Storage {
     data.consentStates[domain] = state;
     this.scheduleSave();
     logger.info('Storage', 'Consent state saved', { domain, status: state.consentStatus, cmpId: state.cmpId });
+  }
+
+  static async getAllowlistEntries(): Promise<Record<string, AllowlistEntry>> {
+    const data = await this.get();
+    return data.allowlist ?? {};
+  }
+
+  static async setAllowlistEntry(domain: string, entry: AllowlistEntry): Promise<void> {
+    const data = await this.get();
+    if (!data.allowlist) {
+      data.allowlist = {};
+    }
+    data.allowlist[domain] = entry;
+    await this.save(data);
+  }
+
+  static async removeAllowlistEntry(domain: string): Promise<void> {
+    const data = await this.get();
+    if (!data.allowlist) {
+      return;
+    }
+    delete data.allowlist[domain];
+    await this.save(data);
   }
 
   static async incrementDomainOccurrence(domain: string): Promise<number> {

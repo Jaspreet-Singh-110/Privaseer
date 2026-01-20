@@ -151,6 +151,7 @@ vi.mock('@/background/storage', () => ({
     setRealEmail: vi.fn().mockResolvedValue(undefined),
     recordComplianceScore: vi.fn().mockResolvedValue(undefined),
     ensureSaved: vi.fn().mockResolvedValue(undefined),
+    getAllowlistEntries: vi.fn().mockResolvedValue({}),
   },
 }));
 

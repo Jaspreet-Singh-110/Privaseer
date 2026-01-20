@@ -20,6 +20,7 @@ const ReportableSettingsPage = SettingsPage as (props: ReportableSettingsPagePro
 function CreditScoreMeter({ creditScore }: { creditScore: CreditScoreResult | null }) {
   const [animatedScore, setAnimatedScore] = useState<number>(CREDIT_SCORE.BASE);
   const animationRef = useRef<number>();
+  const startValueRef = useRef<number>(CREDIT_SCORE.BASE);
   const score = creditScore?.score ?? CREDIT_SCORE.BASE;
   const label = creditScore?.label ?? 'Fair';
   const trend = creditScore?.trend ?? 'stable';
@@ -35,10 +36,14 @@ function CreditScoreMeter({ creditScore }: { creditScore: CreditScoreResult | nu
 
   const scoreColors = getScoreColor(score);
 
+  useEffect(() => {
+    startValueRef.current = animatedScore;
+  }, [animatedScore]);
+
   // Animate score on change
   useEffect(() => {
     let startTime: number;
-    const startValue = animatedScore;
+    const startValue = startValueRef.current;
     const duration = 1200;
 
     const animate = (currentTime: number) => {
@@ -52,6 +57,8 @@ function CreditScoreMeter({ creditScore }: { creditScore: CreditScoreResult | nu
 
       if (progress < 1) {
         animationRef.current = requestAnimationFrame(animate);
+      } else {
+        startValueRef.current = currentScore;
       }
     };
 
@@ -695,6 +702,7 @@ export function AlertItem({
 }) {
   const [trackerInfo, setTrackerInfo] = useState<{ description: string; alternative: string } | null>(null);
   const [loadingInfo, setLoadingInfo] = useState(false);
+  const [reportStatus, setReportStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
 
   const getSeverityIcon = () => {
     switch (alert.severity) {
@@ -756,7 +764,8 @@ export function AlertItem({
   const isTrackerAlert = alert.type === 'tracker_blocked' || alert.type === 'high_risk';
   const isCookieBannerAlert = alert.type === 'non_compliant_site';
   const isPostConsentViolation = alert.type === 'post_consent_violation';
-  const isReportable = isCookieBannerAlert || isPostConsentViolation;
+  const isFeedbackReportable = isPostConsentViolation;
+  const isFalsePositiveReportable = isCookieBannerAlert;
   const hasBannerDetails = isCookieBannerAlert && Boolean(alert.deceptivePatterns?.length);
   const hasViolationDetails = isPostConsentViolation && Boolean(alert.blockedTrackers?.length);
 
@@ -769,6 +778,30 @@ export function AlertItem({
   };
 
   const hasExpandableInfo = isTrackerAlert || hasBannerDetails || hasViolationDetails;
+
+  const handleFalsePositiveReport = async () => {
+    if (reportStatus === 'sending' || reportStatus === 'sent') return;
+    setReportStatus('sending');
+
+    try {
+      await chrome.runtime.sendMessage({
+        type: 'REPORT_FALSE_POSITIVE',
+        data: {
+          domain: alert.domain,
+          url: alert.url || '',
+          detectedPatterns: alert.deceptivePatterns || [],
+          userReason: 'Reported from popup',
+          timestamp: Date.now(),
+          installationId: '',
+          scanConfidence: 0,
+        },
+      });
+      setReportStatus('sent');
+    } catch (error) {
+      logger.error('Popup', 'Failed to report false positive', toError(error));
+      setReportStatus('error');
+    }
+  };
 
   return (
     <div className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-b border-gray-100 dark:border-gray-700">
@@ -804,7 +837,7 @@ export function AlertItem({
                   )}
                 </button>
               )}
-              {isReportable && (
+              {isFeedbackReportable && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -813,6 +846,17 @@ export function AlertItem({
                   className="text-xs text-red-600 dark:text-red-400 hover:underline font-medium ml-2"
                 >
                   Report
+                </button>
+              )}
+              {isFalsePositiveReportable && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void handleFalsePositiveReport();
+                  }}
+                  className="text-xs text-amber-700 dark:text-amber-400 hover:underline font-medium ml-2"
+                >
+                  {reportStatus === 'sent' ? 'Reported' : reportStatus === 'sending' ? 'Reporting...' : 'Report incorrect'}
                 </button>
               )}
             </div>
@@ -843,16 +887,19 @@ export function AlertItem({
         <div className="px-6 pb-3">
           <div className="ml-5 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-xs">
             <div className="mb-2">
-              <span className="font-semibold text-amber-900 dark:text-amber-300">Banner Issues:</span>
+              <span className="font-semibold text-amber-900 dark:text-amber-300">Banner observations:</span>
             </div>
             <ul className="space-y-1 text-amber-800 dark:text-amber-400">
               {alert.deceptivePatterns.map((pattern, idx) => (
                 <li key={idx} className="flex items-start gap-2">
                   <span className="text-amber-600 dark:text-amber-500 mt-0.5">•</span>
                   <span>
-                    {pattern === 'Forced Consent' && 'No reject button available - you must accept tracking'}
-                    {pattern === 'Dark Pattern' && 'Accept button is more prominent than reject button'}
-                    {pattern === 'Hidden Reject' && 'Reject button is hidden below the fold'}
+                    {pattern === 'forcedConsent' && 'Limited consent options available'}
+                    {pattern === 'acceptButtonProminence' && 'Accept option appears more prominent than reject'}
+                    {pattern === 'hiddenRejectButton' && 'Reject option may require scrolling'}
+                    {pattern === 'preCheckedBoxes' && 'Some options are pre-selected'}
+                    {!['forcedConsent', 'acceptButtonProminence', 'hiddenRejectButton', 'preCheckedBoxes'].includes(pattern) &&
+                      'Potential banner issue detected'}
                   </span>
                 </li>
               ))}
@@ -871,10 +918,10 @@ export function AlertItem({
         <div className="px-6 pb-3">
           <div className="ml-5 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-xs">
             <div className="mb-2">
-              <span className="font-semibold text-red-900 dark:text-red-300">GDPR Violation Detected</span>
+              <span className="font-semibold text-red-900 dark:text-red-300">Potential privacy issue</span>
             </div>
             <p className="text-red-800 dark:text-red-400 mb-2">
-              This site loaded tracking scripts after you explicitly denied consent.
+              This site loaded trackers after you denied consent.
             </p>
             <div className="mt-2">
               <span className="font-semibold text-red-900 dark:text-red-300">Trackers loaded:</span>

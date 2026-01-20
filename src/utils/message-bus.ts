@@ -48,6 +48,10 @@ const VALID_MESSAGE_TYPES = new Set<MessageType>([
   'SET_ONBOARDING_STEP',
   'COMPLETE_ONBOARDING',
   'SKIP_ONBOARDING',
+  'REPORT_FALSE_POSITIVE',
+  'GET_ALLOWLIST',
+  'ADD_TO_ALLOWLIST',
+  'REMOVE_FROM_ALLOWLIST',
 ]);
 
 const payloadValidators: Partial<Record<MessageType, (payload: unknown) => boolean>> = {
@@ -84,6 +88,18 @@ const payloadValidators: Partial<Record<MessageType, (payload: unknown) => boole
         typeof (data as { emailConfigured?: unknown }).emailConfigured === 'boolean')),
   SKIP_ONBOARDING: (data): data is MessageDataMap['SKIP_ONBOARDING'] =>
     isObject(data) && typeof (data as { atStep?: unknown }).atStep === 'number',
+  REPORT_FALSE_POSITIVE: (data): data is MessageDataMap['REPORT_FALSE_POSITIVE'] =>
+    isObject(data) &&
+    typeof (data as { domain?: unknown }).domain === 'string' &&
+    typeof (data as { url?: unknown }).url === 'string' &&
+    Array.isArray((data as { detectedPatterns?: unknown }).detectedPatterns) &&
+    typeof (data as { timestamp?: unknown }).timestamp === 'number' &&
+    typeof (data as { installationId?: unknown }).installationId === 'string' &&
+    typeof (data as { scanConfidence?: unknown }).scanConfidence === 'number',
+  ADD_TO_ALLOWLIST: (data): data is MessageDataMap['ADD_TO_ALLOWLIST'] =>
+    isObject(data) && typeof (data as { domain?: unknown }).domain === 'string',
+  REMOVE_FROM_ALLOWLIST: (data): data is MessageDataMap['REMOVE_FROM_ALLOWLIST'] =>
+    isObject(data) && typeof (data as { domain?: unknown }).domain === 'string',
 };
 
 function isValidMessageType(type: unknown): type is MessageType {

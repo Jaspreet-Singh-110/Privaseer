@@ -1,5 +1,6 @@
 import { logger } from './logger';
 import { toError } from './type-guards';
+import { detectPageLanguage, getLocalizedPatterns, matchesAnyPattern } from './i18n-patterns';
 
 // Type definitions for CMP APIs on window object
 interface OneTrustAPI {
@@ -337,10 +338,14 @@ function parseGenericConsent(cookieValue: string): 'accepted' | 'rejected' | 'pa
 }
 
 function detectCMPByBanner(cmpType: string, config: CMPConfig): CMPDetectionResult | null {
+  const pageLanguage = detectPageLanguage();
+  const localizedPatterns = getLocalizedPatterns(pageLanguage);
+
   for (const selector of config.bannerSelectors) {
     try {
       const element = document.querySelector(selector);
       if (element) {
+        const hasRejectButton = hasRejectButtonInElement(element, localizedPatterns.reject);
         return {
           detected: true,
           cmpType,
@@ -348,6 +353,7 @@ function detectCMPByBanner(cmpType: string, config: CMPConfig): CMPDetectionResu
           confidenceScore: 0.7,
           consentStatus: 'unknown',
           cookieNames: getCookiesByPattern(config.cookiePatterns),
+          hasRejectButton,
         };
       }
     } catch {
@@ -355,6 +361,17 @@ function detectCMPByBanner(cmpType: string, config: CMPConfig): CMPDetectionResu
     }
   }
   return null;
+}
+
+function hasRejectButtonInElement(element: Element, patterns: string[]): boolean {
+  const buttons = element.querySelectorAll('button, a, [role="button"]');
+  for (const button of buttons) {
+    const text = `${button.textContent || ''} ${button.getAttribute('aria-label') || ''}`.trim();
+    if (matchesAnyPattern(text, patterns)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function detectCMPByCookie(cmpType: string, config: CMPConfig): CMPDetectionResult | null {

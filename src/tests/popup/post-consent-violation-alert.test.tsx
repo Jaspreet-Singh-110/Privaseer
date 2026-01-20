@@ -58,7 +58,7 @@ describe('AlertItem - post consent violation UI', () => {
     const detailsButton = await screen.findByTitle('Show violation details');
     await user.click(detailsButton);
 
-    await screen.findByText('GDPR Violation Detected');
+    await screen.findByText('Potential privacy issue');
     expect(screen.getByText('tracker.one.com')).toBeTruthy();
 
     const reportButton = screen.getByRole('button', { name: /report/i });

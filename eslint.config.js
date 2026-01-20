@@ -6,7 +6,7 @@ import tseslint from '@typescript-eslint/eslint-plugin';
 import tsparser from '@typescript-eslint/parser';
 
 export default [
-  { ignores: ['dist', 'src/tests/**', 'supabase/**'] },
+  { ignores: ['dist', 'src/tests/**', 'supabase/**', '.stryker-tmp/**'] },
   js.configs.recommended,
   ...tseslint.configs['flat/recommended'],
   {

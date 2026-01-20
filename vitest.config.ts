@@ -29,6 +29,7 @@ export default defineConfig(() => {
       setupFiles: isStryker
         ? ['./src/tests/stryker-vite-shim.ts', './src/tests/setup.ts']
         : ['./src/tests/setup.ts'],
+      exclude: ['**/node_modules/**', '**/dist/**', '**/.stryker-tmp/**', '**/tests/e2e/**'],
       // Use threads pool for Stryker to avoid birpc race conditions
       pool: isStryker ? 'threads' : 'forks',
       poolOptions: {
@@ -40,7 +41,7 @@ export default defineConfig(() => {
         },
       },
       coverage: {
-        provider: 'v8',
+        provider: 'v8' as const,
         reporter: ['text', 'json', 'html', 'lcov'],
         include: ['src/**/*.ts', 'src/**/*.tsx'],
         exclude: [
