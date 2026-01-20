@@ -3,7 +3,7 @@ import { FirewallEngine } from './firewall-engine';
 import { PrivacyScoreManager } from './privacy-score';
 import { burnerEmailService } from './burner-email-service';
 import { feedbackTelemetryService } from './feedback-telemetry-service';
-import type { ConsentScanResult } from '../types';
+import type { ConsentScanResultV2, FalsePositiveReport } from '../types';
 import { logger } from '../utils/logger';
 import { messageBus } from '../utils/message-bus';
 import { tabManager } from '../utils/tab-manager';
@@ -12,6 +12,8 @@ import { toError, isGetTrackerInfoData, isConsentScanResult } from '../utils/typ
 import { sanitizeUrl } from '../utils/sanitizer';
 import { BADGE, TIME, CONSENT_VIOLATION, SUPABASE, ONBOARDING } from '../utils/constants';
 import { validateComplianceScore, validateEventPayload, validateFeedbackPayload } from '../utils/validation';
+import { AllowlistManager } from '../utils/allowlist-manager';
+import { FalsePositiveService } from './false-positive-service';
 
 let isInitialized = false;
 let initializationPromise: Promise<void> | null = null;
@@ -106,6 +108,46 @@ function setupMessageHandlers(): void {
     return { success: true };
   });
 
+  messageBus.on('GET_ALLOWLIST', async () => {
+    const entries = await AllowlistManager.getEntries();
+    return { success: true, entries };
+  });
+
+  messageBus.on('ADD_TO_ALLOWLIST', async (data: unknown) => {
+    const payload = data as { domain: string; source?: 'user' };
+    if (!payload?.domain) {
+      return { success: false, error: 'Invalid allowlist domain' };
+    }
+    await AllowlistManager.addEntry(payload.domain, payload.source ?? 'user');
+    return { success: true };
+  });
+
+  messageBus.on('REMOVE_FROM_ALLOWLIST', async (data: unknown) => {
+    const payload = data as { domain: string };
+    if (!payload?.domain) {
+      return { success: false, error: 'Invalid allowlist domain' };
+    }
+    await AllowlistManager.removeEntry(payload.domain);
+    return { success: true };
+  });
+
+  messageBus.on('REPORT_FALSE_POSITIVE', async (data: unknown) => {
+    const payload = data as FalsePositiveReport;
+    try {
+      const installationId = payload.installationId || await feedbackTelemetryService.getInstallationId();
+      const report: FalsePositiveReport = {
+        ...payload,
+        installationId,
+      };
+      const success = await FalsePositiveService.reportFalsePositive(report);
+      await AllowlistManager.addEntry(payload.domain, 'user');
+      return { success };
+    } catch (error) {
+      logger.error('ServiceWorker', 'Failed to report false positive', toError(error));
+      return { success: false, error: 'Failed to report false positive' };
+    }
+  });
+
   messageBus.on('GET_TRACKER_INFO', async (data: unknown) => {
     if (!isGetTrackerInfoData(data)) {
       return { success: false, error: 'Invalid data: domain not provided' };
@@ -118,7 +160,7 @@ function setupMessageHandlers(): void {
     if (!isConsentScanResult(data)) {
       return { success: false, error: 'Invalid consent scan result data' };
     }
-    const result = data as ConsentScanResult;
+    const result = data as ConsentScanResultV2;
 
     const urlObj = new URL(result.url);
     const domain = urlObj.hostname;
@@ -145,6 +187,10 @@ function setupMessageHandlers(): void {
     }
 
     if (!result.isCompliant) {
+      const isAllowlisted = await AllowlistManager.isAllowlisted(domain);
+      if (isAllowlisted) {
+        logger.info('ServiceWorker', 'Allowlisted domain skipped for alert', { domain });
+      } else {
       // Check if we've already alerted about this domain recently (within 5 minutes)
       const lastAlertTime = consentAlertCache.get(domain);
       const now = Date.now();
@@ -156,9 +202,10 @@ function setupMessageHandlers(): void {
 
       // Also check if there's already a recent alert in storage
       const storageData = await Storage.get();
+      const messageText = `${domain} may not follow privacy best practices`;
       const recentAlert = storageData.alerts.find(
         a => a.domain === domain &&
-        a.message.includes('deceptive cookie banner') &&
+        a.message.includes(messageText) &&
         now - a.timestamp < 300000 // 5 minutes
       );
 
@@ -176,13 +223,13 @@ function setupMessageHandlers(): void {
       let severityMultiplier = 1.0;
 
       if (result.deceptivePatterns && result.deceptivePatterns.length > 0) {
-        if (result.deceptivePatterns.includes('Forced Consent')) {
+        if (result.deceptivePatterns.includes('forcedConsent')) {
           severity = 'high';
           severityMultiplier = 2.0;
-        } else if (result.deceptivePatterns.includes('Hidden Reject')) {
+        } else if (result.deceptivePatterns.includes('hiddenRejectButton')) {
           severity = 'high';
           severityMultiplier = 1.5;
-        } else if (result.deceptivePatterns.includes('Dark Pattern')) {
+        } else if (result.deceptivePatterns.includes('acceptButtonProminence')) {
           severity = 'medium';
           severityMultiplier = 1.0;
         }
@@ -200,7 +247,7 @@ function setupMessageHandlers(): void {
         id: `${Date.now()}-${Math.random()}`,
         type: 'non_compliant_site',
         severity,
-        message: `${domain} has deceptive cookie banner`,
+        message: messageText,
         domain,
         timestamp: Date.now(),
         url: result.url,
@@ -208,6 +255,7 @@ function setupMessageHandlers(): void {
       });
 
       messageBus.broadcast('STATE_UPDATE');
+      }
     }
     // Persist consent state to Supabase when we have meaningful consent data
     // Save when: (1) Known CMP detected, OR (2) Cookie banner found, OR (3) Has persisted consent

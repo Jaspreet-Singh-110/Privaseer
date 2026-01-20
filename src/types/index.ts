@@ -76,6 +76,41 @@ export interface DeceptivePatternViolation {
   penalty: number;
 }
 
+export interface ConfidenceFactor {
+  name: string;
+  score: number;
+  weight: number;
+  reasoning: string;
+}
+
+export interface ScanConfidence {
+  overall: number;
+  bannerDetection: ConfidenceFactor;
+  buttonDetection: ConfidenceFactor;
+  cmpRecognition: ConfidenceFactor;
+  contextualAnalysis: ConfidenceFactor;
+  factors: ConfidenceFactor[];
+  reasoning: string[];
+  shouldAlert: boolean;
+}
+
+export interface AllowlistEntry {
+  domain: string;
+  addedAt: number;
+  source: 'user' | 'verified' | 'community';
+  expiresAt?: number;
+}
+
+export interface FalsePositiveReport {
+  domain: string;
+  url: string;
+  detectedPatterns: string[];
+  userReason?: string;
+  timestamp: number;
+  installationId: string;
+  scanConfidence: number;
+}
+
 export interface PrivacyRules {
   version: string;
   cookieBannerSelectors: string[];
@@ -102,6 +137,12 @@ export interface ConsentScanResult {
   timestamp: number;
   cmpDetection?: CMPDetectionResult;
   hasPersistedConsent?: boolean;
+}
+
+export interface ConsentScanResultV2 extends ConsentScanResult {
+  confidence: ScanConfidence;
+  pageLanguage?: string;
+  scanPhase: 'quick' | 'interaction' | 'delayed';
 }
 
 export interface CMPDetectionResult {
@@ -189,6 +230,7 @@ export interface StorageData {
   lastReset: number;
   penalizedDomains?: Record<string, number>;
   consentStates: Record<string, LocalConsentState>;
+  allowlist?: Record<string, AllowlistEntry>;
   domainOccurrences: Record<string, number>;
   dailySnapshots?: DailyMetricsSnapshot[];
   burnerEmailStats?: {
@@ -246,7 +288,11 @@ export type MessageType =
   | 'GET_ONBOARDING_STATE'
   | 'SET_ONBOARDING_STEP'
   | 'COMPLETE_ONBOARDING'
-  | 'SKIP_ONBOARDING';
+  | 'SKIP_ONBOARDING'
+  | 'REPORT_FALSE_POSITIVE'
+  | 'GET_ALLOWLIST'
+  | 'ADD_TO_ALLOWLIST'
+  | 'REMOVE_FROM_ALLOWLIST';
 
 export interface AllSettingsResponse {
   theme: 'light' | 'dark' | 'system';
@@ -337,6 +383,10 @@ export interface MessageDataMap {
   SET_ONBOARDING_STEP: { step: number };
   COMPLETE_ONBOARDING: { emailConfigured?: boolean };
   SKIP_ONBOARDING: { atStep: number };
+  REPORT_FALSE_POSITIVE: FalsePositiveReport;
+  GET_ALLOWLIST: undefined;
+  ADD_TO_ALLOWLIST: { domain: string; source?: 'user' };
+  REMOVE_FROM_ALLOWLIST: { domain: string };
 }
 
 export interface Message<T extends MessageType = MessageType> {

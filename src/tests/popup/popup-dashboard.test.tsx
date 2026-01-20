@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Popup } from '../../popup/popup';
-import type { StorageData, Alert } from '../../types';
+import type { StorageData, Alert, CreditScoreResult } from '../../types';
 
 // Mock BurnerEmailsSection to prevent heavy component render and memory issues
 vi.mock('../../popup/burner-emails-section', () => ({
@@ -18,6 +18,20 @@ describe('Popup Dashboard Component', () => {
   let mockStorageSet: ReturnType<typeof vi.fn>;
   let mockTabsQuery: ReturnType<typeof vi.fn>;
 
+  const createMockCreditScore = (overrides?: Partial<CreditScoreResult>): CreditScoreResult => ({
+    score: 650,
+    label: 'Good',
+    trend: 'stable',
+    factors: {
+      protectionConsistency: { value: 0.85, impact: 60 },
+      cleanBrowsing: { value: 0.7, impact: 40 },
+      highRiskExposure: { value: 0.15, impact: -30 },
+      violations: { value: 0.1, impact: -20 },
+    },
+    lastCalculated: Date.now(),
+    ...overrides,
+  });
+
   const createMockStorageData = (overrides?: Partial<StorageData>): StorageData => ({
     privacyScore: {
       current: 75,
@@ -28,6 +42,7 @@ describe('Popup Dashboard Component', () => {
       },
       history: [],
     },
+    creditScore: createMockCreditScore(),
     alerts: [],
     trackers: {},
     settings: {
@@ -214,29 +229,31 @@ describe('Popup Dashboard Component', () => {
 
       await waitFor(() => {
         expect(dashboardButton).toHaveClass('bg-white');
-        // Privacy score should be visible
-        expect(screen.getByText('/100')).toBeInTheDocument();
+        // Credit score should be visible
+        expect(screen.getByText('Score: 650 / 850')).toBeInTheDocument();
       }, { timeout: 500 });
     });
   });
 
   describe('Privacy Score Display', () => {
     it('should render privacy score with correct value', async () => {
-      setupMockWithData({ privacyScore: { current: 85, daily: { trackersBlocked: 10, cleanSitesVisited: 5, nonCompliantSites: 1 }, history: [] } });
+      setupMockWithData({
+        creditScore: createMockCreditScore({ score: 780, label: 'Excellent' }),
+      });
 
       render(<Popup />);
 
       await waitFor(() => {
-        expect(screen.getByText('/100')).toBeInTheDocument();
+        expect(screen.getByText('Score: 780 / 850')).toBeInTheDocument();
       }, { timeout: 500 });
     });
 
-    it('should display "Excellent Privacy" label for score >= 80', async () => {
+    it('should display "Excellent" label for score >= 750', async () => {
       mockSendMessage.mockImplementation((message) => {
         if (message.type === 'GET_STATE') {
           return Promise.resolve({
             success: true,
-            data: createMockStorageData({ privacyScore: { current: 85, daily: { trackersBlocked: 10, cleanSitesVisited: 5, nonCompliantSites: 1 }, history: [] } }),
+            data: createMockStorageData({ creditScore: createMockCreditScore({ score: 780, label: 'Excellent' }) }),
           });
         }
         if (message.type === 'GET_THEME') {
@@ -254,16 +271,16 @@ describe('Popup Dashboard Component', () => {
       render(<Popup />);
 
       await waitFor(() => {
-        expect(screen.getByText('Excellent Privacy')).toBeInTheDocument();
+        expect(screen.getByText('Excellent')).toBeInTheDocument();
       }, { timeout: 500 });
     });
 
-    it('should display "Good Privacy" label for score >= 60 and < 80', async () => {
+    it('should display "Good" label for score >= 650 and < 750', async () => {
       mockSendMessage.mockImplementation((message) => {
         if (message.type === 'GET_STATE') {
           return Promise.resolve({
             success: true,
-            data: createMockStorageData({ privacyScore: { current: 70, daily: { trackersBlocked: 8, cleanSitesVisited: 4, nonCompliantSites: 2 }, history: [] } }),
+            data: createMockStorageData({ creditScore: createMockCreditScore({ score: 700, label: 'Good' }) }),
           });
         }
         if (message.type === 'GET_THEME') {
@@ -281,16 +298,16 @@ describe('Popup Dashboard Component', () => {
       render(<Popup />);
 
       await waitFor(() => {
-        expect(screen.getByText('Good Privacy')).toBeInTheDocument();
+        expect(screen.getByText('Good')).toBeInTheDocument();
       }, { timeout: 500 });
     });
 
-    it('should display "Fair Privacy" label for score >= 40 and < 60', async () => {
+    it('should display "Fair" label for score >= 550 and < 650', async () => {
       mockSendMessage.mockImplementation((message) => {
         if (message.type === 'GET_STATE') {
           return Promise.resolve({
             success: true,
-            data: createMockStorageData({ privacyScore: { current: 50, daily: { trackersBlocked: 5, cleanSitesVisited: 2, nonCompliantSites: 3 }, history: [] } }),
+            data: createMockStorageData({ creditScore: createMockCreditScore({ score: 600, label: 'Fair' }) }),
           });
         }
         if (message.type === 'GET_THEME') {
@@ -308,16 +325,16 @@ describe('Popup Dashboard Component', () => {
       render(<Popup />);
 
       await waitFor(() => {
-        expect(screen.getByText('Fair Privacy')).toBeInTheDocument();
+        expect(screen.getByText('Fair')).toBeInTheDocument();
       }, { timeout: 500 });
     });
 
-    it('should animate privacy score from 0 to target value', async () => {
+    it('should animate credit score to target value', async () => {
       mockSendMessage.mockImplementation((message) => {
         if (message.type === 'GET_STATE') {
           return Promise.resolve({
             success: true,
-            data: createMockStorageData({ privacyScore: { current: 75, daily: { trackersBlocked: 12, cleanSitesVisited: 5, nonCompliantSites: 2 }, history: [] } }),
+            data: createMockStorageData({ creditScore: createMockCreditScore({ score: 700, label: 'Good' }) }),
           });
         }
         if (message.type === 'GET_THEME') {
@@ -336,7 +353,7 @@ describe('Popup Dashboard Component', () => {
 
       // Wait for initial render
       await waitFor(() => {
-        expect(screen.getByText('/100')).toBeInTheDocument();
+        expect(screen.getByText('Score: 700 / 850')).toBeInTheDocument();
       }, { timeout: 500 });
 
       // Wait for animation to complete (1500ms + buffer)
@@ -344,7 +361,7 @@ describe('Popup Dashboard Component', () => {
 
       // Check final animated value
       await waitFor(() => {
-        const scoreText = screen.getByText('75');
+        const scoreText = screen.getByText('700');
         expect(scoreText).toBeInTheDocument();
       }, { timeout: 500 });
     });
@@ -513,11 +530,11 @@ describe('Popup Dashboard Component', () => {
       const alerts = [
         createMockAlert({
           id: 'alert-1',
-          message: 'Non-compliant cookie banner',
+          message: 'example.com may not follow privacy best practices',
           domain: 'example.com',
           type: 'non_compliant_site',
           severity: 'medium',
-          deceptivePatterns: ['Forced Consent', 'Dark Pattern'],
+          deceptivePatterns: ['forcedConsent', 'acceptButtonProminence'],
         }),
       ];
 
@@ -543,19 +560,19 @@ describe('Popup Dashboard Component', () => {
       render(<Popup />);
 
       await waitFor(() => {
-        expect(screen.getByText('Non-compliant cookie banner')).toBeInTheDocument();
+        expect(screen.getByText('example.com may not follow privacy best practices')).toBeInTheDocument();
       }, { timeout: 500 });
 
       // Click the alert to expand
-      const alertElement = screen.getByText('Non-compliant cookie banner').closest('div');
+      const alertElement = screen.getByText('example.com may not follow privacy best practices').closest('div');
       if (alertElement) {
         await user.click(alertElement);
       }
 
       await waitFor(() => {
-        expect(screen.getByText('Banner Issues:')).toBeInTheDocument();
-        expect(screen.getByText(/No reject button available/)).toBeInTheDocument();
-        expect(screen.getByText(/Accept button is more prominent/)).toBeInTheDocument();
+        expect(screen.getByText('Banner observations:')).toBeInTheDocument();
+        expect(screen.getByText(/Limited consent options available/)).toBeInTheDocument();
+        expect(screen.getByText(/Accept option appears more prominent/)).toBeInTheDocument();
       }, { timeout: 500 });
     });
   });

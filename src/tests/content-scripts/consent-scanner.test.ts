@@ -27,6 +27,23 @@ vi.mock('@/utils/sanitizer', () => ({
   sanitizeUrl: vi.fn((url: string | null | undefined) => url || 'https://example.com'),
 }));
 
+const { calculateConfidenceMock } = vi.hoisted(() => ({
+  calculateConfidenceMock: vi.fn(() => ({
+    overall: 90,
+    bannerDetection: { name: 'bannerDetection', score: 90, weight: 0.25, reasoning: 'mock' },
+    buttonDetection: { name: 'buttonDetection', score: 90, weight: 0.3, reasoning: 'mock' },
+    cmpRecognition: { name: 'cmpRecognition', score: 90, weight: 0.25, reasoning: 'mock' },
+    contextualAnalysis: { name: 'contextualAnalysis', score: 90, weight: 0.2, reasoning: 'mock' },
+    factors: [],
+    reasoning: [],
+    shouldAlert: true,
+  })),
+}));
+
+vi.mock('@/utils/scan-confidence', () => ({
+  calculateConfidence: calculateConfidenceMock,
+}));
+
 // Import scanner after mocks are set up
 import { scanner } from '@/content-scripts/consent-scanner';
 
@@ -553,7 +570,7 @@ describe('ConsentScanner Integration', () => {
 
       // Initialize and scan after DOM setup
       await scanner.initialize();
-      await scanner.scanPage();
+      await scanner.scanPage('quick');
       
       expect(detectCMPMock).toHaveBeenCalled();
       
@@ -587,7 +604,7 @@ describe('ConsentScanner Integration', () => {
 
       // Initialize and scan after DOM setup
       await scanner.initialize();
-      await scanner.scanPage();
+      await scanner.scanPage('quick');
 
       expect(detectCMPMock).toHaveBeenCalled();
     });
@@ -607,7 +624,7 @@ describe('ConsentScanner Integration', () => {
 
       // Initialize and scan after DOM setup
       await scanner.initialize();
-      await scanner.scanPage();
+      await scanner.scanPage('quick');
 
       expect(detectCMPMock).toHaveBeenCalled();
     });
@@ -619,7 +636,7 @@ describe('ConsentScanner Integration', () => {
 
       // Initialize and scan after DOM setup
       await scanner.initialize();
-      await scanner.scanPage();
+      await scanner.scanPage('quick');
 
       const sendMessageCalls = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
       const consentScanCall = sendMessageCalls.find(
@@ -646,7 +663,7 @@ describe('ConsentScanner Integration', () => {
 
       // Initialize and scan after DOM setup
       await scanner.initialize();
-      await scanner.scanPage();
+      await scanner.scanPage('quick');
 
       const sendMessageCalls = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
       const consentScanCall = sendMessageCalls.find(
@@ -662,7 +679,7 @@ describe('ConsentScanner Integration', () => {
 
       // Initialize and scan after DOM setup
       await scanner.initialize();
-      await scanner.scanPage();
+      await scanner.scanPage('quick');
 
       const sendMessageCalls = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
       const consentScanCall = sendMessageCalls.find(
@@ -680,7 +697,7 @@ describe('ConsentScanner Integration', () => {
 
       // Initialize and scan after DOM setup
       await scanner.initialize();
-      await scanner.scanPage();
+      await scanner.scanPage('quick');
 
       const sendMessageCalls = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
       const consentScanCall = sendMessageCalls.find(
@@ -702,7 +719,7 @@ describe('ConsentScanner Integration', () => {
 
       // Initialize and scan after DOM setup
       await scanner.initialize();
-      await scanner.scanPage();
+      await scanner.scanPage('quick');
 
       const sendMessageCalls = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
       const consentScanCall = sendMessageCalls.find(
@@ -719,7 +736,7 @@ describe('ConsentScanner Integration', () => {
 
       // Initialize and scan after DOM setup
       await scanner.initialize();
-      await scanner.scanPage();
+      await scanner.scanPage('quick');
 
       const sendMessageCalls = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
       const consentScanCall = sendMessageCalls.find(
@@ -739,7 +756,7 @@ describe('ConsentScanner Integration', () => {
 
       // Initialize and scan after DOM setup
       await scanner.initialize();
-      await scanner.scanPage();
+      await scanner.scanPage('quick');
 
       const sendMessageCalls = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
       const consentScanCall = sendMessageCalls.find(
@@ -758,7 +775,7 @@ describe('ConsentScanner Integration', () => {
 
       // Initialize and scan after DOM setup
       await scanner.initialize();
-      await scanner.scanPage();
+      await scanner.scanPage('quick');
 
       const sendMessageCalls = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
       const consentScanCall = sendMessageCalls.find(
@@ -784,7 +801,7 @@ describe('ConsentScanner Integration', () => {
 
       // Initialize and scan after DOM setup
       await scanner.initialize();
-      await scanner.scanPage();
+      await scanner.scanPage('quick');
 
       const sendMessageCalls = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
       const scoreCall = sendMessageCalls.find(
@@ -811,7 +828,7 @@ describe('ConsentScanner Integration', () => {
       await scanner.initialize();
 
       // Should not throw
-      await expect(scanner.scanPage()).resolves.not.toThrow();
+      await expect(scanner.scanPage('quick')).resolves.not.toThrow();
     });
   });
 
@@ -833,7 +850,7 @@ describe('ConsentScanner Integration', () => {
 
       // Initialize and scan after DOM setup
       await scanner.initialize();
-      await scanner.scanPage();
+      await scanner.scanPage('quick');
 
       const sendMessageCalls = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
       const consentScanCall = sendMessageCalls.find(
@@ -851,7 +868,7 @@ describe('ConsentScanner Integration', () => {
 
       // Initialize and scan
       await scanner.initialize();
-      await scanner.scanPage();
+      await scanner.scanPage('quick');
 
       const initialCallCount = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls.length;
 
@@ -862,7 +879,7 @@ describe('ConsentScanner Integration', () => {
       }
 
       // Trigger another scan to simulate mutation handling
-      await scanner.scanPage();
+      await scanner.scanPage('quick');
 
       // Should not have significantly more calls (maybe +1 for mutation, but not full scan)
       const finalCallCount = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls.length;

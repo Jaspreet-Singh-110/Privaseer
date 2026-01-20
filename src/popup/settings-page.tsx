@@ -309,8 +309,8 @@ export function SettingsPage({
 
     const contextText =
       reportContext.type === 'post_consent_violation'
-        ? `[GDPR Violation Report]\nDomain: ${reportContext.domain}\nTrackers loaded after denial: ${reportContext.trackerCount ?? 'unknown'}\nTrackers: ${reportContext.blockedTrackers?.join(', ') || 'N/A'}\nURL: ${reportContext.url || 'N/A'}\n\nAdditional details:`
-        : `[Deceptive Banner Report]\nDomain: ${reportContext.domain}\nPatterns: ${reportContext.deceptivePatterns?.join(', ') || 'N/A'}\nURL: ${reportContext.url || 'N/A'}\n\nAdditional details:`;
+        ? `[Privacy Concern Report]\nDomain: ${reportContext.domain}\nTrackers loaded after denial: ${reportContext.trackerCount ?? 'unknown'}\nTrackers: ${reportContext.blockedTrackers?.join(', ') || 'N/A'}\nURL: ${reportContext.url || 'N/A'}\n\nAdditional details:`
+        : `[Banner Experience Report]\nDomain: ${reportContext.domain}\nSignals: ${reportContext.deceptivePatterns?.join(', ') || 'N/A'}\nURL: ${reportContext.url || 'N/A'}\n\nAdditional details:`;
 
     setFeedbackText(contextText);
   }, [isOpen, reportContext, activeSection]);
