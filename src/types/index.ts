@@ -25,6 +25,33 @@ export interface PrivacyScore {
   }>;
 }
 
+export interface DailyCreditMetrics {
+  date: string;
+  trackersBlocked: number;
+  cleanSitesVisited: number;
+  highRiskScore: number;
+  postConsentViolations: number;
+  protectionActiveMinutes: number;
+}
+
+export type CreditScoreLabel = 'Excellent' | 'Good' | 'Fair' | 'Poor' | 'Very Poor';
+export type ScoreTrend = 'improving' | 'stable' | 'declining';
+
+export interface CreditScoreFactors {
+  protectionConsistency: { value: number; impact: number };
+  cleanBrowsing: { value: number; impact: number };
+  highRiskExposure: { value: number; impact: number };
+  violations: { value: number; impact: number };
+}
+
+export interface CreditScoreResult {
+  score: number;
+  label: CreditScoreLabel;
+  trend: ScoreTrend;
+  factors: CreditScoreFactors;
+  lastCalculated: number;
+}
+
 export interface TrackerData {
   domain: string;
   category: string;
@@ -148,6 +175,8 @@ export interface TelemetryReport {
 
 export interface StorageData {
   privacyScore: PrivacyScore;
+  creditScore?: CreditScoreResult;
+  dailyCreditMetrics?: DailyCreditMetrics[];
   alerts: Alert[];
   trackers: Record<string, TrackerData>;
   settings: {
@@ -184,6 +213,8 @@ export type MessageType =
   | 'GET_STATE'
   | 'GET_ALL_SETTINGS'
   | 'TOGGLE_PROTECTION'
+  | 'GET_CREDIT_SCORE'
+  | 'CREDIT_SCORE_UPDATED'
   | 'CONSENT_SCAN_RESULT'
   | 'GET_TRACKER_INFO'
   | 'TRACKER_BLOCKED'
@@ -272,6 +303,8 @@ export interface MessageDataMap {
   GET_STATE: undefined;
   GET_ALL_SETTINGS: undefined;
   TOGGLE_PROTECTION: undefined;
+  GET_CREDIT_SCORE: undefined;
+  CREDIT_SCORE_UPDATED: { creditScore: CreditScoreResult };
   CONSENT_SCAN_RESULT: ConsentScanResult;
   GET_TRACKER_INFO: GetTrackerInfoData;
   TRACKER_BLOCKED: undefined;

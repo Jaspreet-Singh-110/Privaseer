@@ -26,7 +26,7 @@ export function WelcomeStep({ theme }: StepContentProps): JSX.Element {
         </h1>
         <p className={`text-base max-w-2xl ${bodyClass}`}>
           Privaseer blocks trackers in real time, audits dark patterns, and helps you stay in control
-          with burner emails and instant privacy scores.
+          with burner emails and privacy credit scores.
         </p>
       </header>
 

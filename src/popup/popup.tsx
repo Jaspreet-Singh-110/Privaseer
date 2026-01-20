@@ -1,13 +1,13 @@
 import { useEffect, useState, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Shield, ShieldOff, Activity, AlertTriangle, CheckCircle2, XCircle, Info, Mail, Settings } from 'lucide-react';
-import type { StorageData, Alert as AlertType, Message, OnboardingState } from '../types';
+import { Shield, ShieldOff, Activity, AlertTriangle, CheckCircle2, XCircle, Info, Mail, Settings, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import type { StorageData, Alert as AlertType, Message, OnboardingState, CreditScoreResult } from '../types';
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
 import { BurnerEmailsSection } from './burner-emails-section';
 import { SettingsPage, type SettingsSection, type SettingsPageProps } from './settings-page';
 import { ThemeManager } from '../utils/theme-manager';
-import { ONBOARDING } from '../utils/constants';
+import { ONBOARDING, CREDIT_SCORE } from '../utils/constants';
 import '../index.css';
 
 type ReportableSettingsPageProps = SettingsPageProps & {
@@ -17,44 +17,38 @@ type ReportableSettingsPageProps = SettingsPageProps & {
 
 const ReportableSettingsPage = SettingsPage as (props: ReportableSettingsPageProps) => JSX.Element;
 
-function PrivacyScoreMeter({ score }: { score: number }) {
-  const [animatedScore, setAnimatedScore] = useState(0);
+function CreditScoreMeter({ creditScore }: { creditScore: CreditScoreResult | null }) {
+  const [animatedScore, setAnimatedScore] = useState<number>(CREDIT_SCORE.BASE);
   const animationRef = useRef<number>();
-  const pathRef = useRef<SVGPathElement>(null);
+  const score = creditScore?.score ?? CREDIT_SCORE.BASE;
+  const label = creditScore?.label ?? 'Fair';
+  const trend = creditScore?.trend ?? 'stable';
 
-  const scoreColor = score >= 80 ? '#16a34a' : score >= 60 ? '#d97706' : '#dc2626';
-  const scoreColorLight = score >= 80 ? '#22c55e' : score >= 60 ? '#f59e0b' : '#ef4444';
-  const radius = 80;
-  const strokeWidth = 12;
-  const normalizedRadius = radius - strokeWidth / 2;
-  // Semi-circle arc length - increase to account for rounded caps filling to 100%
-  const circumference = normalizedRadius * Math.PI * 1.10;
+  // Determine colors based on score
+  const getScoreColor = (s: number) => {
+    if (s >= CREDIT_SCORE.LABELS.EXCELLENT) return { text: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-500', ring: 'ring-emerald-200' };
+    if (s >= CREDIT_SCORE.LABELS.GOOD) return { text: 'text-green-600 dark:text-green-400', bg: 'bg-green-500', ring: 'ring-green-200' };
+    if (s >= CREDIT_SCORE.LABELS.FAIR) return { text: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-500', ring: 'ring-amber-200' };
+    if (s >= CREDIT_SCORE.LABELS.POOR) return { text: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-500', ring: 'ring-orange-200' };
+    return { text: 'text-red-600 dark:text-red-400', bg: 'bg-red-500', ring: 'ring-red-200' };
+  };
 
+  const scoreColors = getScoreColor(score);
+
+  // Animate score on change
   useEffect(() => {
-    // Set initial state immediately
-    if (pathRef.current) {
-      pathRef.current.style.strokeDashoffset = `${circumference}`;
-    }
-
     let startTime: number;
-    const duration = 1500; // 1.5 seconds animation
+    const startValue = animatedScore;
+    const duration = 1200;
 
     const animate = (currentTime: number) => {
       if (!startTime) startTime = currentTime;
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / duration, 1);
-
-      // Easing function for smooth animation
       const easeOutCubic = 1 - Math.pow(1 - progress, 3);
-      const currentScore = Math.floor(easeOutCubic * score);
+      const currentScore = Math.round(startValue + (score - startValue) * easeOutCubic);
 
       setAnimatedScore(currentScore);
-
-      // Update path directly
-      if (pathRef.current) {
-        const offset = circumference - (currentScore / 100) * circumference;
-        pathRef.current.style.strokeDashoffset = `${offset}`;
-      }
 
       if (progress < 1) {
         animationRef.current = requestAnimationFrame(animate);
@@ -68,57 +62,128 @@ function PrivacyScoreMeter({ score }: { score: number }) {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [score, circumference]);
+  }, [score]);
+
+  const TrendIcon = trend === 'improving' ? TrendingUp : trend === 'declining' ? TrendingDown : Minus;
+  const trendColor =
+    trend === 'improving' ? 'text-green-600 dark:text-green-400' : trend === 'declining' ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400';
+
+  const contributions = creditScore
+    ? [
+        { name: 'Protection', impact: creditScore.factors.protectionConsistency.impact },
+        { name: 'Clean Sites', impact: creditScore.factors.cleanBrowsing.impact },
+        { name: 'High-Risk', impact: creditScore.factors.highRiskExposure.impact },
+        { name: 'Violations', impact: creditScore.factors.violations.impact },
+      ]
+    : [];
+
+  const positive = contributions.filter(c => c.impact > 0).sort((a, b) => b.impact - a.impact).slice(0, 2);
+  const negative = contributions.filter(c => c.impact < 0).sort((a, b) => a.impact - b.impact).slice(0, 2);
+
+  // Calculate progress percentage for the arc (300-850 range)
+  const progressPercent = ((score - CREDIT_SCORE.MIN) / (CREDIT_SCORE.MAX - CREDIT_SCORE.MIN)) * 100;
 
   return (
-    <div className="relative flex flex-col items-center" style={{ height: '110px' }}>
-      <svg
-        height={radius + strokeWidth + 10}
-        width={(radius + strokeWidth) * 2}
-        style={{ overflow: 'visible' }}
-      >
-        {/* Background arc */}
-        <path
-          d={`M ${strokeWidth / 2} ${radius + strokeWidth / 2} A ${normalizedRadius} ${normalizedRadius} 0 0 1 ${radius * 2 + strokeWidth / 2} ${radius + strokeWidth / 2}`}
-          fill="none"
-          stroke="#e5e7eb"
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-        />
-        {/* Animated score arc */}
-        <path
-          ref={pathRef}
-          d={`M ${strokeWidth / 2} ${radius + strokeWidth / 2} A ${normalizedRadius} ${normalizedRadius} 0 0 1 ${radius * 2 + strokeWidth / 2} ${radius + strokeWidth / 2}`}
-          fill="none"
-          stroke={`url(#gradient-${score})`}
-          strokeWidth={strokeWidth}
-          strokeDasharray={circumference}
-          strokeLinecap="round"
-          style={{
-            strokeDashoffset: circumference,
-            filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))'
-          }}
-        />
-        {/* Gradient definition */}
-        <defs>
-          <linearGradient id={`gradient-${score}`} x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" style={{ stopColor: scoreColor, stopOpacity: 0.8 }} />
-            <stop offset="100%" style={{ stopColor: scoreColorLight, stopOpacity: 1 }} />
-          </linearGradient>
-        </defs>
-      </svg>
-
-      {/* Score display in center */}
-      <div className="absolute" style={{ top: '45px', left: '50%', transform: 'translateX(-50%)' }}>
-        <div className="flex flex-col items-center">
-          <div className="flex items-baseline">
-            <span className="text-4xl font-bold" style={{ color: scoreColor }}>
-              {animatedScore}
-            </span>
-            <span className="text-lg font-medium text-gray-400 ml-1">/100</span>
+    <div className="w-full">
+      {/* Score Display */}
+      <div className="flex items-center gap-6">
+        {/* Circular Progress Indicator */}
+        <div className="relative w-24 h-24 flex-shrink-0">
+          <svg className="w-24 h-24 transform -rotate-90" viewBox="0 0 100 100">
+            {/* Background circle */}
+            <circle
+              cx="50"
+              cy="50"
+              r="42"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="8"
+              className="text-gray-200 dark:text-gray-700"
+            />
+            {/* Progress arc */}
+            <circle
+              cx="50"
+              cy="50"
+              r="42"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="8"
+              strokeLinecap="round"
+              strokeDasharray={`${progressPercent * 2.64} 264`}
+              className={scoreColors.text}
+              style={{ transition: 'stroke-dasharray 1.2s ease-out' }}
+            />
+          </svg>
+          {/* Score number in center */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className={`text-2xl font-bold ${scoreColors.text}`}>{animatedScore}</span>
           </div>
         </div>
+
+        {/* Score Details */}
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-1">
+            <span className={`text-lg font-bold ${scoreColors.text}`}>{label}</span>
+            <div className={`flex items-center gap-1 ${trendColor}`}>
+              <TrendIcon className="w-4 h-4" />
+              <span className="text-xs font-medium capitalize">{trend}</span>
+            </div>
+          </div>
+          <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+            Score: {score} / {CREDIT_SCORE.MAX}
+          </div>
+
+          {/* Factor Pills */}
+          {contributions.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {positive.slice(0, 1).map(item => (
+                <span key={item.name} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
+                  <TrendingUp className="w-3 h-3" />
+                  {item.name} +{item.impact}
+                </span>
+              ))}
+              {negative.slice(0, 1).map(item => (
+                <span key={item.name} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">
+                  <TrendingDown className="w-3 h-3" />
+                  {item.name} {item.impact}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Detailed Factor Breakdown */}
+      {contributions.length > 0 && (positive.length > 0 || negative.length > 0) && (
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          {positive.length > 0 && (
+            <div className="rounded-lg border border-green-100 dark:border-green-900/40 bg-green-50/50 dark:bg-green-900/10 p-2">
+              <p className="text-[10px] font-semibold text-green-700 dark:text-green-300 mb-1 uppercase tracking-wide">Boosting</p>
+              <ul className="space-y-0.5">
+                {positive.map(item => (
+                  <li key={item.name} className="flex justify-between text-xs text-green-800 dark:text-green-200">
+                    <span className="truncate">{item.name}</span>
+                    <span className="font-semibold ml-1">+{item.impact}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {negative.length > 0 && (
+            <div className="rounded-lg border border-red-100 dark:border-red-900/40 bg-red-50/50 dark:bg-red-900/10 p-2">
+              <p className="text-[10px] font-semibold text-red-700 dark:text-red-300 mb-1 uppercase tracking-wide">Reducing</p>
+              <ul className="space-y-0.5">
+                {negative.map(item => (
+                  <li key={item.name} className="flex justify-between text-xs text-red-800 dark:text-red-200">
+                    <span className="truncate">{item.name}</span>
+                    <span className="font-semibold ml-1">{item.impact}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -146,7 +211,7 @@ export function Popup() {
     loadOnboardingState();
 
     const listener = (message: Message) => {
-      if (message.type === 'STATE_UPDATE') {
+      if (message.type === 'STATE_UPDATE' || message.type === 'CREDIT_SCORE_UPDATED') {
         loadData();
         loadOnboardingState();
       } else if (message.type === 'THEME_CHANGED') {
@@ -390,10 +455,18 @@ export function Popup() {
     );
   }
 
-  const score = data.privacyScore.current;
-  const scoreColor = score >= 80 ? 'text-green-600' : score >= 60 ? 'text-amber-600' : 'text-red-600';
-  const scoreBg = score >= 80 ? 'bg-green-50' : score >= 60 ? 'bg-amber-50' : 'bg-red-50';
-  const scoreLabel = score >= 80 ? 'Excellent' : score >= 60 ? 'Good' : score >= 40 ? 'Fair' : 'Poor';
+  const creditScore = data.creditScore ?? null;
+  const currentCreditScore = creditScore?.score ?? CREDIT_SCORE.BASE;
+  
+  // Background color based on credit score
+  const getScoreBg = (score: number) => {
+    if (score >= CREDIT_SCORE.LABELS.EXCELLENT) return 'bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950/30 dark:to-green-950/30';
+    if (score >= CREDIT_SCORE.LABELS.GOOD) return 'bg-gradient-to-br from-green-50 to-lime-50 dark:from-green-950/30 dark:to-lime-950/30';
+    if (score >= CREDIT_SCORE.LABELS.FAIR) return 'bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-950/30 dark:to-yellow-950/30';
+    if (score >= CREDIT_SCORE.LABELS.POOR) return 'bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/30';
+    return 'bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-950/30 dark:to-orange-950/30';
+  };
+  const scoreBg = getScoreBg(currentCreditScore);
 
   return (
     <div className="w-full h-[600px] flex flex-col bg-white dark:bg-gray-900">
@@ -491,22 +564,23 @@ export function Popup() {
       )}
       {activeTab === 'dashboard' && (
         <>
-      <div className={`px-6 py-5 ${scoreBg} border-b border-gray-200`}>
+      <div className={`px-6 py-5 ${scoreBg} border-b border-gray-200 dark:border-gray-700`}>
+        <CreditScoreMeter creditScore={creditScore} />
 
-        <div className="flex items-center justify-center mb-3">
-          <PrivacyScoreMeter score={score} />
-        </div>
-
-        <div className="text-center mb-3">
-          <span className={`text-sm font-semibold ${scoreColor}`}>{scoreLabel} Privacy</span>
-        </div>
-
-        <div className="flex items-center justify-center gap-4 text-sm text-gray-600">
-          <div className="flex items-center gap-1">
-            <XCircle className="w-4 h-4" />
-            <span className="font-semibold">{data.privacyScore.daily.trackersBlocked}</span>
-            <span>blocked today</span>
+        {/* Stats Row */}
+        <div className="mt-4 flex items-center justify-center gap-6 text-sm">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm">
+            <Shield className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <span className="font-semibold text-gray-900 dark:text-white">{data.privacyScore.daily.trackersBlocked}</span>
+            <span className="text-gray-600 dark:text-gray-400">blocked today</span>
           </div>
+          {data.privacyScore.daily.cleanSitesVisited > 0 && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm">
+              <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400" />
+              <span className="font-semibold text-gray-900 dark:text-white">{data.privacyScore.daily.cleanSitesVisited}</span>
+              <span className="text-gray-600 dark:text-gray-400">clean sites</span>
+            </div>
+          )}
         </div>
       </div>
 

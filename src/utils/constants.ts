@@ -11,6 +11,29 @@ export const PRIVACY_SCORE = {
   NON_COMPLIANT_PENALTY: -5,
 } as const;
 
+export const CREDIT_SCORE = {
+  MIN: 300,
+  MAX: 850,
+  BASE: 550,
+
+  PROTECTION_CAP: 150,
+  CLEAN_BROWSING_CAP: 100,
+  HIGH_RISK_CAP: -200,
+  VIOLATION_CAP: -100,
+
+  DAILY_HIGH_RISK_CAP: 30,
+
+  CLEAN_SITE_TRACKER_MAX: 3,
+  METRICS_RETENTION_DAYS: 30,
+
+  LABELS: {
+    EXCELLENT: 750,
+    GOOD: 650,
+    FAIR: 550,
+    POOR: 400,
+  },
+} as const;
+
 export const TIME = {
   ONE_WEEK_MS: 7 * 24 * 60 * 60 * 1000,
   ONE_DAY_MS: 24 * 60 * 60 * 1000,

@@ -44,6 +44,30 @@ export function CompletionStep({ theme }: StepContentProps): JSX.Element {
             </p>
           </div>
         </article>
+        <article className={`md:col-span-2 rounded-2xl border px-6 py-5 ${cardBorder}`}>
+          <p className="text-lg font-semibold mb-3">Privacy Credit at a Glance</p>
+          <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+            Your 300-850 score is built from four factors:
+          </p>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-emerald-500">+</span>
+              <span>Protection Consistency</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-emerald-500">+</span>
+              <span>Clean Browsing</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-red-500">−</span>
+              <span>High-Risk Exposure</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-red-500">−</span>
+              <span>Consent Violations</span>
+            </div>
+          </div>
+        </article>
       </div>
 
       <div className={`mt-6 flex items-center gap-3 rounded-2xl border px-5 py-4 text-sm ${helperBg}`}>

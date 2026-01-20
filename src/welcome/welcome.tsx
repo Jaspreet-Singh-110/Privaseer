@@ -8,7 +8,7 @@ import { StepIndicator } from './components/StepIndicator';
 import { NavigationButtons } from './components/NavigationButtons';
 import { WelcomeStep } from './steps/WelcomeStep';
 import { ProtectionStep } from './steps/ProtectionStep';
-import { PrivacyScoreStep } from './steps/PrivacyScoreStep';
+import { PrivacyCreditStep } from './steps/PrivacyCreditStep';
 import { ConsentScannerStep } from './steps/ConsentScannerStep';
 import { BurnerEmailStep } from './steps/BurnerEmailStep';
 import { CompletionStep } from './steps/CompletionStep';
@@ -18,7 +18,7 @@ export type Theme = 'light' | 'dark';
 type StepId =
   | 'welcome'
   | 'protection'
-  | 'privacy-score'
+  | 'privacy-credit'
   | 'consent'
   | 'burner-email'
   | 'completion';
@@ -34,7 +34,7 @@ interface StepDefinition {
 const steps: StepDefinition[] = [
   { id: 'welcome', label: 'Welcome', Component: WelcomeStep, primaryLabel: 'Get started' },
   { id: 'protection', label: 'Protection', Component: ProtectionStep },
-  { id: 'privacy-score', label: 'Privacy Score', Component: PrivacyScoreStep },
+  { id: 'privacy-credit', label: 'Privacy Credit', Component: PrivacyCreditStep },
   { id: 'consent', label: 'Consent Scanner', Component: ConsentScannerStep },
   { id: 'burner-email', label: 'Burner Email', Component: BurnerEmailStep },
   {

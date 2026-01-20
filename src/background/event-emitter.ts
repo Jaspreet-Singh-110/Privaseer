@@ -40,6 +40,10 @@ interface EventMap {
     trackerCount: number;
     trackers: Set<string>;
   };
+  CREDIT_METRICS_UPDATED: {
+    type: 'tracker' | 'clean_site' | 'violation' | 'high_risk';
+    value: number;
+  };
 }
 
 type EventType = keyof EventMap;
