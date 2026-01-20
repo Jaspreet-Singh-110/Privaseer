@@ -111,3 +111,66 @@ describe('FirewallEngine post consent violation detection', () => {
     expect(alertPayload.blockedTrackers).toEqual(expect.arrayContaining(['tracker-one.com', 'tracker-two.com']));
   });
 });
+
+describe('FirewallEngine performance benchmarks', () => {
+  beforeEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
+    addAlertMock.mockClear();
+    broadcastMock.mockClear();
+    emitMock.mockClear();
+
+    global.chrome = {
+      tabs: {
+        get: vi.fn().mockResolvedValue({ url: 'https://example.com/page' }),
+      },
+      action: {
+        setBadgeText: vi.fn(),
+        setBadgeBackgroundColor: vi.fn(),
+      },
+    } as unknown as typeof chrome;
+  });
+
+  afterEach(() => {
+    FirewallEngine.setConsentRejectionProvider(null);
+    FirewallEngine.cleanup();
+  });
+
+  it('completes a single tracker handling in under 10ms', async () => {
+    const start = performance.now();
+    await FirewallEngine.handleBlockedRequest('https://tracker.example/script.js', 111);
+    const duration = performance.now() - start;
+
+    expect(duration).toBeLessThan(10);
+  });
+
+  it('processes 50 tracker URLs sequentially in under 500ms', async () => {
+    const trackerUrls = Array.from(
+      { length: 50 },
+      (_, index) => `https://tracker-${index}.example.com/script.js`,
+    );
+
+    const start = performance.now();
+    for (const url of trackerUrls) {
+      await FirewallEngine.handleBlockedRequest(url, 222);
+    }
+    const duration = performance.now() - start;
+
+    expect(duration).toBeLessThan(500);
+  });
+
+  it.concurrent('handles 50 tracker URLs concurrently within 500ms', async () => {
+    const trackerUrls = Array.from(
+      { length: 50 },
+      (_, index) => `https://concurrent-tracker-${index}.example.com/script.js`,
+    );
+
+    const start = performance.now();
+    await Promise.all(
+      trackerUrls.map(url => FirewallEngine.handleBlockedRequest(url, 333)),
+    );
+    const duration = performance.now() - start;
+
+    expect(duration).toBeLessThan(500);
+  });
+});

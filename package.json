@@ -12,7 +12,11 @@
     "test": "NODE_OPTIONS='--max-old-space-size=4096' vitest",
     "test:ui": "NODE_OPTIONS='--max-old-space-size=4096' vitest --ui",
     "test:run": "NODE_OPTIONS='--max-old-space-size=4096' vitest run",
-    "test:coverage": "NODE_OPTIONS='--max-old-space-size=4096' vitest run --coverage"
+    "test:coverage": "NODE_OPTIONS='--max-old-space-size=4096' vitest run --coverage",
+    "test:mutation": "STRYKER_MUTATION=1 SOURCEMAP=false VITE_SOURCEMAP=false stryker run",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug"
   },
   "dependencies": {
     "lucide-react": "^0.344.0",
@@ -21,11 +25,16 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",
+    "@playwright/test": "^1.57.0",
+    "@stryker-mutator/core": "^9.4.0",
+    "@stryker-mutator/typescript-checker": "^9.4.0",
+    "@stryker-mutator/vitest-runner": "^9.4.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
     "@types/chrome": "^0.0.300",
     "@types/jsdom": "^21.1.7",
+    "@types/node": "^25.0.3",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@typescript-eslint/eslint-plugin": "^8.47.0",
@@ -40,6 +49,7 @@
     "globals": "^15.9.0",
     "happy-dom": "^20.0.10",
     "jsdom": "^27.2.0",
+    "playwright": "^1.57.0",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.5.3",

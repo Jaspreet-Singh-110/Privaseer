@@ -4,11 +4,12 @@ import type {
   LocalConsentState,
   DailyMetricsSnapshot,
   OnboardingState,
+  DailyCreditMetrics,
 } from '../types';
 import { logger } from '../utils/logger';
 import { backgroundEvents } from './event-emitter';
 import { toError } from '../utils/type-guards';
-import { TIME, DAILY_RECOVERY, STORAGE_RETRY, ONBOARDING } from '../utils/constants';
+import { TIME, DAILY_RECOVERY, STORAGE_RETRY, ONBOARDING, CREDIT_SCORE } from '../utils/constants';
 
 const DEFAULT_ONBOARDING_STATE: OnboardingState = {
   hasCompletedOnboarding: false,
@@ -25,6 +26,19 @@ const DEFAULT_STORAGE_DATA: StorageData = {
     },
     history: [],
   },
+  creditScore: {
+    score: CREDIT_SCORE.BASE,
+    label: 'Fair',
+    trend: 'stable',
+    factors: {
+      protectionConsistency: { value: 0, impact: 0 },
+      cleanBrowsing: { value: 0, impact: 0 },
+      highRiskExposure: { value: 0, impact: 0 },
+      violations: { value: 0, impact: 0 },
+    },
+    lastCalculated: Date.now(),
+  },
+  dailyCreditMetrics: [],
   alerts: [],
   trackers: {},
   settings: {
@@ -63,12 +77,14 @@ export class Storage {
         // Use deep copy to avoid mutating the DEFAULT_STORAGE_DATA constant
         const defaultData = JSON.parse(JSON.stringify(DEFAULT_STORAGE_DATA));
         this.ensureOnboardingState(defaultData);
+        this.ensureCreditDefaults(defaultData);
         await this.save(defaultData);
         this.cache = defaultData;
       } else {
         this.cache = data.privacyData;
         if (this.cache) {
           this.ensureOnboardingState(this.cache);
+          this.ensureCreditDefaults(this.cache);
         }
         await this.checkDailyReset();
       }
@@ -245,6 +261,72 @@ export class Storage {
     this.scheduleSave();
   }
 
+  private static getTodayCreditMetrics(data: StorageData): DailyCreditMetrics {
+    const today = new Date().toISOString().split('T')[0];
+    if (!data.dailyCreditMetrics) {
+      data.dailyCreditMetrics = [];
+    }
+
+    let todayEntry = data.dailyCreditMetrics.find(entry => entry.date === today);
+
+    if (!todayEntry) {
+      todayEntry = {
+        date: today,
+        trackersBlocked: 0,
+        cleanSitesVisited: 0,
+        highRiskScore: 0,
+        postConsentViolations: 0,
+        protectionActiveMinutes: data.settings.protectionEnabled ? 24 * 60 : 0,
+      };
+      data.dailyCreditMetrics.unshift(todayEntry);
+      data.dailyCreditMetrics = data.dailyCreditMetrics.slice(0, CREDIT_SCORE.METRICS_RETENTION_DAYS);
+    }
+
+    return todayEntry;
+  }
+
+  static async recordTrackerForCredit(riskWeight: number, isHighRisk: boolean): Promise<void> {
+    const data = await this.get();
+    const today = this.getTodayCreditMetrics(data);
+    today.trackersBlocked += 1;
+    const riskContribution = riskWeight * (isHighRisk ? 2 : 1);
+    today.highRiskScore += riskContribution;
+    this.scheduleSave();
+  }
+
+  static async recordCleanSiteForCredit(): Promise<void> {
+    const data = await this.get();
+    const today = this.getTodayCreditMetrics(data);
+    today.cleanSitesVisited += 1;
+    this.scheduleSave();
+  }
+
+  static async recordViolationForCredit(): Promise<void> {
+    const data = await this.get();
+    const today = this.getTodayCreditMetrics(data);
+    today.postConsentViolations += 1;
+    this.scheduleSave();
+  }
+
+  static async recordProtectionActive(minutes: number): Promise<void> {
+    const data = await this.get();
+    const today = this.getTodayCreditMetrics(data);
+    today.protectionActiveMinutes += minutes;
+    this.scheduleSave();
+  }
+
+  static async getDailyCreditMetrics(days: number = CREDIT_SCORE.METRICS_RETENTION_DAYS): Promise<DailyCreditMetrics[]> {
+    const data = await this.get();
+    return (data.dailyCreditMetrics ?? []).slice(0, days);
+  }
+
+  static async rotateDailyMetrics(): Promise<void> {
+    const data = await this.get();
+    this.getTodayCreditMetrics(data);
+    data.dailyCreditMetrics = (data.dailyCreditMetrics ?? []).slice(0, CREDIT_SCORE.METRICS_RETENTION_DAYS);
+    await this.save(data);
+  }
+
   static async toggleProtection(): Promise<boolean> {
     const data = await this.get();
     data.settings.protectionEnabled = !data.settings.protectionEnabled;
@@ -306,7 +388,33 @@ export class Storage {
       data.complianceScores = [];
       data.lastReset = now;
 
+      // Ensure a fresh credit metrics entry exists for the new day
+      this.ensureCreditDefaults(data);
+      this.getTodayCreditMetrics(data);
+
       await this.save(data);
+    }
+  }
+
+  private static ensureCreditDefaults(data: StorageData): void {
+    if (!data.creditScore) {
+      const now = Date.now();
+      data.creditScore = {
+        score: CREDIT_SCORE.BASE,
+        label: 'Fair',
+        trend: 'stable',
+        factors: {
+          protectionConsistency: { value: 0, impact: 0 },
+          cleanBrowsing: { value: 0, impact: 0 },
+          highRiskExposure: { value: 0, impact: 0 },
+          violations: { value: 0, impact: 0 },
+        },
+        lastCalculated: now,
+      };
+    }
+
+    if (!data.dailyCreditMetrics) {
+      data.dailyCreditMetrics = [];
     }
   }
 

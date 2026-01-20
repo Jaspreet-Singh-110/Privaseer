@@ -87,6 +87,11 @@ function setupMessageHandlers(): void {
     return { success: true, data };
   });
 
+  messageBus.on('GET_CREDIT_SCORE', async () => {
+    const creditScore = await PrivacyScoreManager.getCurrentCreditScore();
+    return { success: true, creditScore };
+  });
+
   messageBus.on('TOGGLE_PROTECTION', async () => {
     const enabled = await FirewallEngine.toggleProtection();
     feedbackTelemetryService.trackEvent({

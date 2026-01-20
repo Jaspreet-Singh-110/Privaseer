@@ -32,3 +32,29 @@ supabase/.temp/
 
 # Test coverage reports
 coverage/
+
+# Playwright artifacts
+playwright-report/
+test-results/
+blob-report/
+.playwright-cache/
+ms-playwright/
+tests/
+
+# Stryker artifacts
+.stryker-tmp/
+reports/
+stryker.log
+
+# Build / cache noise
+.vite/
+.cache/
+.turbo/
+*.tsbuildinfo
+.eslintcache
+
+# Local env files
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
