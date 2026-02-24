@@ -208,6 +208,15 @@ describe('Consent Validator', () => {
       expect(result.shouldPenalize).toBe(true);
       expect(result.reason).toBe('Unknown consent status');
     });
+
+    it('should default to penalize when consent lookup throws', async () => {
+      vi.spyOn(Storage, 'getConsentState').mockRejectedValueOnce(new Error('storage failure'));
+
+      const result = await shouldPenalizeTracker('example.com', 'analytics', false);
+
+      expect(result.shouldPenalize).toBe(true);
+      expect(result.reason).toBe('Error during consent validation');
+    });
   });
 
   describe('extractDomain', () => {
@@ -234,6 +243,12 @@ describe('Consent Validator', () => {
     it('should return input if not a valid URL', () => {
       const domain = extractDomain('invalid');
       expect(domain).toBe('invalid');
+    });
+
+    it('should return original input when URL parsing throws', () => {
+      const malformed = 'https://%';
+      const domain = extractDomain(malformed);
+      expect(domain).toBe(malformed);
     });
   });
 
@@ -280,6 +295,101 @@ describe('Consent Validator', () => {
     it('should be case insensitive', () => {
       expect(isHighRiskCategory('FINGERPRINTING')).toBe(true);
       expect(isHighRiskCategory('Social')).toBe(true);
+    });
+  });
+
+  describe('shouldBlockTracker', () => {
+    it('should block when no consent state exists', async () => {
+      const { shouldBlockTracker } = await import('@/utils/consent-validator');
+      vi.spyOn(Storage, 'getConsentState').mockResolvedValue(null);
+
+      const result = await shouldBlockTracker('tracker.com', 'example.com', 'analytics', false);
+
+      expect(result).toBe(true);
+    });
+
+    it('should block when consent was rejected', async () => {
+      const { shouldBlockTracker } = await import('@/utils/consent-validator');
+      vi.spyOn(Storage, 'getConsentState').mockResolvedValue({
+        domain: 'example.com',
+        consentStatus: 'rejected',
+        cmpId: 'OneTrust',
+        timestamp: Date.now(),
+        choice: 'explicit',
+      });
+
+      const result = await shouldBlockTracker('tracker.com', 'example.com', 'analytics', false);
+
+      expect(result).toBe(true);
+    });
+
+    it('should not block consented categories with explicit consent', async () => {
+      const { shouldBlockTracker } = await import('@/utils/consent-validator');
+      vi.spyOn(Storage, 'getConsentState').mockResolvedValue({
+        domain: 'example.com',
+        consentStatus: 'accepted',
+        cmpId: 'OneTrust',
+        timestamp: Date.now(),
+        choice: 'explicit',
+      });
+
+      const result = await shouldBlockTracker('tracker.com', 'example.com', 'analytics', false);
+
+      expect(result).toBe(false);
+    });
+
+    it('should block high-risk trackers despite consent', async () => {
+      const { shouldBlockTracker } = await import('@/utils/consent-validator');
+      vi.spyOn(Storage, 'getConsentState').mockResolvedValue({
+        domain: 'example.com',
+        consentStatus: 'accepted',
+        cmpId: 'OneTrust',
+        timestamp: Date.now(),
+        choice: 'explicit',
+      });
+
+      const result = await shouldBlockTracker('tracker.com', 'example.com', 'fingerprinting', true);
+
+      expect(result).toBe(true);
+    });
+
+    it('should handle errors and default to blocking', async () => {
+      const { shouldBlockTracker } = await import('@/utils/consent-validator');
+      vi.spyOn(Storage, 'getConsentState').mockRejectedValue(new Error('Storage error'));
+
+      const result = await shouldBlockTracker('tracker.com', 'example.com', 'analytics', false);
+
+      expect(result).toBe(true);
+    });
+
+    it('should allow low-risk trackers with implied consent', async () => {
+      const { shouldBlockTracker } = await import('@/utils/consent-validator');
+      vi.spyOn(Storage, 'getConsentState').mockResolvedValue({
+        domain: 'example.com',
+        consentStatus: 'accepted',
+        cmpId: 'Custom',
+        timestamp: Date.now(),
+        choice: 'implied',
+      });
+
+      const result = await shouldBlockTracker('tracker.com', 'example.com', 'analytics', false);
+
+      expect(result).toBe(false);
+    });
+
+    it('should block high-risk categories with implied consent', async () => {
+      const { shouldBlockTracker } = await import('@/utils/consent-validator');
+      vi.spyOn(Storage, 'getConsentState').mockResolvedValue({
+        domain: 'example.com',
+        consentStatus: 'accepted',
+        cmpId: 'Custom',
+        timestamp: Date.now(),
+        choice: 'implied',
+      });
+
+      const result = await shouldBlockTracker('tracker.com', 'example.com', 'social', false);
+
+      expect(result).toBe(true);
     });
   });
 });

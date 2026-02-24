@@ -38,6 +38,7 @@ class ConsentScanner {
         subtree: true,
       });
       
+      // Stryker disable next-line all: logging only
       logger.debug('ConsentScanner', 'Initialized successfully', { url: sanitizeUrl(window.location.href) });
     } catch (error) {
       logger.error('ConsentScanner', 'Failed to initialize consent scanner', toError(error));
@@ -101,6 +102,7 @@ class ConsentScanner {
             data: result,
           });
         } catch {
+          // Stryker disable next-line all: logging only
           logger.debug('ConsentScanner', 'Service worker not ready, skipping message');
         }
 
@@ -111,6 +113,7 @@ class ConsentScanner {
 
       if (!banner) {
         if (cmpDetection.detected && cmpDetection.cookieNames.length > 0) {
+          // Stryker disable next-line all: logging only
           logger.debug('ConsentScanner', 'CMP cookies found but no banner visible (likely already dismissed)', {
             domain: window.location.hostname,
             cmpType: cmpDetection.cmpType,
@@ -150,6 +153,7 @@ class ConsentScanner {
       this.bannerScanHistory.set(bannerIdentifier, { confidence: confidence.overall, phase });
 
       if (!confidence.shouldAlert) {
+        // Stryker disable next-line all: logging only
         logger.debug('ConsentScanner', 'Low confidence scan, skipping alert', {
           domain: window.location.hostname,
           confidence: confidence.overall,
@@ -205,6 +209,7 @@ class ConsentScanner {
           });
         }
       } catch {
+        // Stryker disable next-line all: logging only
         logger.debug('ConsentScanner', 'Service worker not ready, skipping message');
       }
     } catch (error) {

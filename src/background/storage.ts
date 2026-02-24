@@ -10,7 +10,7 @@ import type {
 import { logger } from '../utils/logger';
 import { backgroundEvents } from './event-emitter';
 import { toError } from '../utils/type-guards';
-import { TIME, DAILY_RECOVERY, STORAGE_RETRY, ONBOARDING, CREDIT_SCORE } from '../utils/constants';
+import { TIME, DAILY_RECOVERY, STORAGE_RETRY, ONBOARDING, CREDIT_SCORE, SCORING_CONFIG } from '../utils/constants';
 
 const DEFAULT_ONBOARDING_STATE: OnboardingState = {
   hasCompletedOnboarding: false,
@@ -31,6 +31,7 @@ const DEFAULT_STORAGE_DATA: StorageData = {
     score: CREDIT_SCORE.BASE,
     label: 'Fair',
     trend: 'stable',
+    formulaVersion: SCORING_CONFIG.DEFAULT_VERSION,
     factors: {
       protectionConsistency: { value: 0, impact: 0 },
       cleanBrowsing: { value: 0, impact: 0 },
@@ -405,6 +406,7 @@ export class Storage {
         score: CREDIT_SCORE.BASE,
         label: 'Fair',
         trend: 'stable',
+        formulaVersion: SCORING_CONFIG.DEFAULT_VERSION,
         factors: {
           protectionConsistency: { value: 0, impact: 0 },
           cleanBrowsing: { value: 0, impact: 0 },
@@ -413,6 +415,8 @@ export class Storage {
         },
         lastCalculated: now,
       };
+    } else if (!data.creditScore.formulaVersion) {
+      data.creditScore.formulaVersion = SCORING_CONFIG.DEFAULT_VERSION;
     }
 
     if (!data.dailyCreditMetrics) {

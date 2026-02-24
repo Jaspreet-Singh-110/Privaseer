@@ -7,6 +7,8 @@ import { backgroundEvents } from './event-emitter';
 import { toError } from '../utils/type-guards';
 import { sanitizeUrl } from '../utils/sanitizer';
 import { BADGE, CONSENT_VIOLATION } from '../utils/constants';
+import { calculateDecayedPenalty } from '../utils/penalty-decay';
+import { getScoringConfig } from './scoring-config';
 
 const RULESET_ID = 'tracker_blocklist';
 const BADGE_UPDATE_DEBOUNCE_MS = 300;
@@ -22,17 +24,6 @@ export class FirewallEngine {
     { count: number; trackers: string[]; timestamp: number; timeoutId?: number; url?: string }
   >();
   private static consentRejectionProvider?: (domain: string) => { timestamp: number; tabId?: number } | null;
-
-  private static readonly RISK_WEIGHTS = {
-    'analytics': 1,        // Basic analytics (Google Analytics, Matomo)
-    'advertising': 2,      // Behavioral ads (DoubleClick, AdSense)
-    'social': 2,           // Social tracking (Facebook Pixel, Twitter Analytics)
-    'fingerprinting': 5,   // Device fingerprinting (FingerprintJS, CreepJS)
-    'beacons': 2,          // Tracking beacons (conversion tracking)
-    'cryptomining': 10,    // Malicious crypto mining
-    'malware': 20,         // Known malicious domains
-    'unknown': 1           // Default for unclassified trackers
-  };
 
   static async initialize(): Promise<void> {
     if (this.isInitialized) return;
@@ -74,20 +65,24 @@ export class FirewallEngine {
   }
 
   private static getRiskWeight(domain: string, category: string): number {
+    const scoringConfig = getScoringConfig();
+    const riskWeights = scoringConfig.riskWeights;
+
     // Check for known malicious/high-risk domains first
     const knownMalicious = ['coinhive', 'cryptoloot', 'coin-hive'];
     if (knownMalicious.some(m => domain.includes(m))) {
-      return this.RISK_WEIGHTS['cryptomining'];
+      return riskWeights.cryptomining;
     }
 
     // Check for fingerprinting services
     const fingerprintingServices = ['fingerprintjs', 'creepjs', 'canvas', 'clientjs'];
     if (fingerprintingServices.some(f => domain.includes(f)) || category === 'fingerprinting') {
-      return this.RISK_WEIGHTS['fingerprinting'];
+      return riskWeights.fingerprinting;
     }
 
     // Use category-based weight
-    return this.RISK_WEIGHTS[category as keyof typeof this.RISK_WEIGHTS] || this.RISK_WEIGHTS['unknown'];
+    const categoryWeight = riskWeights[category];
+    return typeof categoryWeight === 'number' ? categoryWeight : riskWeights.unknown;
   }
 
   static setConsentRejectionProvider(
@@ -104,6 +99,15 @@ export class FirewallEngine {
       const category = this.getTrackerCategory(domain);
       const isHighRisk = this.isHighRisk(domain);
       const riskWeight = this.getRiskWeight(domain, category);
+      const occurrenceCount = await Storage.getDomainOccurrence(domain);
+      await Storage.incrementDomainOccurrence(domain);
+      const decayConfig = getScoringConfig().decay;
+      const decayedRiskWeight = decayConfig.enabled
+        ? calculateDecayedPenalty(riskWeight, occurrenceCount, {
+            base: decayConfig.base,
+            maxOccurrences: decayConfig.maxOccurrences,
+          })
+        : riskWeight;
 
       // Emit event for Storage to increment tracker count
       backgroundEvents.emit('TRACKER_INCREMENT', {
@@ -117,7 +121,7 @@ export class FirewallEngine {
         domain,
         category,
         isHighRisk,
-        riskWeight,
+        riskWeight: decayedRiskWeight,
         tabId,
         url,
       });

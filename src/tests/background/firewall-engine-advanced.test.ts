@@ -33,6 +33,8 @@ vi.mock('@/background/storage', () => ({
   Storage: {
     addAlert: addAlertMock,
     get: getMock,
+    getDomainOccurrence: vi.fn().mockResolvedValue(0),
+    incrementDomainOccurrence: vi.fn().mockResolvedValue(1),
     toggleProtection: vi.fn(),
   },
 }));

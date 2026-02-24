@@ -138,6 +138,8 @@ vi.mock('@/background/storage', () => ({
     addAlert: vi.fn().mockImplementation(async (alert: any) => {
       storageData.alerts.push(alert);
     }),
+    getDomainOccurrence: vi.fn().mockResolvedValue(0),
+    incrementDomainOccurrence: vi.fn().mockResolvedValue(1),
     clearAlerts: vi.fn().mockResolvedValue(undefined),
     toggleProtection: vi.fn().mockResolvedValue(true),
     getBurnerEmailEnabled: vi.fn().mockResolvedValue(storageData.settings.burnerEmailEnabled),

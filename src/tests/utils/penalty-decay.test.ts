@@ -47,6 +47,17 @@ describe('Penalty Decay', () => {
         expect(actual).toBeCloseTo(expected, 10);
       }
     });
+
+    it('should clamp negative and non-finite occurrences to first occurrence behavior', () => {
+      expect(calculateDecayFactor(-1)).toBe(1);
+      expect(calculateDecayFactor(Number.NaN)).toBe(1);
+      expect(calculateDecayFactor(Number.POSITIVE_INFINITY)).toBe(1);
+    });
+
+    it('supports custom decay settings from remote config', () => {
+      const factor = calculateDecayFactor(2, { base: 0.25, maxOccurrences: 3 });
+      expect(factor).toBeCloseTo(0.0625, 10);
+    });
   });
 
   describe('calculateDecayedPenalty', () => {
@@ -121,6 +132,10 @@ describe('Penalty Decay', () => {
       expect(penalty4).toBe(penalty10);
       expect(penalty4).toBe(0.625);
     });
+
+    it('should keep full penalty for negative occurrence counts', () => {
+      expect(calculateDecayedPenalty(5.0, -2)).toBe(5.0);
+    });
   });
 
   describe('getDecayPercentage', () => {
@@ -149,6 +164,11 @@ describe('Penalty Decay', () => {
       expect(getDecayPercentage(5)).toBe(6.25);
       expect(getDecayPercentage(10)).toBe(6.25);
       expect(getDecayPercentage(100)).toBe(6.25);
+    });
+
+    it('should return 100% for invalid occurrence input', () => {
+      expect(getDecayPercentage(-10)).toBe(100);
+      expect(getDecayPercentage(Number.NaN)).toBe(100);
     });
   });
 

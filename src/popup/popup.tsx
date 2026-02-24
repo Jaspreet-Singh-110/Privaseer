@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, type KeyboardEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Shield, ShieldOff, Activity, AlertTriangle, CheckCircle2, XCircle, Info, Mail, Settings, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import type { StorageData, Alert as AlertType, Message, OnboardingState, CreditScoreResult } from '../types';
@@ -211,6 +211,7 @@ export function Popup() {
   const [highlightBurnerToggle, setHighlightBurnerToggle] = useState(false);
   const [reportingAlert, setReportingAlert] = useState<AlertType | null>(null);
   const [onboardingState, setOnboardingState] = useState<OnboardingState | null>(null);
+  const tabs: Array<'dashboard' | 'burner'> = ['dashboard', 'burner'];
 
   useEffect(() => {
     checkCurrentTab();
@@ -286,6 +287,7 @@ export function Popup() {
       const errorMessage = err.message;
       if (errorMessage.includes('Could not establish connection') ||
           errorMessage.includes('Receiving end does not exist')) {
+        // Stryker disable next-line all: logging only
         logger.debug('Popup', 'Service worker not ready yet');
       } else {
         logger.error('Popup', 'Failed to load data', err);
@@ -337,6 +339,7 @@ export function Popup() {
 
     const timeout = setTimeout(() => {
       setIsTogglingProtection(false);
+      // Stryker disable next-line all: logging only
       logger.warn('Popup', 'Toggle protection timed out');
     }, 5000);
 
@@ -354,6 +357,7 @@ export function Popup() {
         setShowProtectionToast(true);
         setTimeout(() => setShowProtectionToast(false), 3000);
 
+        // Stryker disable next-line all: logging only
         logger.info('Popup', 'Protection toggled', { enabled: newState });
       }
     } catch (error) {
@@ -362,6 +366,7 @@ export function Popup() {
       const errorMessage = err.message;
       if (errorMessage.includes('Could not establish connection') ||
           errorMessage.includes('Receiving end does not exist')) {
+        // Stryker disable next-line all: logging only
         logger.debug('Popup', 'Service worker not ready for toggle');
       } else {
         logger.error('Popup', 'Failed to toggle protection', err);
@@ -381,6 +386,32 @@ export function Popup() {
       }
       return newSet;
     });
+  };
+
+  const handleTabKeyDown = (
+    event: KeyboardEvent<HTMLButtonElement>,
+    tab: 'dashboard' | 'burner'
+  ) => {
+    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft' && event.key !== 'Home' && event.key !== 'End') {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (event.key === 'Home') {
+      setActiveTab('dashboard');
+      return;
+    }
+
+    if (event.key === 'End') {
+      setActiveTab('burner');
+      return;
+    }
+
+    const currentIndex = tabs.indexOf(tab);
+    const step = event.key === 'ArrowRight' ? 1 : -1;
+    const nextIndex = (currentIndex + step + tabs.length) % tabs.length;
+    setActiveTab(tabs[nextIndex]);
   };
 
   const handleFeedbackSuccess = () => {
@@ -420,6 +451,7 @@ export function Popup() {
             onClick={() => setShowSettings(true)}
             className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white transition-colors"
             title="Settings"
+            aria-label="Open settings"
           >
             <Settings className="w-4 h-4" />
           </button>
@@ -488,12 +520,16 @@ export function Popup() {
               onClick={() => setShowSettings(true)}
               className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white transition-colors"
               title="Settings"
+              aria-label="Open settings"
             >
               <Settings className="w-4 h-4" />
             </button>
             <button
               onClick={toggleProtection}
               disabled={isTogglingProtection}
+              role="switch"
+              aria-checked={data.settings.protectionEnabled}
+              aria-label="Toggle tracker protection"
               className={`p-2 rounded-lg transition-colors ${
                 isTogglingProtection
                   ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
@@ -514,9 +550,14 @@ export function Popup() {
           </div>
         </div>
 
-        <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+        <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg" role="tablist" aria-label="Main navigation">
           <button
+            id="tab-dashboard"
+            role="tab"
+            aria-selected={activeTab === 'dashboard'}
+            aria-controls="panel-dashboard"
             onClick={() => setActiveTab('dashboard')}
+            onKeyDown={(event) => handleTabKeyDown(event, 'dashboard')}
             className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-all ${
               activeTab === 'dashboard'
                 ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
@@ -529,7 +570,12 @@ export function Popup() {
             </div>
           </button>
           <button
+            id="tab-burner"
+            role="tab"
+            aria-selected={activeTab === 'burner'}
+            aria-controls="panel-burner"
             onClick={() => setActiveTab('burner')}
+            onKeyDown={(event) => handleTabKeyDown(event, 'burner')}
             className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-all ${
               activeTab === 'burner'
                 ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
@@ -562,7 +608,12 @@ export function Popup() {
       )}
 
       {activeTab === 'burner' && (
-        <div className="flex-1 overflow-y-auto">
+        <div
+          className="flex-1 overflow-y-auto"
+          role="tabpanel"
+          id="panel-burner"
+          aria-labelledby="tab-burner"
+        >
           <BurnerEmailsSection 
             onOpenSettings={openSettingsToBurner}
             isActive={true}
@@ -570,7 +621,7 @@ export function Popup() {
         </div>
       )}
       {activeTab === 'dashboard' && (
-        <>
+        <div role="tabpanel" id="panel-dashboard" aria-labelledby="tab-dashboard" className="flex-1 flex flex-col min-h-0">
       <div className={`px-6 py-5 ${scoreBg} border-b border-gray-200 dark:border-gray-700`}>
         <CreditScoreMeter creditScore={creditScore} />
 
@@ -605,13 +656,14 @@ export function Popup() {
                 }
               }}
               className="text-xs text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 font-medium transition-colors"
+              aria-label="Clear all alerts"
             >
               Clear All
             </button>
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto" role="list" aria-label="Recent privacy alerts">
           {data.alerts.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-500 px-6 text-center">
               <CheckCircle2 className="w-12 h-12 mb-3" />
@@ -631,7 +683,7 @@ export function Popup() {
           )}
         </div>
       </div>
-        </>
+        </div>
       )}
 
       {showSettings && (
@@ -777,7 +829,15 @@ export function AlertItem({
     }
   };
 
+  const handleAlertKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      handleAlertClick();
+    }
+  };
+
   const hasExpandableInfo = isTrackerAlert || hasBannerDetails || hasViolationDetails;
+  const alertToggleLabel = isExpanded ? 'Collapse alert details' : 'Expand alert details';
 
   const handleFalsePositiveReport = async () => {
     if (reportStatus === 'sending' || reportStatus === 'sent') return;
@@ -793,7 +853,7 @@ export function AlertItem({
           userReason: 'Reported from popup',
           timestamp: Date.now(),
           installationId: '',
-          scanConfidence: 0,
+          scanConfidence: alert.scanConfidence ?? 0,
         },
       });
       setReportStatus('sent');
@@ -804,8 +864,16 @@ export function AlertItem({
   };
 
   return (
-    <div className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-b border-gray-100 dark:border-gray-700">
-      <div className="px-6 py-3 cursor-pointer" onClick={handleAlertClick}>
+    <div className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-b border-gray-100 dark:border-gray-700" role="listitem">
+      <div
+        className="px-6 py-3 cursor-pointer"
+        onClick={handleAlertClick}
+        role="button"
+        tabIndex={0}
+        onKeyDown={handleAlertKeyDown}
+        aria-expanded={hasExpandableInfo ? isExpanded : undefined}
+        aria-label={`${alert.message} from ${alert.domain}. ${hasExpandableInfo ? alertToggleLabel : ''}`.trim()}
+      >
         <div className="flex items-start gap-3">
           <div className="mt-0.5">{getSeverityIcon()}</div>
           <div className="flex-1 min-w-0">
@@ -821,6 +889,7 @@ export function AlertItem({
                     handleAlertClick();
                   }}
                   className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors flex-shrink-0"
+                  aria-label={alertToggleLabel}
                   title={
                     isTrackerAlert
                       ? 'Show tracker info'
@@ -844,6 +913,7 @@ export function AlertItem({
                     onReport(alert);
                   }}
                   className="text-xs text-red-600 dark:text-red-400 hover:underline font-medium ml-2"
+                  aria-label="Report privacy issue"
                 >
                   Report
                 </button>
@@ -855,6 +925,7 @@ export function AlertItem({
                     void handleFalsePositiveReport();
                   }}
                   className="text-xs text-amber-700 dark:text-amber-400 hover:underline font-medium ml-2"
+                  aria-label="Report false positive"
                 >
                   {reportStatus === 'sent' ? 'Reported' : reportStatus === 'sending' ? 'Reporting...' : 'Report incorrect'}
                 </button>

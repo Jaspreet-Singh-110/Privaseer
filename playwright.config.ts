@@ -12,6 +12,11 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1, // keep single worker for extension stability
   reporter: 'list',
+  webServer: {
+    command: 'python3 -m http.server 3333 --directory tests/e2e/pages',
+    port: 3333,
+    reuseExistingServer: !process.env.CI,
+  },
   use: {
     headless: false, // extensions require headed mode
     viewport: { width: 1280, height: 720 },

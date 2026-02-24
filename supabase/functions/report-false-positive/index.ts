@@ -32,6 +32,12 @@ interface ValidationResult<T = unknown> {
   sanitized?: T;
 }
 
+interface AggregationResult {
+  report_count: number;
+  override_threshold: number | null;
+  should_override: boolean;
+}
+
 function validateString(value: unknown, fieldName: string, maxLength = 512): ValidationResult<string> {
   if (typeof value !== "string" || value.trim().length === 0) {
     return { valid: false, error: `${fieldName} is required and must be a string` };
@@ -148,8 +154,31 @@ denoRuntime.serve(async (req: Request) => {
       throw error;
     }
 
+    const { data: aggregationData, error: aggregationError } = await supabase.rpc(
+      "aggregate_false_positive_reports",
+      {
+        p_domain: domain.sanitized,
+      }
+    );
+
+    if (aggregationError) {
+      throw aggregationError;
+    }
+
+    const aggregation = (aggregationData ?? {}) as Partial<AggregationResult>;
+
     return new Response(
-      JSON.stringify({ success: true }),
+      JSON.stringify({
+        success: true,
+        aggregation: {
+          reportCount: typeof aggregation.report_count === "number" ? aggregation.report_count : 0,
+          overrideThreshold:
+            typeof aggregation.override_threshold === "number"
+              ? aggregation.override_threshold
+              : null,
+          shouldOverride: Boolean(aggregation.should_override),
+        },
+      }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {

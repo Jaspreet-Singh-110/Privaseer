@@ -356,10 +356,11 @@ export function BurnerEmailsSection({ onOpenSettings }: BurnerEmailsSectionProps
           )}
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2" role="list" aria-label="Burner email addresses">
           {emails.map((email) => (
             <div
               key={email.id}
+              role="listitem"
               aria-label={`Burner email ${email.email_address} for ${email.domain}`}
               className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:border-blue-300 dark:hover:border-blue-500 hover:shadow-sm transition-all group"
             >

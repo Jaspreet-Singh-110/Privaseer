@@ -1,12 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, cleanup, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Popup } from '../../popup/popup';
-import type { StorageData, Alert, CreditScoreResult } from '../../types';
+import type { StorageData, Alert, CreditScoreResult, CreditScoreLabel } from '../../types';
 
 // Mock BurnerEmailsSection to prevent heavy component render and memory issues
 vi.mock('../../popup/burner-emails-section', () => ({
   BurnerEmailsSection: () => <div data-testid="mocked-burner-emails">Mocked Burner Emails</div>
+}));
+
+vi.mock('../../popup/settings-page', () => ({
+  SettingsPage: ({ isOpen }: { isOpen: boolean }) =>
+    isOpen ? <div data-testid="mocked-settings-page">Mocked Settings</div> : null,
 }));
 
 describe('Popup Dashboard Component', () => {
@@ -22,6 +27,7 @@ describe('Popup Dashboard Component', () => {
     score: 650,
     label: 'Good',
     trend: 'stable',
+    formulaVersion: '1.0',
     factors: {
       protectionConsistency: { value: 0.85, impact: 60 },
       cleanBrowsing: { value: 0.7, impact: 40 },
@@ -137,6 +143,14 @@ describe('Popup Dashboard Component', () => {
       },
     } as unknown as typeof chrome;
 
+    if (!global.requestAnimationFrame) {
+      global.requestAnimationFrame = ((callback: FrameRequestCallback) =>
+        setTimeout(() => callback(performance.now()), 16)) as unknown as typeof requestAnimationFrame;
+    }
+    if (!global.cancelAnimationFrame) {
+      global.cancelAnimationFrame = ((id: number) => clearTimeout(id)) as unknown as typeof cancelAnimationFrame;
+    }
+
     // Default mock implementation
     mockSendMessage.mockImplementation((message) => {
       if (message.type === 'GET_STATE') {
@@ -182,7 +196,7 @@ describe('Popup Dashboard Component', () => {
         expect(screen.getByText('Dashboard')).toBeInTheDocument();
       }, { timeout: 500 });
 
-      const dashboardButton = screen.getByRole('button', { name: /dashboard/i });
+      const dashboardButton = screen.getByRole('tab', { name: /dashboard/i });
       expect(dashboardButton).toHaveClass('bg-white');
     });
 
@@ -195,7 +209,7 @@ describe('Popup Dashboard Component', () => {
         expect(screen.getByText('Dashboard')).toBeInTheDocument();
       }, { timeout: 500 });
 
-      const burnerButton = screen.getByRole('button', { name: /burner emails/i });
+      const burnerButton = screen.getByRole('tab', { name: /burner emails/i });
       await user.click(burnerButton);
 
       await waitFor(() => {
@@ -216,7 +230,7 @@ describe('Popup Dashboard Component', () => {
       }, { timeout: 500 });
 
       // Switch to Burner Emails
-      const burnerButton = screen.getByRole('button', { name: /burner emails/i });
+      const burnerButton = screen.getByRole('tab', { name: /burner emails/i });
       await user.click(burnerButton);
 
       await waitFor(() => {
@@ -224,13 +238,71 @@ describe('Popup Dashboard Component', () => {
       }, { timeout: 500 });
 
       // Switch back to Dashboard
-      const dashboardButton = screen.getByRole('button', { name: /dashboard/i });
+      const dashboardButton = screen.getByRole('tab', { name: /dashboard/i });
       await user.click(dashboardButton);
 
       await waitFor(() => {
         expect(dashboardButton).toHaveClass('bg-white');
         // Credit score should be visible
         expect(screen.getByText('Score: 650 / 850')).toBeInTheDocument();
+      }, { timeout: 500 });
+    });
+
+    it('reloads state when STATE_UPDATE is received', async () => {
+      render(<Popup />);
+
+      await waitFor(() => {
+        expect(mockSendMessage).toHaveBeenCalledWith({ type: 'GET_STATE' });
+      }, { timeout: 500 });
+
+      const listener = mockAddListener.mock.calls[0][0];
+      listener({ type: 'STATE_UPDATE' });
+
+      await waitFor(() => {
+        expect(mockSendMessage).toHaveBeenCalledWith({ type: 'GET_STATE' });
+      }, { timeout: 500 });
+    });
+
+    it('supports keyboard tab navigation with Home/End/Arrow keys', async () => {
+      render(<Popup />);
+
+      const dashboardTab = await screen.findByRole('tab', { name: /dashboard/i });
+      const burnerTab = screen.getByRole('tab', { name: /burner emails/i });
+      expect(dashboardTab).toHaveAttribute('aria-selected', 'true');
+
+      fireEvent.keyDown(dashboardTab, { key: 'End' });
+      await waitFor(() => {
+        expect(burnerTab).toHaveAttribute('aria-selected', 'true');
+      }, { timeout: 500 });
+
+      fireEvent.keyDown(burnerTab, { key: 'Home' });
+      await waitFor(() => {
+        expect(dashboardTab).toHaveAttribute('aria-selected', 'true');
+      }, { timeout: 500 });
+
+      fireEvent.keyDown(dashboardTab, { key: 'ArrowRight' });
+      await waitFor(() => {
+        expect(burnerTab).toHaveAttribute('aria-selected', 'true');
+      }, { timeout: 500 });
+
+      fireEvent.keyDown(burnerTab, { key: 'ArrowLeft' });
+      await waitFor(() => {
+        expect(dashboardTab).toHaveAttribute('aria-selected', 'true');
+      }, { timeout: 500 });
+    });
+
+    it('ignores non-navigation keys on tab controls', async () => {
+      render(<Popup />);
+
+      const dashboardTab = await screen.findByRole('tab', { name: /dashboard/i });
+      const burnerTab = screen.getByRole('tab', { name: /burner emails/i });
+      expect(dashboardTab).toHaveAttribute('aria-selected', 'true');
+
+      fireEvent.keyDown(dashboardTab, { key: 'Enter' });
+
+      await waitFor(() => {
+        expect(dashboardTab).toHaveAttribute('aria-selected', 'true');
+        expect(burnerTab).toHaveAttribute('aria-selected', 'false');
       }, { timeout: 500 });
     });
   });
@@ -329,6 +401,101 @@ describe('Popup Dashboard Component', () => {
       }, { timeout: 500 });
     });
 
+    it('applies score color classes for excellent scores', async () => {
+      setupMockWithData({
+        creditScore: createMockCreditScore({ score: 780, label: 'Excellent' }),
+      });
+
+      render(<Popup />);
+
+      await waitFor(() => {
+        const label = screen.getByText('Excellent');
+        expect(label.className).toContain('text-emerald-600');
+      }, { timeout: 500 });
+    });
+
+    it('applies score color classes for poor scores', async () => {
+      setupMockWithData({
+        creditScore: createMockCreditScore({ score: 500, label: 'Poor' }),
+      });
+
+      render(<Popup />);
+
+      await waitFor(() => {
+        const label = screen.getByText('Poor');
+        expect(label.className).toContain('text-orange-600');
+      }, { timeout: 500 });
+    });
+
+    it('applies exact score label boundaries (750/650/550/400)', async () => {
+      const renderWithScore = async (score: number, label: CreditScoreLabel) => {
+        setupMockWithData({
+          creditScore: createMockCreditScore({ score, label }),
+        });
+        cleanup();
+        render(<Popup />);
+        await waitFor(() => {
+          expect(screen.getByText(label)).toBeInTheDocument();
+        }, { timeout: 500 });
+      };
+
+      await renderWithScore(750, 'Excellent');
+      await renderWithScore(650, 'Good');
+      await renderWithScore(550, 'Fair');
+      await renderWithScore(400, 'Poor');
+    });
+
+    it('renders trend labels with their color classes', async () => {
+      setupMockWithData({
+        creditScore: createMockCreditScore({ score: 700, label: 'Good', trend: 'improving' }),
+      });
+
+      render(<Popup />);
+
+      await waitFor(() => {
+        const trend = screen.getByText('improving');
+        expect(trend.parentElement?.className).toContain('text-green-600');
+      }, { timeout: 500 });
+
+      setupMockWithData({
+        creditScore: createMockCreditScore({ score: 620, label: 'Fair', trend: 'declining' }),
+      });
+
+      cleanup();
+      render(<Popup />);
+
+      await waitFor(() => {
+        const trend = screen.getByText('declining');
+        expect(trend.parentElement?.className).toContain('text-red-600');
+      }, { timeout: 500 });
+    });
+
+    it('shows factor contribution pills and breakdown', async () => {
+      setupMockWithData({
+        creditScore: createMockCreditScore({
+          score: 680,
+          label: 'Good',
+          factors: {
+            protectionConsistency: { value: 0.85, impact: 60 },
+            cleanBrowsing: { value: 0.7, impact: 40 },
+            highRiskExposure: { value: 0.2, impact: -30 },
+            violations: { value: 0.1, impact: -20 },
+          },
+        }),
+      });
+
+      render(<Popup />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Protection +60')).toBeInTheDocument();
+        expect(screen.getByText('High-Risk -30')).toBeInTheDocument();
+        expect(screen.getByText('Boosting')).toBeInTheDocument();
+        expect(screen.getByText('Reducing')).toBeInTheDocument();
+        expect(screen.getByText('Clean Sites')).toBeInTheDocument();
+        expect(screen.getByText('Violations')).toBeInTheDocument();
+      }, { timeout: 500 });
+    });
+
     it('should animate credit score to target value', async () => {
       mockSendMessage.mockImplementation((message) => {
         if (message.type === 'GET_STATE') {
@@ -356,8 +523,7 @@ describe('Popup Dashboard Component', () => {
         expect(screen.getByText('Score: 700 / 850')).toBeInTheDocument();
       }, { timeout: 500 });
 
-      // Wait for animation to complete (1500ms + buffer)
-      await new Promise(resolve => setTimeout(resolve, 1600));
+      await new Promise(resolve => setTimeout(resolve, 1700));
 
       // Check final animated value
       await waitFor(() => {
@@ -574,6 +740,349 @@ describe('Popup Dashboard Component', () => {
         expect(screen.getByText(/Limited consent options available/)).toBeInTheDocument();
         expect(screen.getByText(/Accept option appears more prominent/)).toBeInTheDocument();
       }, { timeout: 500 });
+    });
+
+    it('loads tracker info when a tracker alert is expanded', async () => {
+      const user = userEvent.setup({ delay: null });
+      const alerts = [
+        createMockAlert({
+          id: 'alert-1',
+          message: 'Blocked tracker.example.com',
+          domain: 'example.com',
+          type: 'tracker_blocked',
+          severity: 'medium',
+        }),
+      ];
+
+      mockSendMessage.mockImplementation((message) => {
+        if (message.type === 'GET_STATE') {
+          return Promise.resolve({
+            success: true,
+            data: createMockStorageData({ alerts }),
+          });
+        }
+        if (message.type === 'GET_TRACKER_INFO') {
+          return Promise.resolve({
+            success: true,
+            info: { description: 'Tracks user behavior', alternative: 'Use privacy-safe analytics' },
+          });
+        }
+        if (message.type === 'GET_THEME') {
+          return Promise.resolve({ success: true, theme: 'system' });
+        }
+        if (message.type === 'GET_ONBOARDING_STATE') {
+          return Promise.resolve({
+            success: true,
+            onboarding: { hasCompletedOnboarding: true, currentStep: 0 },
+          });
+        }
+        return Promise.resolve({ success: true });
+      });
+
+      render(<Popup />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Blocked tracker.example.com')).toBeInTheDocument();
+      }, { timeout: 500 });
+
+      const alertRow = screen.getByText('Blocked tracker.example.com').closest('div');
+      if (alertRow) {
+        await user.click(alertRow);
+      }
+
+      await waitFor(() => {
+        expect(screen.getByText(/what it does/i)).toBeInTheDocument();
+        expect(screen.getByText('Tracks user behavior')).toBeInTheDocument();
+        expect(screen.getByText('Use privacy-safe analytics')).toBeInTheDocument();
+      }, { timeout: 500 });
+    });
+
+    it('allows false positive reports for banner alerts', async () => {
+      const user = userEvent.setup({ delay: null });
+      const alerts = [
+        createMockAlert({
+          id: 'alert-1',
+          message: 'example.com may not follow privacy best practices',
+          domain: 'example.com',
+          type: 'non_compliant_site',
+          severity: 'medium',
+          deceptivePatterns: ['forcedConsent'],
+        }),
+      ];
+
+      mockSendMessage.mockImplementation((message) => {
+        if (message.type === 'GET_STATE') {
+          return Promise.resolve({
+            success: true,
+            data: createMockStorageData({ alerts }),
+          });
+        }
+        if (message.type === 'REPORT_FALSE_POSITIVE') {
+          return Promise.resolve({ success: true });
+        }
+        if (message.type === 'GET_THEME') {
+          return Promise.resolve({ success: true, theme: 'system' });
+        }
+        if (message.type === 'GET_ONBOARDING_STATE') {
+          return Promise.resolve({
+            success: true,
+            onboarding: { hasCompletedOnboarding: true, currentStep: 0 },
+          });
+        }
+        return Promise.resolve({ success: true });
+      });
+
+      render(<Popup />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Report incorrect')).toBeInTheDocument();
+      }, { timeout: 500 });
+
+      await user.click(screen.getByText('Report incorrect'));
+
+      await waitFor(() => {
+        expect(mockSendMessage).toHaveBeenCalledWith(
+          expect.objectContaining({ type: 'REPORT_FALSE_POSITIVE' })
+        );
+        expect(screen.getByText('Reported')).toBeInTheDocument();
+      }, { timeout: 500 });
+    });
+
+    it('renders time ago labels for alerts', async () => {
+      const baseTime = new Date('2026-01-20T12:00:00Z').getTime();
+      const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(baseTime);
+      const alerts = [
+        createMockAlert({
+          id: 'alert-now',
+          message: 'Recent alert',
+          timestamp: baseTime - 30 * 1000,
+        }),
+        createMockAlert({
+          id: 'alert-min',
+          message: 'Minutes alert',
+          timestamp: baseTime - 5 * 60 * 1000,
+        }),
+        createMockAlert({
+          id: 'alert-hours',
+          message: 'Hours alert',
+          timestamp: baseTime - 2 * 60 * 60 * 1000,
+        }),
+        createMockAlert({
+          id: 'alert-days',
+          message: 'Days alert',
+          timestamp: baseTime - 3 * 24 * 60 * 60 * 1000,
+        }),
+      ];
+
+      mockSendMessage.mockImplementation((message) => {
+        if (message.type === 'GET_STATE') {
+          return Promise.resolve({
+            success: true,
+            data: createMockStorageData({ alerts }),
+          });
+        }
+        if (message.type === 'GET_THEME') {
+          return Promise.resolve({ success: true, theme: 'system' });
+        }
+        if (message.type === 'GET_ONBOARDING_STATE') {
+          return Promise.resolve({
+            success: true,
+            onboarding: { hasCompletedOnboarding: true, currentStep: 0 },
+          });
+        }
+        return Promise.resolve({ success: true });
+      });
+
+      render(<Popup />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Just now')).toBeInTheDocument();
+        expect(screen.getByText('5m ago')).toBeInTheDocument();
+        expect(screen.getByText('2h ago')).toBeInTheDocument();
+        expect(screen.getByText('3d ago')).toBeInTheDocument();
+      }, { timeout: 500 });
+
+      nowSpy.mockRestore();
+    });
+
+    it('renders severity indicators by alert severity', async () => {
+      const alerts = [
+        createMockAlert({ id: 'high', message: 'High severity', severity: 'high' }),
+        createMockAlert({ id: 'medium', message: 'Medium severity', severity: 'medium' }),
+        createMockAlert({ id: 'low', message: 'Low severity', severity: 'low' }),
+      ];
+
+      mockSendMessage.mockImplementation((message) => {
+        if (message.type === 'GET_STATE') {
+          return Promise.resolve({
+            success: true,
+            data: createMockStorageData({ alerts }),
+          });
+        }
+        if (message.type === 'GET_THEME') {
+          return Promise.resolve({ success: true, theme: 'system' });
+        }
+        if (message.type === 'GET_ONBOARDING_STATE') {
+          return Promise.resolve({
+            success: true,
+            onboarding: { hasCompletedOnboarding: true, currentStep: 0 },
+          });
+        }
+        return Promise.resolve({ success: true });
+      });
+
+      const { container } = render(<Popup />);
+
+      await waitFor(() => {
+        expect(screen.getByText('High severity')).toBeInTheDocument();
+      }, { timeout: 500 });
+
+      expect(container.querySelectorAll('div.bg-red-500')).not.toHaveLength(0);
+      expect(container.querySelectorAll('div.bg-amber-500')).not.toHaveLength(0);
+      expect(container.querySelectorAll('div.bg-green-500')).not.toHaveLength(0);
+    });
+  });
+
+  describe('Protection Toggle and Onboarding', () => {
+    it('toggles protection and shows a status toast', async () => {
+      const user = userEvent.setup({ delay: null });
+      let protectionEnabled = true;
+
+      mockSendMessage.mockImplementation((message) => {
+        if (message.type === 'GET_STATE') {
+          return Promise.resolve({
+            success: true,
+            data: createMockStorageData({
+              settings: { ...createMockStorageData().settings, protectionEnabled },
+            }),
+          });
+        }
+        if (message.type === 'TOGGLE_PROTECTION') {
+          protectionEnabled = !protectionEnabled;
+          return Promise.resolve({ success: true, enabled: protectionEnabled });
+        }
+        if (message.type === 'GET_THEME') {
+          return Promise.resolve({ success: true, theme: 'system' });
+        }
+        if (message.type === 'GET_ONBOARDING_STATE') {
+          return Promise.resolve({
+            success: true,
+            onboarding: { hasCompletedOnboarding: true, currentStep: 0 },
+          });
+        }
+        return Promise.resolve({ success: true });
+      });
+
+      render(<Popup />);
+
+      const toggleButton = await screen.findByTitle(/protection enabled/i);
+      await user.click(toggleButton);
+
+      await waitFor(() => {
+        expect(mockSendMessage).toHaveBeenCalledWith({ type: 'TOGGLE_PROTECTION' });
+        expect(screen.getByText('Protection Paused')).toBeInTheDocument();
+      }, { timeout: 500 });
+    });
+
+    it('hides the protection toast after timeout', async () => {
+      const user = userEvent.setup({ delay: null });
+      let protectionEnabled = true;
+
+      mockSendMessage.mockImplementation((message) => {
+        if (message.type === 'GET_STATE') {
+          return Promise.resolve({
+            success: true,
+            data: createMockStorageData({
+              settings: { ...createMockStorageData().settings, protectionEnabled },
+            }),
+          });
+        }
+        if (message.type === 'TOGGLE_PROTECTION') {
+          protectionEnabled = !protectionEnabled;
+          return Promise.resolve({ success: true, enabled: protectionEnabled });
+        }
+        if (message.type === 'GET_THEME') {
+          return Promise.resolve({ success: true, theme: 'system' });
+        }
+        if (message.type === 'GET_ONBOARDING_STATE') {
+          return Promise.resolve({
+            success: true,
+            onboarding: { hasCompletedOnboarding: true, currentStep: 0 },
+          });
+        }
+        return Promise.resolve({ success: true });
+      });
+
+      render(<Popup />);
+
+      const toggleButton = await screen.findByTitle(/protection enabled/i);
+      await user.click(toggleButton);
+
+      await waitFor(() => {
+        expect(screen.getByText('Protection Paused')).toBeInTheDocument();
+      }, { timeout: 500 });
+
+      await new Promise(resolve => setTimeout(resolve, 3100));
+      await waitFor(() => {
+        expect(screen.queryByText('Protection Paused')).not.toBeInTheDocument();
+      }, { timeout: 500 });
+    });
+
+    it('renders the invalid page state and allows settings access', async () => {
+      const user = userEvent.setup({ delay: null });
+      mockTabsQuery.mockResolvedValue([{ url: 'chrome://extensions', active: true }]);
+
+      render(<Popup />);
+
+      await waitFor(() => {
+        expect(
+          screen.getByText(/open this extension on a website to see privacy insights/i)
+        ).toBeInTheDocument();
+      }, { timeout: 500 });
+
+      const settingsButton = screen.getByTitle('Settings');
+      await user.click(settingsButton);
+
+      expect(screen.getByTestId('mocked-settings-page')).toBeInTheDocument();
+    });
+
+    it('shows onboarding banner and opens the welcome guide', async () => {
+      const user = userEvent.setup({ delay: null });
+      const closeSpy = vi.spyOn(window, 'close').mockImplementation(() => {});
+
+      mockSendMessage.mockImplementation((message) => {
+        if (message.type === 'GET_STATE') {
+          return Promise.resolve({
+            success: true,
+            data: createMockStorageData(),
+          });
+        }
+        if (message.type === 'GET_THEME') {
+          return Promise.resolve({ success: true, theme: 'system' });
+        }
+        if (message.type === 'GET_ONBOARDING_STATE') {
+          return Promise.resolve({
+            success: true,
+            onboarding: { hasCompletedOnboarding: false, currentStep: 1 },
+          });
+        }
+        return Promise.resolve({ success: true });
+      });
+
+      render(<Popup />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Complete setup')).toBeInTheDocument();
+      }, { timeout: 500 });
+
+      await user.click(screen.getByRole('button', { name: /resume/i }));
+
+      expect(global.chrome.tabs.create).toHaveBeenCalledWith(
+        { url: 'chrome-extension://test/src/welcome/welcome.html', active: true },
+        expect.any(Function)
+      );
+
+      closeSpy.mockRestore();
     });
   });
 
