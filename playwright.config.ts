@@ -29,10 +29,12 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         headless: false,
-        args: [
-          `--disable-extensions-except=${extensionPath}`,
-          `--load-extension=${extensionPath}`,
-        ],
+        launchOptions: {
+          args: [
+            `--disable-extensions-except=${extensionPath}`,
+            `--load-extension=${extensionPath}`,
+          ],
+        },
       },
     },
   ],
