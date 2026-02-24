@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { DeceptivePatternViolation, DeceptivePatternRule, CMPDetectionResult, PrivacyRules } from '@/types';
+import { SCAN_PHASES } from '@/utils/constants';
 
 // Mock CMP detector module - use vi.hoisted to ensure mocks are available before module import
 const { detectCMPMock, hasValidPersistedConsentMock } = vi.hoisted(() => ({
@@ -552,6 +553,7 @@ describe('ConsentScanner Integration', () => {
 
   afterEach(() => {
     document.body.innerHTML = '';
+    vi.useRealTimers();
   });
 
   describe('CMP Detection', () => {
@@ -572,11 +574,13 @@ describe('ConsentScanner Integration', () => {
       await scanner.initialize();
       await scanner.scanPage('quick');
       
-      expect(detectCMPMock).toHaveBeenCalled();
+      expect(detectCMPMock).toHaveBeenCalledTimes(1);
       
       // Verify message was sent with CMP detection
       await vi.waitFor(() => {
-        expect(chrome.runtime.sendMessage).toHaveBeenCalled();
+        expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
+          expect.objectContaining({ type: 'CONSENT_SCAN_RESULT' })
+        );
       }, { timeout: 3000 });
 
       const sendMessageCalls = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
@@ -606,7 +610,7 @@ describe('ConsentScanner Integration', () => {
       await scanner.initialize();
       await scanner.scanPage('quick');
 
-      expect(detectCMPMock).toHaveBeenCalled();
+      expect(detectCMPMock).toHaveBeenCalledTimes(1);
     });
 
     it('should return unknown when no CMP detected', async () => {
@@ -626,7 +630,7 @@ describe('ConsentScanner Integration', () => {
       await scanner.initialize();
       await scanner.scanPage('quick');
 
-      expect(detectCMPMock).toHaveBeenCalled();
+      expect(detectCMPMock).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -643,7 +647,10 @@ describe('ConsentScanner Integration', () => {
         (call) => call[0]?.type === 'CONSENT_SCAN_RESULT'
       );
 
-      expect(consentScanCall).toBeDefined();
+      expect(consentScanCall?.[0]).toMatchObject({
+        type: 'CONSENT_SCAN_RESULT',
+        data: expect.any(Object),
+      });
       expect(consentScanCall![0].data.hasBanner).toBe(true);
     });
 
@@ -670,7 +677,10 @@ describe('ConsentScanner Integration', () => {
         (call) => call[0]?.type === 'CONSENT_SCAN_RESULT'
       );
 
-      expect(consentScanCall).toBeDefined();
+      expect(consentScanCall?.[0]).toMatchObject({
+        type: 'CONSENT_SCAN_RESULT',
+        data: expect.any(Object),
+      });
       expect(consentScanCall![0].data.hasRejectButton).toBe(true);
     });
 
@@ -686,8 +696,73 @@ describe('ConsentScanner Integration', () => {
         (call) => call[0]?.type === 'CONSENT_SCAN_RESULT'
       );
 
-      expect(consentScanCall).toBeDefined();
+      expect(consentScanCall?.[0]).toMatchObject({
+        type: 'CONSENT_SCAN_RESULT',
+        data: expect.any(Object),
+      });
       expect(consentScanCall![0].data.hasRejectButton).toBe(false);
+    });
+
+    it('ignores hidden banners when detecting consent', async () => {
+      setupBannerDOM({ hasRejectButton: true });
+      const banner = document.querySelector('.cookie-banner') as HTMLElement | null;
+      if (banner) {
+        banner.style.display = 'none';
+      }
+
+      await scanner.initialize();
+      await scanner.scanPage('quick');
+
+      const sendMessageCalls = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
+      const consentScanCall = sendMessageCalls.find(
+        (call) => call[0]?.type === 'CONSENT_SCAN_RESULT'
+      );
+
+      expect(consentScanCall).toBeUndefined();
+    });
+
+    it('falls back to keyword banner detection when selector lookup misses', async () => {
+      document.body.innerHTML = `
+        <section id="fallback-banner" style="display:block; visibility:visible; opacity:1;">
+          We use cookies to improve your experience.
+          <button>Accept All</button>
+          <button>Reject All</button>
+        </section>
+      `;
+      const fallbackBanner = document.getElementById('fallback-banner');
+      if (fallbackBanner) {
+        fallbackBanner.getBoundingClientRect = vi.fn(() => ({
+          width: 250,
+          height: 100,
+          top: 0,
+          left: 0,
+          bottom: 100,
+          right: 250,
+          x: 0,
+          y: 0,
+          toJSON: () => ({}),
+        }));
+      }
+
+      await scanner.initialize();
+      const detectedBanner = (scanner as unknown as { findCookieBanner: () => Element | null }).findCookieBanner();
+
+      expect(detectedBanner).toBe(fallbackBanner);
+    });
+
+    it('treats opacity zero banners as not visible', async () => {
+      setupBannerDOM({ hasRejectButton: true });
+      const banner = document.querySelector('.cookie-banner') as HTMLElement | null;
+      if (banner) {
+        banner.style.opacity = '0';
+      }
+
+      await scanner.initialize();
+      const visible = (scanner as unknown as { isVisible: (element: Element) => boolean }).isVisible(
+        banner as Element
+      );
+
+      expect(visible).toBe(false);
     });
   });
 
@@ -747,6 +822,27 @@ describe('ConsentScanner Integration', () => {
       expect(consentScanCall![0].data.deceptivePatterns).toContain('preCheckedBoxes');
     });
 
+    it('does not flag necessary-only checkboxes as pre-checked violations', async () => {
+      setupBannerDOM({ hasRejectButton: true });
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = true;
+      checkbox.setAttribute('aria-label', 'Necessary only');
+      document.querySelector('.cookie-banner')?.appendChild(checkbox);
+
+      await scanner.initialize();
+      await scanner.scanPage('quick');
+
+      const sendMessageCalls = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
+      const consentScanCall = sendMessageCalls.find(
+        (call) => call[0]?.type === 'CONSENT_SCAN_RESULT'
+      );
+
+      expect(consentScanCall).toBeDefined();
+      expect(consentScanCall![0].data.deceptivePatterns).not.toContain('preCheckedBoxes');
+    });
+
     it('should mark compliant when equal button prominence + reject exists', async () => {
       setupBannerDOM({
         hasRejectButton: true,
@@ -766,6 +862,58 @@ describe('ConsentScanner Integration', () => {
       expect(consentScanCall).toBeDefined();
       expect(consentScanCall![0].data.isCompliant).toBe(true);
       expect(consentScanCall![0].data.complianceScore).toBe(100);
+    });
+
+    it('treats exact 1.5x area ratio as compliant threshold boundary', async () => {
+      setupBannerDOM({
+        hasRejectButton: true,
+        acceptButtonSize: { width: 150, height: 40 }, // 6000
+        rejectButtonSize: { width: 100, height: 40 }, // 4000 => 1.5x exactly
+      });
+
+      await scanner.initialize();
+      await scanner.scanPage('quick');
+
+      const sendMessageCalls = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
+      const consentScanCall = sendMessageCalls.find((call) => call[0]?.type === 'CONSENT_SCAN_RESULT');
+
+      expect(consentScanCall?.[0]).toMatchObject({
+        type: 'CONSENT_SCAN_RESULT',
+        data: expect.any(Object),
+      });
+      expect(consentScanCall![0].data.isCompliant).toBe(true);
+      expect(consentScanCall![0].data.deceptivePatterns).not.toContain('acceptButtonProminence');
+    });
+
+    it('flags hidden reject button when below viewport', async () => {
+      setupBannerDOM({ hasRejectButton: true });
+
+      Object.defineProperty(window, 'innerHeight', { value: 100, configurable: true });
+      const rejectBtn = document.getElementById('reject-btn');
+      if (rejectBtn) {
+        rejectBtn.getBoundingClientRect = vi.fn(() => ({
+          width: 100,
+          height: 40,
+          top: 120,
+          left: 0,
+          bottom: 200,
+          right: 100,
+          x: 0,
+          y: 120,
+          toJSON: () => ({}),
+        }));
+      }
+
+      await scanner.initialize();
+      await scanner.scanPage('quick');
+
+      const sendMessageCalls = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
+      const consentScanCall = sendMessageCalls.find(
+        (call) => call[0]?.type === 'CONSENT_SCAN_RESULT'
+      );
+
+      expect(consentScanCall).toBeDefined();
+      expect(consentScanCall![0].data.deceptivePatterns).toContain('hiddenRejectButton');
     });
   });
 
@@ -808,7 +956,10 @@ describe('ConsentScanner Integration', () => {
         (call) => call[0]?.type === 'RECORD_COMPLIANCE_SCORE'
       );
 
-      expect(scoreCall).toBeDefined();
+      expect(scoreCall?.[0]).toMatchObject({
+        type: 'RECORD_COMPLIANCE_SCORE',
+        data: expect.any(Object),
+      });
       expect(scoreCall![0]).toMatchObject({
         type: 'RECORD_COMPLIANCE_SCORE',
         data: {
@@ -829,6 +980,48 @@ describe('ConsentScanner Integration', () => {
 
       // Should not throw
       await expect(scanner.scanPage('quick')).resolves.not.toThrow();
+    });
+
+    it('retries sending when service worker is temporarily unavailable', async () => {
+      vi.useFakeTimers();
+      let callCount = 0;
+      (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mockImplementation(() => {
+        callCount += 1;
+        if (callCount <= 2) {
+          return Promise.reject(new Error('Receiving end does not exist'));
+        }
+        return Promise.resolve({ success: true });
+      });
+
+      setupBannerDOM({ hasRejectButton: true });
+
+      await scanner.initialize();
+      const scanPromise = scanner.scanPage('quick');
+
+      await vi.advanceTimersByTimeAsync(1000);
+      await expect(scanPromise).resolves.toBeUndefined();
+      expect(callCount).toBe(4);
+      const calls = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
+      expect(calls[0]?.[0]?.type).toBe('CONSENT_SCAN_RESULT');
+      expect(calls[1]?.[0]?.type).toBe('CONSENT_SCAN_RESULT');
+      expect(calls[2]?.[0]?.type).toBe('CONSENT_SCAN_RESULT');
+      expect(calls[3]?.[0]?.type).toBe('RECORD_COMPLIANCE_SCORE');
+    });
+  });
+
+  describe('Scan Scheduling', () => {
+    it('schedules quick, interaction, and delayed scans at configured intervals', async () => {
+      setupBannerDOM({ hasRejectButton: true });
+      const timeoutSpy = vi.spyOn(global, 'setTimeout');
+      await scanner.initialize();
+
+      const delays = timeoutSpy.mock.calls
+        .map((call) => call[1])
+        .filter((value): value is number => typeof value === 'number');
+
+      expect(delays).toContain(SCAN_PHASES.QUICK_DELAY_MS);
+      expect(delays).toContain(SCAN_PHASES.INTERACTION_DELAY_MS);
+      expect(delays).toContain(SCAN_PHASES.DELAYED_DELAY_MS);
     });
   });
 
@@ -853,10 +1046,7 @@ describe('ConsentScanner Integration', () => {
       await scanner.scanPage('quick');
 
       const sendMessageCalls = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
-      const consentScanCall = sendMessageCalls.find(
-        (call) => call[0]?.type === 'CONSENT_SCAN_RESULT'
-      );
-
+      const consentScanCall = sendMessageCalls.find((call) => call[0]?.type === 'CONSENT_SCAN_RESULT');
       expect(consentScanCall).toBeDefined();
       expect(consentScanCall![0].data.hasPersistedConsent).toBe(true);
       expect(consentScanCall![0].data.hasBanner).toBe(false);

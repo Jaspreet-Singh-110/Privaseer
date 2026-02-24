@@ -10,17 +10,28 @@ import { tabManager } from '../utils/tab-manager';
 import { backgroundEvents } from './event-emitter';
 import { toError, isGetTrackerInfoData, isConsentScanResult } from '../utils/type-guards';
 import { sanitizeUrl } from '../utils/sanitizer';
-import { BADGE, TIME, CONSENT_VIOLATION, SUPABASE, ONBOARDING } from '../utils/constants';
+import {
+  BADGE,
+  TIME,
+  CONSENT_VIOLATION,
+  SUPABASE,
+  ONBOARDING,
+  FALSE_POSITIVE_FEEDBACK,
+  SCORING_CONFIG,
+} from '../utils/constants';
 import { validateComplianceScore, validateEventPayload, validateFeedbackPayload } from '../utils/validation';
 import { AllowlistManager } from '../utils/allowlist-manager';
 import { FalsePositiveService } from './false-positive-service';
+import { fetchScoringConfig, getScoringConfig } from './scoring-config';
 
 let isInitialized = false;
 let initializationPromise: Promise<void> | null = null;
 const consentAlertCache = new Map<string, number>(); // Track consent alerts by domain
 const consentRejectionCache = new Map<string, { timestamp: number; tabId?: number }>();
+const fpOverridesCache = new Map<string, { threshold: number; reportCount: number; lastUpdated: string }>();
 
 const CONSENT_PERSIST_ENDPOINT = `${SUPABASE.URL}/functions/v1/persist-consent-state`;
+const FP_OVERRIDES_ENDPOINT = `${SUPABASE.URL}${FALSE_POSITIVE_FEEDBACK.OVERRIDES_ENDPOINT}`;
 
 export function getConsentRejection(domain: string): { timestamp: number; tabId?: number } | null {
   const entry = consentRejectionCache.get(domain);
@@ -37,6 +48,64 @@ export function getConsentRejection(domain: string): { timestamp: number; tabId?
 }
 
 FirewallEngine.setConsentRejectionProvider(getConsentRejection);
+
+function normalizeDomain(domain: string): string {
+  const normalized = domain.trim().toLowerCase();
+  return normalized.startsWith('www.') ? normalized.slice(4) : normalized;
+}
+
+function normalizeConfidenceScore(score: number | undefined): number | undefined {
+  if (typeof score !== 'number' || Number.isNaN(score)) {
+    return undefined;
+  }
+  // Support both normalized [0..1] and percentage [0..100] confidence scales.
+  return score <= 1 ? score * 100 : score;
+}
+
+async function fetchFalsePositiveOverrides(): Promise<void> {
+  try {
+    const response = await fetch(FP_OVERRIDES_ENDPOINT, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE.ANON_KEY}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      logger.warn('ServiceWorker', 'Failed to fetch false positive overrides', {
+        status: response.status,
+        error: errorText,
+      });
+      return;
+    }
+
+    const payload = (await response.json()) as {
+      overrides?: Record<string, { threshold?: number; reportCount?: number; lastUpdated?: string }>;
+    };
+
+    const overrides = payload.overrides ?? {};
+    fpOverridesCache.clear();
+
+    for (const [domain, entry] of Object.entries(overrides)) {
+      if (!entry || typeof entry.threshold !== 'number') {
+        continue;
+      }
+      fpOverridesCache.set(normalizeDomain(domain), {
+        threshold: entry.threshold,
+        reportCount: typeof entry.reportCount === 'number' ? entry.reportCount : 0,
+        lastUpdated: entry.lastUpdated ?? new Date().toISOString(),
+      });
+    }
+
+    logger.debug('ServiceWorker', 'False positive overrides refreshed', {
+      overrideCount: fpOverridesCache.size,
+    });
+  } catch (error) {
+    logger.error('ServiceWorker', 'Error fetching false positive overrides', toError(error));
+  }
+}
 
 async function initializeExtension(): Promise<void> {
   // If already initialized, skip
@@ -65,6 +134,8 @@ async function initializeExtension(): Promise<void> {
       await FirewallEngine.initialize();
       await burnerEmailService.initialize();
       await feedbackTelemetryService.initialize();
+      void fetchFalsePositiveOverrides();
+      void fetchScoringConfig();
 
       await chrome.action.setBadgeBackgroundColor({ color: BADGE.BACKGROUND_COLOR });
 
@@ -94,11 +165,16 @@ function setupMessageHandlers(): void {
     return { success: true, creditScore };
   });
 
+  messageBus.on('GET_SCORING_CONFIG', async () => {
+    return { success: true, config: getScoringConfig() };
+  });
+
   messageBus.on('TOGGLE_PROTECTION', async () => {
     const enabled = await FirewallEngine.toggleProtection();
     feedbackTelemetryService.trackEvent({
       eventType: 'protection_toggled',
       eventData: { enabled },
+    // Stryker disable next-line all: logging only
     }).catch(err => logger.debug('ServiceWorker', 'Telemetry failed', err));
     return { success: true, enabled };
   });
@@ -141,6 +217,9 @@ function setupMessageHandlers(): void {
       };
       const success = await FalsePositiveService.reportFalsePositive(report);
       await AllowlistManager.addEntry(payload.domain, 'user');
+      if (success) {
+        await fetchFalsePositiveOverrides();
+      }
       return { success };
     } catch (error) {
       logger.error('ServiceWorker', 'Failed to report false positive', toError(error));
@@ -191,70 +270,85 @@ function setupMessageHandlers(): void {
       if (isAllowlisted) {
         logger.info('ServiceWorker', 'Allowlisted domain skipped for alert', { domain });
       } else {
-      // Check if we've already alerted about this domain recently (within 5 minutes)
-      const lastAlertTime = consentAlertCache.get(domain);
-      const now = Date.now();
+      const normalizedDomain = normalizeDomain(domain);
+      const override = fpOverridesCache.get(normalizedDomain);
+      const effectiveThreshold = override?.threshold ?? FALSE_POSITIVE_FEEDBACK.BASE_THRESHOLD;
+      const scanConfidence = normalizeConfidenceScore(result.confidence?.overall);
 
-      // If we've alerted within 5 minutes, skip
-      if (lastAlertTime && now - lastAlertTime < 300000) {
-        return { success: true };
-      }
+      if (typeof scanConfidence === 'number' && scanConfidence < effectiveThreshold) {
+        logger.info('ServiceWorker', 'Alert skipped due to domain confidence override', {
+          domain: normalizedDomain,
+          scanConfidence,
+          threshold: effectiveThreshold,
+          reportCount: override?.reportCount ?? 0,
+        });
+      } else {
+        // Check if we've already alerted about this domain recently (within 5 minutes)
+        const lastAlertTime = consentAlertCache.get(domain);
+        const now = Date.now();
 
-      // Also check if there's already a recent alert in storage
-      const storageData = await Storage.get();
-      const messageText = `${domain} may not follow privacy best practices`;
-      const recentAlert = storageData.alerts.find(
-        a => a.domain === domain &&
-        a.message.includes(messageText) &&
-        now - a.timestamp < 300000 // 5 minutes
-      );
-
-      if (recentAlert) {
-        // Update cache to prevent future checks
-        consentAlertCache.set(domain, now);
-        return { success: true };
-      }
-
-      // Set cache BEFORE creating alert to prevent race conditions
-      consentAlertCache.set(domain, now);
-
-      // Calculate severity based on deceptive patterns
-      let severity: 'low' | 'medium' | 'high' = 'medium';
-      let severityMultiplier = 1.0;
-
-      if (result.deceptivePatterns && result.deceptivePatterns.length > 0) {
-        if (result.deceptivePatterns.includes('forcedConsent')) {
-          severity = 'high';
-          severityMultiplier = 2.0;
-        } else if (result.deceptivePatterns.includes('hiddenRejectButton')) {
-          severity = 'high';
-          severityMultiplier = 1.5;
-        } else if (result.deceptivePatterns.includes('acceptButtonProminence')) {
-          severity = 'medium';
-          severityMultiplier = 1.0;
+        // If we've alerted within 5 minutes, skip
+        if (lastAlertTime && now - lastAlertTime < 300000) {
+          return { success: true };
         }
+
+        // Also check if there's already a recent alert in storage
+        const storageData = await Storage.get();
+        const messageText = `${domain} may not follow privacy best practices`;
+        const recentAlert = storageData.alerts.find(
+          a => a.domain === domain &&
+          a.message.includes(messageText) &&
+          now - a.timestamp < 300000 // 5 minutes
+        );
+
+        if (recentAlert) {
+          // Update cache to prevent future checks
+          consentAlertCache.set(domain, now);
+          return { success: true };
+        }
+
+        // Set cache BEFORE creating alert to prevent race conditions
+        consentAlertCache.set(domain, now);
+
+        // Calculate severity based on deceptive patterns
+        let severity: 'low' | 'medium' | 'high' = 'medium';
+        let severityMultiplier = 1.0;
+
+        if (result.deceptivePatterns && result.deceptivePatterns.length > 0) {
+          if (result.deceptivePatterns.includes('forcedConsent')) {
+            severity = 'high';
+            severityMultiplier = 2.0;
+          } else if (result.deceptivePatterns.includes('hiddenRejectButton')) {
+            severity = 'high';
+            severityMultiplier = 1.5;
+          } else if (result.deceptivePatterns.includes('acceptButtonProminence')) {
+            severity = 'medium';
+            severityMultiplier = 1.0;
+          }
+        }
+
+        // Emit non-compliant site event with severity multiplier
+        backgroundEvents.emit('NON_COMPLIANT_SITE', {
+          domain,
+          url: result.url,
+          deceptivePatterns: result.deceptivePatterns || [],
+          severityMultiplier,
+        });
+
+        await Storage.addAlert({
+          id: `${Date.now()}-${Math.random()}`,
+          type: 'non_compliant_site',
+          severity,
+          message: messageText,
+          domain,
+          timestamp: Date.now(),
+          url: result.url,
+          deceptivePatterns: result.deceptivePatterns || [],
+          scanConfidence,
+        });
+
+        messageBus.broadcast('STATE_UPDATE');
       }
-
-      // Emit non-compliant site event with severity multiplier
-      backgroundEvents.emit('NON_COMPLIANT_SITE', {
-        domain,
-        url: result.url,
-        deceptivePatterns: result.deceptivePatterns || [],
-        severityMultiplier,
-      });
-
-      await Storage.addAlert({
-        id: `${Date.now()}-${Math.random()}`,
-        type: 'non_compliant_site',
-        severity,
-        message: messageText,
-        domain,
-        timestamp: Date.now(),
-        url: result.url,
-        deceptivePatterns: result.deceptivePatterns || [],
-      });
-
-      messageBus.broadcast('STATE_UPDATE');
       }
     }
     // Persist consent state to Supabase when we have meaningful consent data
@@ -305,10 +399,12 @@ function setupMessageHandlers(): void {
   // Existing emails remain fully accessible - users can still view, copy, and delete
   // their previously generated burner emails even when generation is disabled.
   messageBus.on('GENERATE_BURNER_EMAIL', async (data: unknown) => {
+      // Stryker disable next-line all: logging only
       logger.debug('ServiceWorker', 'GENERATE_BURNER_EMAIL received', { data });
     try {
       // Guard to ensure only generation is affected by the feature toggle; existing emails remain accessible
       const isEnabled = await Storage.getBurnerEmailEnabled();
+      // Stryker disable next-line all: logging only
       logger.debug('ServiceWorker', 'Burner email feature enabled check', { isEnabled });
 
       if (!isEnabled) {
@@ -318,6 +414,7 @@ function setupMessageHandlers(): void {
       }
 
       const { domain, url, label } = data as { domain: string; url?: string; label?: string };
+      // Stryker disable next-line all: logging only
       logger.debug('ServiceWorker', 'Generating email for', { domain, url, label });
       
       const email = await burnerEmailService.generateEmail(domain, url, label);
@@ -326,6 +423,7 @@ function setupMessageHandlers(): void {
       feedbackTelemetryService.trackEvent({
         eventType: 'burner_email_generated',
         eventData: { domain },
+      // Stryker disable next-line all: logging only
       }).catch(err => logger.debug('ServiceWorker', 'Telemetry failed', err));
       return { success: true, email };
     } catch (error) {
@@ -515,6 +613,7 @@ function setupMessageHandlers(): void {
    */
   messageBus.on('GET_BURNER_EMAIL_SETTING', async () => {
     try {
+      // Stryker disable next-line all: logging only
       logger.debug('ServiceWorker', 'GET_BURNER_EMAIL_SETTING: Request received');
       const enabled = await Storage.getBurnerEmailEnabled();
       logger.info('ServiceWorker', 'GET_BURNER_EMAIL_SETTING: Retrieved from storage', { enabled, type: typeof enabled });
@@ -528,6 +627,7 @@ function setupMessageHandlers(): void {
   messageBus.on('SET_TELEMETRY_SETTING', async (data: unknown) => {
     try {
       const { enabled } = data as { enabled: boolean };
+      // Stryker disable next-line all: logging only
       logger.debug('ServiceWorker', 'SET_TELEMETRY_SETTING request received', { enabled });
       if (typeof enabled !== 'boolean') {
         return { success: false, error: 'Invalid enabled value' };
@@ -549,6 +649,7 @@ function setupMessageHandlers(): void {
   messageBus.on('GET_TELEMETRY_SETTING', async () => {
     try {
       const enabled = await Storage.getTelemetryEnabled();
+      // Stryker disable next-line all: logging only
       logger.debug('ServiceWorker', 'Telemetry setting retrieved', { enabled });
       return { success: true, enabled };
     } catch (error) {
@@ -559,6 +660,7 @@ function setupMessageHandlers(): void {
 
   messageBus.on('GET_REAL_EMAIL', async () => {
     try {
+      // Stryker disable next-line all: logging only
       logger.debug('ServiceWorker', 'GET_REAL_EMAIL: Request received');
       const email = await Storage.getRealEmail();
       logger.info('ServiceWorker', 'GET_REAL_EMAIL: Retrieved from storage', { hasEmail: !!email, emailLength: email?.length || 0 });
@@ -580,6 +682,7 @@ function setupMessageHandlers(): void {
 
       // Check if burner email feature is enabled before allowing real email configuration
       const isEnabled = await Storage.getBurnerEmailEnabled();
+      // Stryker disable next-line all: logging only
       logger.debug('ServiceWorker', 'SET_REAL_EMAIL: Checked burner email enabled state', { isEnabled });
       if (!isEnabled) {
         logger.warn('ServiceWorker', 'SET_REAL_EMAIL blocked - burner email feature is disabled');
@@ -587,9 +690,11 @@ function setupMessageHandlers(): void {
       }
 
       await Storage.setRealEmail(email);
+      // Stryker disable next-line all: logging only
       logger.debug('ServiceWorker', 'SET_REAL_EMAIL: Email saved to storage');
 
       // Broadcast STATE_UPDATE to notify all UI components to refresh their state
+      // Stryker disable next-line all: logging only
       logger.debug('ServiceWorker', 'SET_REAL_EMAIL: Broadcasting STATE_UPDATE');
       messageBus.broadcast('STATE_UPDATE');
 
@@ -774,6 +879,14 @@ function setupCleanupInterval(): void {
     tabManager.cleanup();
     FirewallEngine.cleanup();
   }, TIME.ONE_HOUR_MS);
+
+  setInterval(() => {
+    void fetchFalsePositiveOverrides();
+  }, FALSE_POSITIVE_FEEDBACK.OVERRIDE_REFRESH_INTERVAL_MS);
+
+  setInterval(() => {
+    void fetchScoringConfig();
+  }, SCORING_CONFIG.REFRESH_INTERVAL_MS);
 }
 
 chrome.runtime.onInstalled.addListener(async (details) => {
@@ -781,6 +894,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === 'install') {
     feedbackTelemetryService.trackEvent({
       eventType: 'extension_installed',
+    // Stryker disable next-line all: logging only
     }).catch(err => logger.debug('ServiceWorker', 'Telemetry failed', err));
 
     try {

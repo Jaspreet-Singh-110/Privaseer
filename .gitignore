@@ -39,7 +39,9 @@ test-results/
 blob-report/
 .playwright-cache/
 ms-playwright/
-tests/
+tests/*
+!tests/e2e/
+!tests/e2e/**
 
 # Stryker artifacts
 .stryker-tmp/

@@ -5,6 +5,20 @@ import { resolve } from 'path';
 export default defineConfig(() => {
   const isStryker = process.env.STRYKER_MUTATION === '1';
 
+  const exclude = [
+    '**/node_modules/**',
+    '**/dist/**',
+    '**/.stryker-tmp/**',
+    '**/tests/e2e/**',
+    ...(isStryker
+      ? [
+          'src/tests/popup/settings-page.test.tsx',
+          'src/tests/content-scripts/email-autofill.test.ts',
+          'src/tests/welcome/welcome.test.tsx',
+        ]
+      : []),
+  ];
+
   return {
     plugins: [react({ jsxRuntime: 'automatic' })],
     esbuild: {
@@ -29,7 +43,7 @@ export default defineConfig(() => {
       setupFiles: isStryker
         ? ['./src/tests/stryker-vite-shim.ts', './src/tests/setup.ts']
         : ['./src/tests/setup.ts'],
-      exclude: ['**/node_modules/**', '**/dist/**', '**/.stryker-tmp/**', '**/tests/e2e/**'],
+      exclude,
       // Use threads pool for Stryker to avoid birpc race conditions
       pool: isStryker ? 'threads' : 'forks',
       poolOptions: {
@@ -52,10 +66,10 @@ export default defineConfig(() => {
           'src/manifest.json',
         ],
         thresholds: {
-          lines: 40,
-          functions: 40,
-          branches: 30,
-          statements: 40,
+          lines: 80,
+          functions: 85,
+          branches: 75,
+          statements: 80,
         },
       },
     },

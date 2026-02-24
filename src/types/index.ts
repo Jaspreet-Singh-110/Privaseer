@@ -9,6 +9,7 @@ export interface Alert {
   deceptivePatterns?: string[];
   trackerCount?: number;
   blockedTrackers?: string[];
+  scanConfidence?: number;
 }
 
 export interface PrivacyScore {
@@ -48,8 +49,29 @@ export interface CreditScoreResult {
   score: number;
   label: CreditScoreLabel;
   trend: ScoreTrend;
+  formulaVersion: string;
   factors: CreditScoreFactors;
   lastCalculated: number;
+}
+
+export interface ScoringConfig {
+  version: string;
+  riskWeights: Record<string, number>;
+  creditFactors: {
+    protectionMultiplier: number;
+    protectionCap: number;
+    cleanBrowsingMultiplier: number;
+    cleanBrowsingCap: number;
+    highRiskCap: number;
+    violationMultiplier: number;
+    violationCap: number;
+    dailyHighRiskCap: number;
+  };
+  decay: {
+    enabled: boolean;
+    base: number;
+    maxOccurrences: number;
+  };
 }
 
 export interface TrackerData {
@@ -242,6 +264,19 @@ export interface StorageData {
   onboarding: OnboardingState;
 }
 
+export interface DataExportPayload {
+  format: string;
+  version: string;
+  exportedAt: string;
+  data: StorageData;
+}
+
+export interface DomainConfidenceOverride {
+  threshold: number;
+  reportCount: number;
+  lastUpdated: string;
+}
+
 export interface OnboardingState {
   hasCompletedOnboarding: boolean;
   currentStep: number;
@@ -256,6 +291,7 @@ export type MessageType =
   | 'GET_ALL_SETTINGS'
   | 'TOGGLE_PROTECTION'
   | 'GET_CREDIT_SCORE'
+  | 'GET_SCORING_CONFIG'
   | 'CREDIT_SCORE_UPDATED'
   | 'CONSENT_SCAN_RESULT'
   | 'GET_TRACKER_INFO'
@@ -350,6 +386,7 @@ export interface MessageDataMap {
   GET_ALL_SETTINGS: undefined;
   TOGGLE_PROTECTION: undefined;
   GET_CREDIT_SCORE: undefined;
+  GET_SCORING_CONFIG: undefined;
   CREDIT_SCORE_UPDATED: { creditScore: CreditScoreResult };
   CONSENT_SCAN_RESULT: ConsentScanResult;
   GET_TRACKER_INFO: GetTrackerInfoData;

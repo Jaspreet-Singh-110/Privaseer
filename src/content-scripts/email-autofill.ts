@@ -2,7 +2,7 @@ import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
 import { sanitizeUrlForBurner } from '../utils/validation';
 
-class EmailAutofill {
+export class EmailAutofill {
   private isProcessing: boolean = false;
   private burnerEmailButton: HTMLElement | null = null;
   private isEnabled: boolean = false;
@@ -167,6 +167,9 @@ class EmailAutofill {
 
     const button = document.createElement('div');
     button.id = 'privaseer-burner-email-btn';
+    button.setAttribute('role', 'button');
+    button.setAttribute('aria-label', 'Generate burner email address');
+    button.setAttribute('tabindex', '0');
     button.innerHTML = `
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
@@ -214,6 +217,24 @@ class EmailAutofill {
     button.addEventListener('click', async (e) => {
       e.preventDefault();
       e.stopPropagation();
+
+      button.style.opacity = '0.6';
+      button.style.pointerEvents = 'none';
+
+      await this.generateAndFillBurnerEmail(input);
+    });
+
+    button.addEventListener('keydown', async (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') {
+        return;
+      }
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (button.style.pointerEvents === 'none') {
+        return;
+      }
 
       button.style.opacity = '0.6';
       button.style.pointerEvents = 'none';
@@ -329,6 +350,9 @@ class EmailAutofill {
 
   private showSuccessNotification(email: string): void {
     const notification = document.createElement('div');
+    notification.setAttribute('role', 'alert');
+    notification.setAttribute('aria-live', 'assertive');
+    notification.setAttribute('aria-atomic', 'true');
     notification.innerHTML = `
       <div style="display: flex; align-items: center; gap: 8px;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -367,6 +391,9 @@ class EmailAutofill {
 
   private showErrorNotification(message: string): void {
     const notification = document.createElement('div');
+    notification.setAttribute('role', 'alert');
+    notification.setAttribute('aria-live', 'assertive');
+    notification.setAttribute('aria-atomic', 'true');
     notification.innerHTML = `
       <div style="display: flex; align-items: center; gap: 8px;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

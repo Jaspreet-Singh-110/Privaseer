@@ -3,24 +3,31 @@
   "packageManager": "npm",
   "testRunner": "vitest",
   "reporters": ["html", "clear-text", "progress"],
-  "coverageAnalysis": "off",
+  "coverageAnalysis": "perTest",
   "mutate": [
     "src/**/*.ts",
     "src/**/*.tsx",
     "!src/**/*.test.ts",
     "!src/**/*.test.tsx",
     "!src/tests/**",
-    "!src/vite-env.d.ts"
+    "!src/vite-env.d.ts",
+    "!src/types/**"
   ],
-  "checkers": ["typescript"],
+  "checkers": [],
   "tsconfigFile": "tsconfig.app.json",
   "timeoutMS": 120000,
-  "concurrency": 4,
-  "disableTimeouts": false,
+  "concurrency": 1,
+  "ignoreStatic": true,
+  "testRunnerNodeArgs": ["--max-old-space-size=4096"],
+  "ignorePatterns": [
+    ".cursor/**",
+    ".git/**",
+    "reports/**"
+  ],
   "thresholds": {
     "high": 80,
     "low": 60,
-    "break": null
+    "break": 50
   }
 }
 

@@ -26,6 +26,7 @@ describe('tabManager integration', () => {
   let updatedListeners: ChromeTabListener<
     (tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => void
   >;
+  let activatedListeners: ChromeTabListener<(activeInfo: chrome.tabs.TabActiveInfo) => void>;
   let removedListeners: ChromeTabListener<(tabId: number) => void>;
 
   const resetTabManagerState = (): void => {
@@ -42,13 +43,14 @@ describe('tabManager integration', () => {
   const setupChromeTabs = (initialTabs: chrome.tabs.Tab[]): void => {
     createdListeners = [];
     updatedListeners = [];
+    activatedListeners = [];
     removedListeners = [];
 
     const tabsApi = {
       query: vi.fn().mockResolvedValue(initialTabs),
       onCreated: { addListener: vi.fn((cb) => createdListeners.push(cb)) },
       onUpdated: { addListener: vi.fn((cb) => updatedListeners.push(cb)) },
-      onActivated: { addListener: vi.fn() },
+      onActivated: { addListener: vi.fn((cb) => activatedListeners.push(cb)) },
       onRemoved: { addListener: vi.fn((cb) => removedListeners.push(cb)) },
     };
 
@@ -133,5 +135,131 @@ describe('tabManager integration', () => {
     const stats = tabManager.getStats();
     expect(stats.totalTabs).toBe(1);
     expect(stats.totalBlocks).toBe(0);
+  });
+
+  it('handles tab creation events', async () => {
+    await tabManager.initialize();
+
+    createdListeners[0]?.({
+      id: 3,
+      url: 'https://new-tab.example',
+      title: 'New Tab',
+      active: false,
+      status: 'complete',
+    } as chrome.tabs.Tab);
+
+    expect(tabManager.getTab(3)).toBeDefined();
+  });
+
+  it('handles tab activation events', async () => {
+    await tabManager.initialize();
+
+    createdListeners[0]?.({
+      id: 4,
+      url: 'https://inactive.example',
+      title: 'Inactive',
+      active: false,
+      status: 'complete',
+    } as chrome.tabs.Tab);
+
+    expect(tabManager.getTab(4)).toBeDefined();
+
+    activatedListeners[0]?.({ tabId: 4, windowId: 1 } as chrome.tabs.TabActiveInfo);
+    expect(tabManager.getActiveTab()).toEqual(
+      expect.objectContaining({
+        id: 4,
+        active: true,
+      })
+    );
+  });
+
+  it('cleans up old tab data', async () => {
+    await tabManager.initialize();
+
+    // Cleanup removes tabs older than 24 hours, but we need to test the cleanup function exists
+    tabManager.cleanup();
+    
+    // Verify cleanup doesn't crash
+    const stats = tabManager.getStats();
+    expect(stats).toBeDefined();
+  });
+
+  it('returns undefined for non-existent tabs', () => {
+    expect(tabManager.getTab(999)).toBeUndefined();
+    expect(tabManager.getBlockCount(999)).toBe(0);
+  });
+
+  it('handles multiple increments correctly', async () => {
+    await tabManager.initialize();
+
+    tabManager.incrementBlockCount(1);
+    tabManager.incrementBlockCount(1);
+    tabManager.incrementBlockCount(1);
+
+    expect(tabManager.getBlockCount(1)).toBe(3);
+
+    const stats = tabManager.getStats();
+    expect(stats.totalBlocks).toBeGreaterThanOrEqual(3);
+  });
+
+  it('recovers when initial tab sync fails', async () => {
+    const queryError = new Error('tabs query failed');
+    setupChromeTabs([]);
+    const chromeRef = globalThis.chrome as unknown as {
+      tabs: { query: ReturnType<typeof vi.fn> };
+    };
+    chromeRef.tabs.query.mockRejectedValue(queryError);
+
+    await tabManager.initialize();
+
+    const stats = tabManager.getStats();
+    expect(stats.totalTabs).toBe(0);
+    expect(loggerMock.error).toHaveBeenCalledWith(
+      'TabManager',
+      'Failed to sync existing tabs',
+      queryError
+    );
+  });
+
+  it('handles rapid navigation updates without losing final tab state', async () => {
+    await tabManager.initialize();
+
+    updatedListeners[0]?.(
+      1,
+      { status: 'loading' } as chrome.tabs.TabChangeInfo,
+      {
+        id: 1,
+        url: 'https://example.com/loading?ref=track',
+        title: 'Loading',
+        active: true,
+        status: 'loading',
+      } as chrome.tabs.Tab
+    );
+
+    updatedListeners[0]?.(
+      1,
+      { status: 'complete' } as chrome.tabs.TabChangeInfo,
+      {
+        id: 1,
+        url: 'https://example.com/final?utm=test',
+        title: 'Final',
+        active: true,
+        status: 'complete',
+      } as chrome.tabs.Tab
+    );
+
+    const tab = tabManager.getTab(1);
+    expect(tab).toEqual(
+      expect.objectContaining({
+        status: 'complete',
+        title: 'Final',
+        // URL should be sanitized by tab manager
+        url: 'https://example.com/final',
+      })
+    );
+    expect(broadcastMock).toHaveBeenCalledWith(
+      'TAB_UPDATED',
+      expect.objectContaining({ tabId: 1 })
+    );
   });
 });

@@ -1,9 +1,10 @@
-import { CREDIT_SCORE } from './constants';
+import { CREDIT_SCORE, SCORING_CONFIG } from './constants';
 import type {
   CreditScoreFactors,
   CreditScoreLabel,
   CreditScoreResult,
   DailyCreditMetrics,
+  ScoringConfig,
   ScoreTrend,
 } from '../types';
 
@@ -46,7 +47,19 @@ export class PrivacyCreditEngine {
    * @param metrics Array of daily credit metrics (last 30 days)
    * @param previousScore Optional previous score for trend calculation
    */
-  static calculateScore(metrics: DailyCreditMetrics[], previousScore?: number): CreditScoreResult {
+  static calculateScore(
+    metrics: DailyCreditMetrics[],
+    previousScore?: number,
+    config?: ScoringConfig
+  ): CreditScoreResult {
+    const resolvedConfig = config ?? {
+      version: SCORING_CONFIG.DEFAULT_VERSION,
+      riskWeights: { ...SCORING_CONFIG.DEFAULTS.riskWeights },
+      creditFactors: { ...SCORING_CONFIG.DEFAULTS.creditFactors },
+      decay: { ...SCORING_CONFIG.DEFAULTS.decay },
+    };
+    const factorsConfig = resolvedConfig.creditFactors;
+
     const ordered = [...metrics].sort((a, b) => (a.date > b.date ? -1 : 1));
     const windowed = ordered.slice(0, CREDIT_SCORE.METRICS_RETENTION_DAYS);
 
@@ -57,7 +70,7 @@ export class PrivacyCreditEngine {
         acc.violations += day.postConsentViolations;
 
         const dailyHighRiskPenalty = Math.min(
-          CREDIT_SCORE.DAILY_HIGH_RISK_CAP,
+          factorsConfig.dailyHighRiskCap,
           day.highRiskScore * 2
         );
         acc.highRiskPenalty += dailyHighRiskPenalty;
@@ -73,27 +86,27 @@ export class PrivacyCreditEngine {
     );
 
     const protectionImpact = clamp(
-      50 * log2scaled(totals.daysActive + 1),
+      factorsConfig.protectionMultiplier * log2scaled(totals.daysActive + 1),
       0,
-      CREDIT_SCORE.PROTECTION_CAP
+      factorsConfig.protectionCap
     );
 
     const cleanBrowsingImpact = clamp(
-      10 * log2scaled(totals.cleanSites + 1),
+      factorsConfig.cleanBrowsingMultiplier * log2scaled(totals.cleanSites + 1),
       0,
-      CREDIT_SCORE.CLEAN_BROWSING_CAP
+      factorsConfig.cleanBrowsingCap
     );
 
     const highRiskImpact = -clamp(
       totals.highRiskPenalty,
       0,
-      Math.abs(CREDIT_SCORE.HIGH_RISK_CAP)
+      Math.abs(factorsConfig.highRiskCap)
     );
 
     const violationImpact = -clamp(
-      totals.violations * 25,
+      totals.violations * factorsConfig.violationMultiplier,
       0,
-      Math.abs(CREDIT_SCORE.VIOLATION_CAP)
+      Math.abs(factorsConfig.violationCap)
     );
 
     const rawScore =
@@ -118,6 +131,7 @@ export class PrivacyCreditEngine {
       score,
       label: getLabel(score),
       trend,
+      formulaVersion: resolvedConfig.version,
       factors,
       lastCalculated: Date.now(),
     };

@@ -7,6 +7,8 @@ import { shouldPenalizeTracker } from '../utils/consent-validator';
 import type { CreditScoreResult, DailyMetricsSnapshot, StorageData, TrackerData } from '../types';
 import { PrivacyCreditEngine } from '../utils/privacy-credit-engine';
 import { messageBus } from '../utils/message-bus';
+import { getScoringConfig } from './scoring-config';
+import { feedbackTelemetryService } from './feedback-telemetry-service';
 
 export class PrivacyScoreManager {
   private static listenersSetup = false;
@@ -119,7 +121,8 @@ export class PrivacyScoreManager {
     const data = await Storage.get();
     const metrics = await Storage.getDailyCreditMetrics(CREDIT_SCORE.METRICS_RETENTION_DAYS);
     const previousScore = data.creditScore?.score;
-    const creditScore = PrivacyCreditEngine.calculateScore(metrics, previousScore);
+    const scoringConfig = getScoringConfig();
+    const creditScore = PrivacyCreditEngine.calculateScore(metrics, previousScore, scoringConfig);
     const legacyOld = data.privacyScore.current;
     const legacyNew = this.legacyFromCredit(creditScore.score);
 
@@ -132,6 +135,29 @@ export class PrivacyScoreManager {
       oldScore: legacyOld,
       newScore: legacyNew,
       reason: 'Credit score updated',
+    });
+    backgroundEvents.emit('SCORING_ANALYTICS', {
+      formulaVersion: creditScore.formulaVersion,
+      scoreDelta: creditScore.score - (previousScore ?? creditScore.score),
+      factors: {
+        protectionConsistencyImpact: creditScore.factors.protectionConsistency.impact,
+        cleanBrowsingImpact: creditScore.factors.cleanBrowsing.impact,
+        highRiskExposureImpact: creditScore.factors.highRiskExposure.impact,
+        violationsImpact: creditScore.factors.violations.impact,
+      },
+    });
+    void feedbackTelemetryService.trackEvent({
+      eventType: 'scoring_analytics',
+      eventData: {
+        formulaVersion: creditScore.formulaVersion,
+        score: creditScore.score,
+        previousScore: previousScore ?? null,
+        scoreDelta: creditScore.score - (previousScore ?? creditScore.score),
+        protectionImpact: creditScore.factors.protectionConsistency.impact,
+        cleanBrowsingImpact: creditScore.factors.cleanBrowsing.impact,
+        highRiskImpact: creditScore.factors.highRiskExposure.impact,
+        violationImpact: creditScore.factors.violations.impact,
+      },
     });
 
     messageBus.broadcast('CREDIT_SCORE_UPDATED', { creditScore });

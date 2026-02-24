@@ -44,6 +44,16 @@ interface EventMap {
     type: 'tracker' | 'clean_site' | 'violation' | 'high_risk';
     value: number;
   };
+  SCORING_ANALYTICS: {
+    formulaVersion: string;
+    scoreDelta: number;
+    factors: {
+      protectionConsistencyImpact: number;
+      cleanBrowsingImpact: number;
+      highRiskExposureImpact: number;
+      violationsImpact: number;
+    };
+  };
 }
 
 type EventType = keyof EventMap;

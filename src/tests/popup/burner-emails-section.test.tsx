@@ -171,6 +171,32 @@ describe('BurnerEmailsSection', () => {
       expect(screen.queryByText('Forwarding Email Address')).not.toBeInTheDocument();
       expect(screen.queryByPlaceholderText('your.email@example.com')).not.toBeInTheDocument();
     });
+
+    it('still shows existing emails when feature is disabled', async () => {
+      mockSendMessage.mockImplementation((message) => {
+        if (message.type === 'GET_BURNER_EMAIL_SETTING') {
+          return Promise.resolve({ success: true, enabled: false });
+        }
+        if (message.type === 'GET_BURNER_EMAILS') {
+          return Promise.resolve({ success: true, emails: mockBurnerEmails });
+        }
+        if (message.type === 'GET_REAL_EMAIL') {
+          return Promise.resolve({ success: true, email: null });
+        }
+        return Promise.resolve({ success: true });
+      });
+
+      render(<BurnerEmailsSection />);
+
+      await waitFor(() => {
+        expect(screen.getByText('burner1@privaseer.email')).toBeInTheDocument();
+      });
+
+      const copyButtons = screen.getAllByLabelText(/Copy email address/i);
+      const deleteButtons = screen.getAllByLabelText(/Delete email address/i);
+      expect(copyButtons).toHaveLength(2);
+      expect(deleteButtons).toHaveLength(2);
+    });
   });
 
   describe('Real Email Validation and Save', () => {

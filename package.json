@@ -13,10 +13,12 @@
     "test:ui": "NODE_OPTIONS='--max-old-space-size=4096' vitest --ui",
     "test:run": "NODE_OPTIONS='--max-old-space-size=4096' vitest run",
     "test:coverage": "NODE_OPTIONS='--max-old-space-size=4096' vitest run --coverage",
-    "test:mutation": "STRYKER_MUTATION=1 SOURCEMAP=false VITE_SOURCEMAP=false stryker run",
+    "test:mutation": "BROWSERSLIST_IGNORE_OLD_DATA=1 STRYKER_MUTATION=1 SOURCEMAP=false VITE_SOURCEMAP=false stryker run",
+    "test:mutation:changed": "BROWSERSLIST_IGNORE_OLD_DATA=1 STRYKER_MUTATION=1 SOURCEMAP=false VITE_SOURCEMAP=false stryker run --incremental --incrementalFile .stryker-incremental.json",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:e2e:debug": "playwright test --debug"
+    "test:e2e:debug": "playwright test --debug",
+    "prepare": "husky"
   },
   "dependencies": {
     "lucide-react": "^0.344.0",
@@ -48,9 +50,12 @@
     "eslint-plugin-react-refresh": "^0.4.11",
     "globals": "^15.9.0",
     "happy-dom": "^20.0.10",
+    "husky": "^9.1.7",
     "jsdom": "^27.2.0",
+    "lint-staged": "^16.2.7",
     "playwright": "^1.57.0",
     "postcss": "^8.4.35",
+    "prettier": "^3.8.1",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.5.3",
     "vite": "^7.2.2",
@@ -61,5 +66,14 @@
     "web-ext-run": {
       "pino": "^9.13.1"
     }
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "vitest related --run"
+    ],
+    "*.{json,md}": [
+      "prettier --write"
+    ]
   }
 }

@@ -272,22 +272,22 @@ describe('Theme Integration Tests', () => {
 
   describe('Theme Transitions', () => {
     it('should not cause flashing by applying theme immediately on init', () => {
-      const startTime = Date.now();
+      const addCallsBefore = (document.documentElement.classList.add as ReturnType<typeof vi.fn>).mock.calls.length;
       ThemeManager.initialize('dark');
-      const endTime = Date.now();
+      const addCallsAfter = (document.documentElement.classList.add as ReturnType<typeof vi.fn>).mock.calls.length;
 
-      expect(endTime - startTime).toBeLessThan(10);
+      expect(addCallsAfter).toBeGreaterThan(addCallsBefore);
       expect(document.documentElement.classList.add).toHaveBeenCalledWith('dark');
     });
 
     it('should apply new theme immediately on update', () => {
       ThemeManager.initialize('light');
 
-      const startTime = Date.now();
+      const addCallsBefore = (document.documentElement.classList.add as ReturnType<typeof vi.fn>).mock.calls.length;
       ThemeManager.updatePreference('dark');
-      const endTime = Date.now();
+      const addCallsAfter = (document.documentElement.classList.add as ReturnType<typeof vi.fn>).mock.calls.length;
 
-      expect(endTime - startTime).toBeLessThan(10);
+      expect(addCallsAfter).toBeGreaterThan(addCallsBefore);
       expect(document.documentElement.classList.add).toHaveBeenCalledWith('dark');
     });
 

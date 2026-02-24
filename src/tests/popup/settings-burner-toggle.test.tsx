@@ -45,7 +45,7 @@ describe('Settings Page - Burner Email Toggle', () => {
     const user = userEvent.setup();
     
     // Mock initial state - burner email is disabled
-    mockSendMessage.mockImplementation((message) => {
+    mockSendMessage.mockImplementation((message: { type: string }) => {
       if (message.type === 'GET_ALL_SETTINGS') {
         return Promise.resolve({ 
           success: true, 
@@ -91,7 +91,7 @@ describe('Settings Page - Burner Email Toggle', () => {
     const toggleButton = screen.getByLabelText('Toggle burner email protection');
     
     // Mock the toggle response - burner email is now enabled
-    mockSendMessage.mockImplementation((message) => {
+    mockSendMessage.mockImplementation((message: { type: string }) => {
       if (message.type === 'SET_BURNER_EMAIL_SETTING') {
         return Promise.resolve({ success: true, enabled: true });
       }
@@ -288,5 +288,69 @@ describe('Settings Page - Burner Email Toggle', () => {
     // Final state should match the last toggle
     expect(currentEnabled).toBe(true);
     expect(emailInput.disabled).toBe(false);
+  });
+
+  it('blocks toggle while a previous toggle is in progress', async () => {
+    const user = userEvent.setup();
+    let resolveToggle: ((value: unknown) => void) | null = null;
+
+    mockSendMessage.mockImplementation((message) => {
+      if (message.type === 'GET_ALL_SETTINGS') {
+        return Promise.resolve({
+          success: true,
+          settings: {
+            burnerEmailEnabled: false,
+            telemetryEnabled: false,
+            protectionEnabled: true,
+          },
+        });
+      }
+      if (message.type === 'GET_REAL_EMAIL') {
+        return Promise.resolve({ success: true, email: '' });
+      }
+      if (message.type === 'GET_THEME') {
+        return Promise.resolve({ success: true, theme: 'system' });
+      }
+      if (message.type === 'SET_BURNER_EMAIL_SETTING') {
+        return new Promise<unknown>((resolve) => {
+          resolveToggle = resolve;
+        });
+      }
+      return Promise.resolve({ success: true });
+    });
+
+    render(
+      <SettingsPage
+        isOpen={true}
+        onClose={vi.fn()}
+        currentTab={null}
+        onFeedbackSuccess={vi.fn()}
+        deepLinkSection="burner-services"
+      />
+    );
+
+    await waitFor(() => {
+      expect(mockSendMessage).toHaveBeenCalledWith({ type: 'GET_ALL_SETTINGS' });
+    });
+
+    const toggleButton = screen.getByLabelText('Toggle burner email protection');
+
+    await user.click(toggleButton);
+    await user.click(toggleButton);
+
+    expect(mockSendMessage).toHaveBeenCalledWith({
+      type: 'SET_BURNER_EMAIL_SETTING',
+      data: { enabled: true },
+    });
+
+    expect(
+      mockSendMessage.mock.calls.filter(
+        (call) => call[0]?.type === 'SET_BURNER_EMAIL_SETTING'
+      )
+    ).toHaveLength(1);
+
+    if (resolveToggle) {
+      (resolveToggle as (value: unknown) => void)({ success: true, enabled: true });
+    }
   });
 });

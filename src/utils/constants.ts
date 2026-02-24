@@ -34,6 +34,39 @@ export const CREDIT_SCORE = {
   },
 } as const;
 
+export const SCORING_CONFIG = {
+  REFRESH_INTERVAL_MS: 60 * 60 * 1000,
+  ENDPOINT: '/functions/v1/get-scoring-config',
+  DEFAULT_VERSION: '1.0',
+  DEFAULTS: {
+    riskWeights: {
+      analytics: 1,
+      advertising: 2,
+      social: 2,
+      fingerprinting: 5,
+      beacons: 2,
+      cryptomining: 10,
+      malware: 20,
+      unknown: 1,
+    },
+    creditFactors: {
+      protectionMultiplier: 50,
+      protectionCap: 150,
+      cleanBrowsingMultiplier: 10,
+      cleanBrowsingCap: 100,
+      highRiskCap: -200,
+      violationMultiplier: 25,
+      violationCap: -100,
+      dailyHighRiskCap: 30,
+    },
+    decay: {
+      enabled: true,
+      base: 0.5,
+      maxOccurrences: 4,
+    },
+  },
+} as const;
+
 export const TIME = {
   ONE_WEEK_MS: 7 * 24 * 60 * 60 * 1000,
   ONE_DAY_MS: 24 * 60 * 60 * 1000,
@@ -89,6 +122,19 @@ export const CONFIDENCE = {
   },
 } as const;
 
+export const DATA_EXPORT = {
+  FORMAT: 'privaseer-data-export',
+  VERSION: '1.0',
+} as const;
+
+export const FALSE_POSITIVE_FEEDBACK = {
+  BASE_THRESHOLD: 80,
+  MIN_REPORTERS_FOR_OVERRIDE: 3,
+  MAX_OVERRIDE_THRESHOLD: 95,
+  OVERRIDE_REFRESH_INTERVAL_MS: 60 * 60 * 1000,
+  OVERRIDES_ENDPOINT: '/functions/v1/get-fp-overrides',
+} as const;
+
 export const SCAN_PHASES = {
   QUICK_DELAY_MS: 2000,
   INTERACTION_DELAY_MS: 5000,
@@ -116,8 +162,8 @@ export const STORAGE_RETRY = {
 
 export const SUPABASE = {
   URL: 'https://llffqxdhpgsqnpzeznaq.supabase.co',
-  ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxsZmZxeGRocGdzcW5wemV6bmFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA4NjMxNjIsImV4cCI6MjA3NjQzOTE2Mn0.Eaug9z-gFKPiD3vGI7yKXVUUwJMEMsfUnZ3SXj9SO4Y',
-} as const;
+  ANON_KEY: import.meta.env.VITE_SUPABASE_ANON_KEY,
+};
 
 export const BURNER_AUTH = {
   TOKEN_REFRESH_BUFFER_MS: 60 * 1000,

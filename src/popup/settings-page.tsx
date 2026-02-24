@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { X, MessageSquare, Send, Info, Palette, Mail, ChevronRight, ArrowLeft, Sun, Moon, Monitor, BarChart2 } from 'lucide-react';
+import { X, MessageSquare, Send, Info, Palette, Mail, ChevronRight, ArrowLeft, Sun, Moon, Monitor, BarChart2, Download } from 'lucide-react';
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
 import { ThemeManager } from '../utils/theme-manager';
+import { DATA_EXPORT } from '../utils/constants';
 import { validateEmail } from '../utils/validation';
-import type { Alert as AlertType, AllSettingsResponse } from '../types';
+import type { Alert as AlertType, AllSettingsResponse, DataExportPayload } from '../types';
 
 export type SettingsSection = 'menu' | 'feedback' | 'theme' | 'burner-services' | 'telemetry' | 'about';
 type ThemeOption = 'light' | 'dark' | 'system';
@@ -47,6 +48,7 @@ export function SettingsPage({
   const [realEmailInput, setRealEmailInput] = useState<string>('');
   const [isSavingRealEmail, setIsSavingRealEmail] = useState(false);
   const [realEmailError, setRealEmailError] = useState<string | null>(null);
+  const [isExportingData, setIsExportingData] = useState(false);
   const burnerToggleRef = useRef<HTMLButtonElement | null>(null);
   const isTogglingRef = useRef(false);
 
@@ -411,6 +413,44 @@ export function SettingsPage({
     }
   };
 
+  const handleExportData = async () => {
+    if (isExportingData) {
+      return;
+    }
+
+    setIsExportingData(true);
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'GET_STATE' });
+      if (!response?.success || !response.data) {
+        throw new Error(response?.error || 'Failed to prepare export');
+      }
+
+      const exportData: DataExportPayload = {
+        format: DATA_EXPORT.FORMAT,
+        version: DATA_EXPORT.VERSION,
+        exportedAt: new Date().toISOString(),
+        data: response.data,
+      };
+      const fileContents = JSON.stringify(exportData, null, 2);
+      const blob = new Blob([fileContents], { type: 'application/json' });
+      const objectUrl = URL.createObjectURL(blob);
+      const timestamp = new Date().toISOString().split('T')[0];
+      const downloadLink = document.createElement('a');
+      downloadLink.href = objectUrl;
+      downloadLink.download = `privaseer-data-export-${timestamp}.json`;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      downloadLink.remove();
+      URL.revokeObjectURL(objectUrl);
+
+      logger.info('Settings', 'User data export downloaded');
+    } catch (error) {
+      logger.error('Settings', 'Failed to export data', toError(error));
+    } finally {
+      setIsExportingData(false);
+    }
+  };
+
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {
       handleClose();
@@ -422,7 +462,7 @@ export function SettingsPage({
       className="absolute inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
       onClick={handleBackdropClick}
     >
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md" role="dialog" aria-modal="true" aria-label="Extension settings">
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
           <div className="flex items-center gap-2">
             {activeSection !== 'menu' && (
@@ -567,6 +607,7 @@ export function SettingsPage({
                 <button
                   onClick={() => handleThemeChange('light')}
                   disabled={isApplyingTheme}
+                  aria-pressed={selectedTheme === 'light'}
                   className={`w-full flex items-center justify-between p-4 border-2 rounded-lg transition-all ${
                     selectedTheme === 'light'
                       ? 'border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
@@ -600,6 +641,7 @@ export function SettingsPage({
                 <button
                   onClick={() => handleThemeChange('dark')}
                   disabled={isApplyingTheme}
+                  aria-pressed={selectedTheme === 'dark'}
                   className={`w-full flex items-center justify-between p-4 border-2 rounded-lg transition-all ${
                     selectedTheme === 'dark'
                       ? 'border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
@@ -633,6 +675,7 @@ export function SettingsPage({
                 <button
                   onClick={() => handleThemeChange('system')}
                   disabled={isApplyingTheme}
+                  aria-pressed={selectedTheme === 'system'}
                   className={`w-full flex items-center justify-between p-4 border-2 rounded-lg transition-all ${
                     selectedTheme === 'system'
                       ? 'border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
@@ -685,6 +728,8 @@ export function SettingsPage({
                     ref={burnerToggleRef}
                     onClick={handleBurnerEmailToggle}
                     disabled={isTogglingBurnerEmail}
+                    role="switch"
+                    aria-checked={isBurnerEmailEnabled}
                     className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 ${
                       isBurnerEmailEnabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
                     } ${isTogglingBurnerEmail ? 'opacity-50 cursor-not-allowed' : ''} ${
@@ -820,6 +865,21 @@ export function SettingsPage({
                 </div>
 
                 <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
+                  <button
+                    onClick={handleExportData}
+                    disabled={isExportingData}
+                    className="w-full px-4 py-2.5 text-sm font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/30 disabled:opacity-60 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center justify-center gap-2"
+                    aria-label="Export my data as a JSON file"
+                  >
+                    <Download className="w-4 h-4" />
+                    {isExportingData ? 'Exporting...' : 'Export My Data'}
+                  </button>
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-center">
+                    Download a portable copy of your local extension data.
+                  </p>
+                </div>
+
+                <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
                     Built with privacy in mind
                   </p>
@@ -846,6 +906,8 @@ export function SettingsPage({
                   <button
                     onClick={handleTelemetryToggle}
                     disabled={isTogglingTelemetry}
+                    role="switch"
+                    aria-checked={isTelemetryEnabled}
                     className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${
                       isTelemetryEnabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
                     } ${isTogglingTelemetry ? 'opacity-50 cursor-not-allowed' : ''}`}
