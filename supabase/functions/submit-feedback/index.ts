@@ -24,6 +24,8 @@ interface TelemetryRequest {
   browserVersion?: string;
 }
 
+const MAX_FEEDBACK_LENGTH = 5000;
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -42,10 +44,21 @@ Deno.serve(async (req: Request) => {
 
     if (req.method === "POST" && endpoint === "feedback") {
       const body: FeedbackRequest = await req.json();
+      const trimmedFeedback = body.feedbackText?.trim() ?? "";
 
-      if (!body.installationId || !body.feedbackText) {
+      if (!body.installationId || !trimmedFeedback) {
         return new Response(
           JSON.stringify({ error: "Missing required fields: installationId, feedbackText" }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      if (trimmedFeedback.length > MAX_FEEDBACK_LENGTH) {
+        return new Response(
+          JSON.stringify({ error: `feedbackText exceeds ${MAX_FEEDBACK_LENGTH} characters` }),
           {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -57,7 +70,7 @@ Deno.serve(async (req: Request) => {
         .from("user_feedback")
         .insert({
           installation_id: body.installationId,
-          feedback_text: body.feedbackText,
+          feedback_text: trimmedFeedback,
           url: body.url || null,
           domain: body.domain || null,
           extension_version: body.extensionVersion || null,
@@ -69,7 +82,7 @@ Deno.serve(async (req: Request) => {
       if (error) {
         console.error("Database error:", error);
         return new Response(
-          JSON.stringify({ error: "Failed to submit feedback", details: error.message }),
+          JSON.stringify({ error: "Failed to submit feedback" }),
           {
             status: 500,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -112,7 +125,7 @@ Deno.serve(async (req: Request) => {
       if (error) {
         console.error("Database error:", error);
         return new Response(
-          JSON.stringify({ error: "Failed to submit telemetry", details: error.message }),
+          JSON.stringify({ error: "Failed to submit telemetry" }),
           {
             status: 500,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -139,7 +152,7 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     console.error("Edge function error:", error);
     return new Response(
-      JSON.stringify({ error: "Internal server error", details: error instanceof Error ? error.message : String(error) }),
+      JSON.stringify({ error: "Internal server error" }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

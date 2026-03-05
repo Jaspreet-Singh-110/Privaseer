@@ -276,4 +276,17 @@ describe('Service worker onboarding telemetry', () => {
       })
     );
   });
+
+  it('rejects non-boolean telemetry enabled values', async () => {
+    const handler = getHandler('SET_TELEMETRY_SETTING');
+    const result = await handler({ enabled: 'yes' });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        success: false,
+        error: 'Invalid enabled value',
+      })
+    );
+    expect(storageMock.setTelemetryEnabled).not.toHaveBeenCalled();
+  });
 });

@@ -133,7 +133,7 @@ describe('Burner Email Toggle - Comprehensive Tests', () => {
           return { success: false, error: 'Invalid enabled value' };
         }
         await Storage.setTelemetryEnabled(enabled);
-        messageBus.broadcast('TELEMETRY_SETTING_CHANGED', { enabled });
+        messageBus.broadcast('STATE_UPDATE');
         return { success: true, enabled };
       } catch (error) {
         return { success: false, error: 'Failed to set telemetry setting' };
@@ -254,7 +254,7 @@ describe('Burner Email Toggle - Comprehensive Tests', () => {
     it('should broadcast telemetry changes', async () => {
       const broadcastSpy = vi.spyOn(messageBus, 'broadcast');
       await invokeHandler('SET_TELEMETRY_SETTING', { enabled: true });
-      expect(broadcastSpy).toHaveBeenCalledWith('TELEMETRY_SETTING_CHANGED', { enabled: true });
+      expect(broadcastSpy).toHaveBeenCalledWith('STATE_UPDATE');
       broadcastSpy.mockRestore();
     });
 

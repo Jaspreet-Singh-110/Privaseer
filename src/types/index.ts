@@ -376,7 +376,6 @@ export type MessageType =
   | 'BURNER_EMAIL_SETTING_CHANGED'
   | 'GET_TELEMETRY_SETTING'
   | 'SET_TELEMETRY_SETTING'
-  | 'TELEMETRY_SETTING_CHANGED'
   | 'SUBMIT_FEEDBACK'
   | 'TRACK_EVENT'
   | 'RECORD_COMPLIANCE_SCORE'
@@ -476,7 +475,6 @@ export interface MessageDataMap {
   GET_PRIVACY_SCORE_TREND: undefined;
   GET_TELEMETRY_SETTING: undefined;
   SET_TELEMETRY_SETTING: { enabled: boolean };
-  TELEMETRY_SETTING_CHANGED: { enabled: boolean };
   GET_REAL_EMAIL: undefined;
   SET_REAL_EMAIL: { email: string };
   SET_THEME: { theme: 'light' | 'dark' | 'system' };

@@ -63,7 +63,7 @@ class FeedbackTelemetryService {
 
       logger.debug('FeedbackTelemetryService', 'Submitting feedback', {
         endpoint: FEEDBACK_ENDPOINT,
-        installationId: this.installationId,
+        installationId: this.installationId ? `${this.installationId.substring(0, 8)}...` : null,
         textLength: data.feedbackText.length
       });
 
