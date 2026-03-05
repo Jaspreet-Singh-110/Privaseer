@@ -54,6 +54,8 @@ stryker.log
 .turbo/
 *.tsbuildinfo
 .eslintcache
+*.tgz
+*.zip
 
 # Local env files
 .env.local
