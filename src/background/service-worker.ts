@@ -32,6 +32,8 @@ import { validateComplianceScore, validateEventPayload, validateFeedbackPayload 
 import { AllowlistManager } from '../utils/allowlist-manager';
 import { FalsePositiveService } from './false-positive-service';
 import { fetchScoringConfig, getScoringConfig } from './scoring-config';
+import { MetricsAggregationService } from './metrics-aggregation';
+import { DataExportService } from './data-export-service';
 
 let isInitialized = false;
 let initializationPromise: Promise<void> | null = null;
@@ -907,6 +909,63 @@ function setupMessageHandlers(): void {
     } catch (error) {
       logger.error('ServiceWorker', 'Failed to record compliance score', toError(error));
       return { success: false, error: 'Failed to record compliance score' };
+    }
+  });
+
+  messageBus.on('GET_METRICS_AGGREGATION', async (data: unknown) => {
+    try {
+      const payload = (data ?? {}) as { period?: 'week' | 'month' | 'all-time' };
+      const requestedPeriod = payload.period;
+      const period =
+        requestedPeriod === 'week' || requestedPeriod === 'month' || requestedPeriod === 'all-time'
+          ? requestedPeriod
+          : 'week';
+
+      const aggregation = await MetricsAggregationService.aggregateMetrics(period);
+      return { success: true, aggregation };
+    } catch (error) {
+      logger.error('ServiceWorker', 'Failed to get metrics aggregation', toError(error));
+      return { success: false, error: 'Failed to get metrics aggregation' };
+    }
+  });
+
+  messageBus.on('GET_PRIVACY_SCORE_TREND', async () => {
+    try {
+      const trend = await MetricsAggregationService.getPrivacyScoreTrend();
+      return { success: true, trend };
+    } catch (error) {
+      logger.error('ServiceWorker', 'Failed to get privacy score trend', toError(error));
+      return { success: false, error: 'Failed to get privacy score trend' };
+    }
+  });
+
+  messageBus.on('EXPORT_USER_DATA', async (data: unknown) => {
+    try {
+      const payload = (data ?? {}) as MessageDataMap['EXPORT_USER_DATA'];
+      const format = payload?.format === 'csv' ? 'csv' : 'json';
+      const includeEmail = Boolean(payload?.includeEmail);
+      const exportData = await DataExportService.exportData(format, includeEmail);
+
+      logger.info('ServiceWorker', 'User data export prepared', {
+        format,
+        includeEmail,
+      });
+
+      return { success: true, exportData };
+    } catch (error) {
+      logger.error('ServiceWorker', 'Failed to export user data', toError(error));
+      return { success: false, error: 'Failed to export user data' };
+    }
+  });
+
+  messageBus.on('DELETE_ALL_DATA', async () => {
+    try {
+      await Storage.clearAll();
+      messageBus.broadcast('STATE_UPDATE');
+      return { success: true };
+    } catch (error) {
+      logger.error('ServiceWorker', 'Failed to delete local data', toError(error));
+      return { success: false, error: 'Failed to delete local data' };
     }
   });
 

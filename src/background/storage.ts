@@ -21,6 +21,7 @@ import {
   CREDIT_SCORE,
   SCORING_CONFIG,
   FALSE_POSITIVE_FEEDBACK,
+  DATA_EXPORT,
 } from '../utils/constants';
 
 const DEFAULT_ONBOARDING_STATE: OnboardingState = {
@@ -464,9 +465,9 @@ export class Storage {
 
       data.dailySnapshots.unshift(snapshot);
 
-      // Keep last 30 days
-      if (data.dailySnapshots.length > 30) {
-        data.dailySnapshots = data.dailySnapshots.slice(0, 30);
+      // Keep last N days for portability/reporting consistency.
+      if (data.dailySnapshots.length > DATA_EXPORT.MAX_SNAPSHOT_DAYS) {
+        data.dailySnapshots = data.dailySnapshots.slice(0, DATA_EXPORT.MAX_SNAPSHOT_DAYS);
       }
 
       logger.info('Storage', 'Daily metrics snapshot created', {
@@ -483,6 +484,11 @@ export class Storage {
     await chrome.storage.local.clear();
     this.cache = null;
     await this.initialize();
+  }
+
+  static async clearAll(): Promise<void> {
+    await this.clear();
+    logger.info('Storage', 'All local extension data cleared');
   }
 
   static async getConsentState(domain: string): Promise<LocalConsentState | null> {

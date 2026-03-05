@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { X, MessageSquare, Send, Info, Palette, Mail, ChevronRight, ArrowLeft, Sun, Moon, Monitor, BarChart2, Download } from 'lucide-react';
+import { X, MessageSquare, Send, Info, Palette, Mail, ChevronRight, ArrowLeft, Sun, Moon, Monitor, BarChart2, Download, Trash2 } from 'lucide-react';
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
 import { ThemeManager } from '../utils/theme-manager';
-import { DATA_EXPORT } from '../utils/constants';
 import { validateEmail } from '../utils/validation';
-import type { Alert as AlertType, AllSettingsResponse, DataExportPayload } from '../types';
+import type { Alert as AlertType, AllSettingsResponse } from '../types';
 
 export type SettingsSection = 'menu' | 'feedback' | 'theme' | 'burner-services' | 'telemetry' | 'about';
 type ThemeOption = 'light' | 'dark' | 'system';
@@ -51,6 +50,9 @@ export function SettingsPage({
   const [isSavingRealEmail, setIsSavingRealEmail] = useState(false);
   const [realEmailError, setRealEmailError] = useState<string | null>(null);
   const [isExportingData, setIsExportingData] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'json' | 'csv'>('json');
+  const [includeEmailInExport, setIncludeEmailInExport] = useState(false);
+  const [isDeletingData, setIsDeletingData] = useState(false);
   const burnerToggleRef = useRef<HTMLButtonElement | null>(null);
   const isTogglingRef = useRef(false);
 
@@ -438,34 +440,76 @@ export function SettingsPage({
 
     setIsExportingData(true);
     try {
-      const response = await chrome.runtime.sendMessage({ type: 'GET_STATE' });
-      if (!response?.success || !response.data) {
+      const response = await chrome.runtime.sendMessage({
+        type: 'EXPORT_USER_DATA',
+        data: {
+          format: exportFormat,
+          includeEmail: includeEmailInExport,
+        },
+      }) as {
+        success?: boolean;
+        error?: string;
+        exportData?: {
+          filename: string;
+          mimeType: string;
+          content: string;
+        };
+      };
+
+      if (!response?.success || !response.exportData) {
         throw new Error(response?.error || 'Failed to prepare export');
       }
 
-      const exportData: DataExportPayload = {
-        format: DATA_EXPORT.FORMAT,
-        version: DATA_EXPORT.VERSION,
-        exportedAt: new Date().toISOString(),
-        data: response.data,
-      };
-      const fileContents = JSON.stringify(exportData, null, 2);
-      const blob = new Blob([fileContents], { type: 'application/json' });
+      const blob = new Blob([response.exportData.content], { type: response.exportData.mimeType });
       const objectUrl = URL.createObjectURL(blob);
-      const timestamp = new Date().toISOString().split('T')[0];
       const downloadLink = document.createElement('a');
       downloadLink.href = objectUrl;
-      downloadLink.download = `privaseer-data-export-${timestamp}.json`;
+      downloadLink.download = response.exportData.filename;
       document.body.appendChild(downloadLink);
       downloadLink.click();
       downloadLink.remove();
       URL.revokeObjectURL(objectUrl);
 
-      logger.info('Settings', 'User data export downloaded');
+      logger.info('Settings', 'User data export downloaded', {
+        format: exportFormat,
+        includeEmail: includeEmailInExport,
+      });
     } catch (error) {
       logger.error('Settings', 'Failed to export data', toError(error));
     } finally {
       setIsExportingData(false);
+    }
+  };
+
+  const handleDeleteAllData = async () => {
+    if (isDeletingData) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Delete all local Privaseer data from this browser? This action cannot be undone.'
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setIsDeletingData(true);
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'DELETE_ALL_DATA' }) as {
+        success?: boolean;
+        error?: string;
+      };
+      if (!response?.success) {
+        throw new Error(response?.error || 'Failed to delete data');
+      }
+      await loadAllSettings();
+      setRealEmail('');
+      setRealEmailInput('');
+      logger.info('Settings', 'User requested local data deletion');
+    } catch (error) {
+      logger.error('Settings', 'Failed to delete local data', toError(error));
+    } finally {
+      setIsDeletingData(false);
     }
   };
 
@@ -890,18 +934,50 @@ export function SettingsPage({
                 </div>
 
                 <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
+                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                    Export format
+                  </label>
+                  <select
+                    value={exportFormat}
+                    onChange={(event) => setExportFormat(event.target.value as 'json' | 'csv')}
+                    className="mt-2 w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    aria-label="Select export format"
+                  >
+                    <option value="json">JSON (full structured export)</option>
+                    <option value="csv">CSV (metrics summary)</option>
+                  </select>
+
+                  <label className="mt-3 flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
+                    <input
+                      type="checkbox"
+                      checked={includeEmailInExport}
+                      onChange={(event) => setIncludeEmailInExport(event.target.checked)}
+                      className="rounded border-gray-300 dark:border-gray-600"
+                    />
+                    Include forwarding email address in export
+                  </label>
+
                   <button
                     onClick={handleExportData}
                     disabled={isExportingData}
                     className="w-full px-4 py-2.5 text-sm font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/30 disabled:opacity-60 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center justify-center gap-2"
-                    aria-label="Export my data as a JSON file"
+                    aria-label="Export my data file"
                   >
                     <Download className="w-4 h-4" />
-                    {isExportingData ? 'Exporting...' : 'Export My Data'}
+                    {isExportingData ? 'Exporting...' : `Export My Data (${exportFormat.toUpperCase()})`}
                   </button>
                   <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-center">
-                    Download a portable copy of your local extension data.
+                    GDPR Article 20 portability export. URLs are sanitized and email is excluded unless explicitly selected.
                   </p>
+                  <button
+                    onClick={handleDeleteAllData}
+                    disabled={isDeletingData}
+                    className="mt-3 w-full px-4 py-2.5 text-sm font-medium text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 hover:bg-red-100 dark:hover:bg-red-900/30 disabled:opacity-60 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center justify-center gap-2"
+                    aria-label="Delete all local extension data"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    {isDeletingData ? 'Deleting...' : 'Delete All My Data'}
+                  </button>
                 </div>
 
                 <div className="border-t border-gray-200 dark:border-gray-600 pt-4">

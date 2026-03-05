@@ -133,7 +133,21 @@ export const CONFIDENCE = {
 
 export const DATA_EXPORT = {
   FORMAT: 'privaseer-data-export',
-  VERSION: '1.0',
+  VERSION: '2.0',
+  MAX_SNAPSHOT_DAYS: 30,
+  GDPR: {
+    DATA_CONTROLLER: 'Privaseer local extension',
+    PURPOSE: 'Privacy protection analytics and user data portability',
+    LEGAL_BASIS: 'User consent and GDPR Article 20 portability request',
+    RETENTION_POLICY: 'Data retained locally for up to 30 days where applicable',
+    DATA_CATEGORIES: [
+      'Privacy scores',
+      'Tracker blocking statistics',
+      'Site compliance assessments',
+      'Burner email usage statistics',
+      'Extension settings',
+    ],
+  },
 } as const;
 
 export const FALSE_POSITIVE_FEEDBACK = {

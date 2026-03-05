@@ -312,12 +312,31 @@ export interface StorageData {
   onboarding: OnboardingState;
 }
 
-export interface DataExportPayload {
+export type ExportFormat = 'json' | 'csv';
+
+export interface GdprExportMetadata {
+  dataController: string;
+  purpose: string;
+  legalBasis: string;
+  retentionPolicy: string;
+  dataCategories: string[];
+}
+
+export interface SanitizedExportData extends Omit<StorageData, 'realEmail' | 'alerts'> {
+  alerts: Alert[];
+  realEmail?: string | null;
+}
+
+export interface GdprExportPayload {
   format: string;
   version: string;
   exportedAt: string;
-  data: StorageData;
+  gdpr: GdprExportMetadata;
+  data: SanitizedExportData;
 }
+
+// Backward compatibility alias for older references.
+export type DataExportPayload = GdprExportPayload;
 
 export interface DomainConfidenceOverride {
   threshold: number;
@@ -381,6 +400,8 @@ export type MessageType =
   | 'RECORD_COMPLIANCE_SCORE'
   | 'GET_METRICS_AGGREGATION'
   | 'GET_PRIVACY_SCORE_TREND'
+  | 'EXPORT_USER_DATA'
+  | 'DELETE_ALL_DATA'
   | 'SET_THEME'
   | 'GET_THEME'
   | 'THEME_CHANGED'
@@ -473,6 +494,8 @@ export interface MessageDataMap {
   BURNER_EMAIL_SETTING_CHANGED: { enabled: boolean };
   GET_METRICS_AGGREGATION: { period?: 'week' | 'month' | 'all-time' } | undefined;
   GET_PRIVACY_SCORE_TREND: undefined;
+  EXPORT_USER_DATA: { format?: ExportFormat; includeEmail?: boolean } | undefined;
+  DELETE_ALL_DATA: undefined;
   GET_TELEMETRY_SETTING: undefined;
   SET_TELEMETRY_SETTING: { enabled: boolean };
   GET_REAL_EMAIL: undefined;
