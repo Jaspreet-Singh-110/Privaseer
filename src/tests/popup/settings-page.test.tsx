@@ -262,6 +262,39 @@ describe('SettingsPage', () => {
     expect(loggerErrorSpy).toHaveBeenCalled();
   });
 
+  it('omits non-http tab url metadata from feedback payload', async () => {
+    const user = userEvent.setup({ delay: null });
+    const onClose = vi.fn();
+    const onFeedbackSuccess = vi.fn();
+
+    render(
+      <SettingsPage
+        {...baseProps}
+        onClose={onClose}
+        onFeedbackSuccess={onFeedbackSuccess}
+        currentTab={{ url: 'chrome://settings/privacy' } as chrome.tabs.Tab}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: /feedback/i }));
+    const textarea = await screen.findByPlaceholderText(/type your feedback here/i);
+    await user.type(textarea, 'Works on chrome settings page');
+    await user.click(screen.getByRole('button', { name: /submit feedback/i }));
+
+    await waitFor(() => {
+      expect(mockSendMessage).toHaveBeenCalledWith({
+        type: 'SUBMIT_FEEDBACK',
+        data: {
+          feedbackText: 'Works on chrome settings page',
+          url: undefined,
+          domain: 'unknown',
+        },
+      });
+      expect(onFeedbackSuccess).toHaveBeenCalledTimes(1);
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('opens burner services via deep link and returns to menu', async () => {
     const user = userEvent.setup({ delay: null });
     render(<SettingsPage {...baseProps} deepLinkSection="burner-services" />);
