@@ -21,10 +21,16 @@ const messageHandlers = vi.hoisted(() => new Map<MessageType, Handler>());
 const storageMock = vi.hoisted(() => ({
   initialize: vi.fn().mockResolvedValue(undefined),
   addAlert: vi.fn().mockResolvedValue(undefined),
+  getFresh: vi.fn().mockResolvedValue({
+    alerts: [],
+    reportedFalsePositives: {},
+  }),
   getDomainOccurrence: vi.fn().mockResolvedValue(0),
   incrementDomainOccurrence: vi.fn().mockResolvedValue(1),
   clearAlerts: vi.fn().mockResolvedValue(undefined),
   getBurnerEmailEnabled: vi.fn().mockResolvedValue(true),
+  getReportedFalsePositive: vi.fn().mockResolvedValue(null),
+  setReportedFalsePositive: vi.fn().mockResolvedValue(undefined),
 }));
 
 const telemetryMock = vi.hoisted(() => ({
@@ -51,7 +57,14 @@ const allowlistMock = vi.hoisted(() => ({
 }));
 
 const falsePositiveMock = vi.hoisted(() => ({
-  reportFalsePositive: vi.fn().mockResolvedValue(true),
+  reportFalsePositive: vi.fn().mockResolvedValue({
+    success: true,
+    aggregation: {
+      reportCount: 3,
+      overrideThreshold: 86,
+      shouldOverride: true,
+    },
+  }),
 }));
 
 const chromeMock = {
@@ -234,12 +247,17 @@ describe('alert flow integration', () => {
       domain: 'example.com',
       url: 'https://example.com',
       detectedPatterns: ['forcedConsent'],
+      reason: 'wrong_detection',
       timestamp: Date.now(),
       installationId: 'install-123',
       scanConfidence: 0.5,
     });
 
-    expect(result).toEqual({ success: true });
+    expect(result).toEqual({
+      success: true,
+      reportCount: 3,
+      alreadyOverridden: true,
+    });
     expect(FalsePositiveService.reportFalsePositive).toHaveBeenCalledWith(
       expect.objectContaining({ domain: 'example.com' })
     );

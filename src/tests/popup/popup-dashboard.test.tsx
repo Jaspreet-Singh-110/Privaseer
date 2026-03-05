@@ -818,7 +818,7 @@ describe('Popup Dashboard Component', () => {
           });
         }
         if (message.type === 'REPORT_FALSE_POSITIVE') {
-          return Promise.resolve({ success: true });
+          return Promise.resolve({ success: true, reportCount: 2, alreadyOverridden: false });
         }
         if (message.type === 'GET_THEME') {
           return Promise.resolve({ success: true, theme: 'system' });
@@ -835,14 +835,19 @@ describe('Popup Dashboard Component', () => {
       render(<Popup />);
 
       await waitFor(() => {
-        expect(screen.getByText('Report incorrect')).toBeInTheDocument();
+        expect(screen.getByLabelText('False positive reason')).toBeInTheDocument();
       }, { timeout: 500 });
 
-      await user.click(screen.getByText('Report incorrect'));
+      await user.click(screen.getByRole('button', { name: 'Report false positive' }));
 
       await waitFor(() => {
         expect(mockSendMessage).toHaveBeenCalledWith(
-          expect.objectContaining({ type: 'REPORT_FALSE_POSITIVE' })
+          expect.objectContaining({
+            type: 'REPORT_FALSE_POSITIVE',
+            data: expect.objectContaining({
+              reason: 'wrong_detection',
+            }),
+          })
         );
         expect(screen.getByText('Reported')).toBeInTheDocument();
       }, { timeout: 500 });

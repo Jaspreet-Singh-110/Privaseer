@@ -23,6 +23,7 @@ describe('ConsentScannerStep', () => {
 
     expect(screen.getByText(/gdpr risk detected/i)).toBeInTheDocument();
     expect(screen.getByText(/reject button hidden behind accordion/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /try a demo scan/i })).toBeInTheDocument();
   });
 
   it('applies dark theme styles to the container and violation card', () => {

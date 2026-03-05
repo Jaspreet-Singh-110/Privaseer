@@ -14,5 +14,12 @@ export interface StepContentProps {
   burnerEmail?: BurnerEmailProps;
   onOpenSettings?: () => void;
   onLaunchDashboard?: () => void;
+  trackerCount?: number;
+  creditScore?: number | null;
+  protectionEnabled?: boolean;
+  emailConfigured?: boolean;
+  onToggleProtection?: () => Promise<void>;
+  onConfigureEmail?: () => Promise<void>;
+  onRunDemoScan?: () => Promise<void>;
 }
 

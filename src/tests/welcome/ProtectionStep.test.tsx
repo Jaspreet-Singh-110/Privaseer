@@ -10,8 +10,10 @@ import { render, screen } from '@testing-library/react';
 import { ProtectionStep } from '@/welcome/steps/ProtectionStep';
 
 describe('ProtectionStep', () => {
-  it('renders the protection messaging and script list', () => {
-    const { container } = render(<ProtectionStep theme="light" />);
+  it('renders the protection messaging and live tracker controls', () => {
+    const { container } = render(
+      <ProtectionStep theme="light" trackerCount={14} protectionEnabled={true} />
+    );
 
     expect(
       screen.getByRole('heading', {
@@ -19,11 +21,9 @@ describe('ProtectionStep', () => {
       })
     ).toBeInTheDocument();
 
-    ['analytics-beacon.js', 'fingerprint-pro.js', 'pixel-ads.js'].forEach((script) => {
-      expect(screen.getByText(script)).toBeInTheDocument();
-    });
-
-    expect(screen.getAllByText('blocked', { selector: 'span' })).toHaveLength(3);
+    expect(screen.getByText(/trackers blocked so far/i)).toBeInTheDocument();
+    expect(screen.getByText('14')).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: /protection enabled/i })).toBeInTheDocument();
 
     const cards = container.querySelectorAll('article');
     expect(cards).toHaveLength(2);

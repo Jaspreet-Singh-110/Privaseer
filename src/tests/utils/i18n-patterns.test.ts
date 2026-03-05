@@ -67,4 +67,16 @@ describe('i18n-patterns', () => {
       expect(patterns.preferences.length).toBeGreaterThan(0);
     });
   });
+
+  it('matches native CJK consent actions', () => {
+    const ja = getLocalizedPatterns('ja');
+    const ko = getLocalizedPatterns('ko');
+    const zh = getLocalizedPatterns('zh-CN');
+    const zhHant = getLocalizedPatterns('zh-Hant');
+
+    expect(matchesAnyPattern('すべて同意', ja.accept)).toBe(true);
+    expect(matchesAnyPattern('모두 거부', ko.reject)).toBe(true);
+    expect(matchesAnyPattern('全部拒绝', zh.reject)).toBe(true);
+    expect(matchesAnyPattern('設定', zhHant.preferences)).toBe(true);
+  });
 });

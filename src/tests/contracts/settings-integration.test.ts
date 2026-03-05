@@ -294,6 +294,12 @@ describe('settings integration flows', () => {
     });
 
     const stateResult = await getStateHandler();
-    expect(stateResult).toEqual({ success: true, data: expect.objectContaining({ settings: expect.objectContaining({ protectionEnabled: true }) }) });
+    expect(stateResult).toMatchObject({
+      success: true,
+      data: expect.objectContaining({
+        settings: expect.objectContaining({ protectionEnabled: true }),
+      }),
+      falsePositiveStatuses: {},
+    });
   });
 });

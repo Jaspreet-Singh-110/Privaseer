@@ -20,7 +20,14 @@ vi.mock('@/utils/logger', () => ({
 
 vi.mock('@/background/false-positive-service', () => ({
   FalsePositiveService: {
-    reportFalsePositive: vi.fn().mockResolvedValue(true),
+    reportFalsePositive: vi.fn().mockResolvedValue({
+      success: true,
+      aggregation: {
+        reportCount: 3,
+        overrideThreshold: 88,
+        shouldOverride: true,
+      },
+    }),
   },
 }));
 
@@ -45,6 +52,8 @@ vi.mock('@/background/storage', () => ({
     getFresh: vi.fn().mockResolvedValue({}),
     get: vi.fn().mockResolvedValue({ alerts: [], settings: { telemetryEnabled: false } }),
     clearAlerts: vi.fn().mockResolvedValue(undefined),
+    getReportedFalsePositive: vi.fn().mockResolvedValue(null),
+    setReportedFalsePositive: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -124,13 +133,18 @@ describe('False positive reporting flow', () => {
       domain: 'example.com',
       url: 'https://example.com',
       detectedPatterns: ['forcedConsent'],
+      reason: 'wrong_detection',
       timestamp: Date.now(),
       installationId: '',
       scanConfidence: 80,
     };
 
     const response = await handler!(payload);
-    expect(response).toEqual({ success: true });
+    expect(response).toEqual({
+      success: true,
+      reportCount: 3,
+      alreadyOverridden: true,
+    });
     expect(FalsePositiveService.reportFalsePositive).toHaveBeenCalledWith(
       expect.objectContaining({
         domain: 'example.com',
@@ -147,6 +161,7 @@ describe('False positive reporting flow', () => {
       domain: 'example.com',
       url: 'https://example.com',
       detectedPatterns: ['forcedConsent'],
+      reason: 'wrong_detection',
       timestamp: Date.now(),
       installationId: '',
       scanConfidence: 80,
@@ -162,7 +177,14 @@ describe('False positive reporting flow', () => {
   });
 
   it('returns error when allowlist update fails', async () => {
-    vi.mocked(FalsePositiveService.reportFalsePositive).mockResolvedValueOnce(true);
+    vi.mocked(FalsePositiveService.reportFalsePositive).mockResolvedValueOnce({
+      success: true,
+      aggregation: {
+        reportCount: 3,
+        overrideThreshold: 88,
+        shouldOverride: true,
+      },
+    });
     vi.mocked(AllowlistManager.addEntry).mockRejectedValueOnce(new Error('allowlist failed'));
     const handler = messageHandlers.get('REPORT_FALSE_POSITIVE');
 
@@ -170,6 +192,7 @@ describe('False positive reporting flow', () => {
       domain: 'example.com',
       url: 'https://example.com',
       detectedPatterns: ['forcedConsent'],
+      reason: 'wrong_detection',
       timestamp: Date.now(),
       installationId: '',
       scanConfidence: 80,
@@ -193,6 +216,7 @@ describe('False positive reporting flow', () => {
       domain: 'example.com',
       url: 'https://example.com',
       detectedPatterns: ['forcedConsent'],
+      reason: 'wrong_detection',
       timestamp: Date.now(),
       installationId: '',
       scanConfidence: 80,
@@ -204,5 +228,32 @@ describe('False positive reporting flow', () => {
         installationId: 'install-fallback-42',
       })
     );
+  });
+
+  it('short-circuits when domain was already reported locally', async () => {
+    const { Storage } = await import('@/background/storage');
+    vi.mocked(Storage.getReportedFalsePositive).mockResolvedValueOnce({
+      timestamp: Date.now(),
+      reason: 'wrong_detection',
+    });
+
+    const handler = messageHandlers.get('REPORT_FALSE_POSITIVE');
+    const response = await handler!({
+      domain: 'example.com',
+      url: 'https://example.com',
+      detectedPatterns: ['forcedConsent'],
+      reason: 'wrong_detection',
+      timestamp: Date.now(),
+      installationId: '',
+      scanConfidence: 80,
+    } satisfies FalsePositiveReport);
+
+    expect(response).toEqual({
+      success: false,
+      alreadyReported: true,
+      reportCount: 3,
+    });
+    expect(FalsePositiveService.reportFalsePositive).not.toHaveBeenCalled();
+    expect(AllowlistManager.addEntry).not.toHaveBeenCalled();
   });
 });

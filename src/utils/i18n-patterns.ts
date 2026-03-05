@@ -106,24 +106,24 @@ const BUTTON_PATTERNS: Record<string, PatternSet> = {
     preferences: ['ayarlar', 'tercihler', 'ozellestir', 'yonet'],
   },
   ja: {
-    accept: ['accept', 'agree', 'ok', 'continue'],
-    reject: ['reject', 'decline', 'deny'],
-    preferences: ['settings', 'preferences', 'customize'],
+    accept: ['すべて同意', '同意する', '同意', '許可', '受け入れる'],
+    reject: ['すべて拒否', '拒否する', '拒否', '同意しない'],
+    preferences: ['設定', '詳細設定', 'カスタマイズ', '選択する'],
   },
   ko: {
-    accept: ['accept', 'agree', 'ok', 'continue'],
-    reject: ['reject', 'decline', 'deny'],
-    preferences: ['settings', 'preferences', 'customize'],
+    accept: ['모두 동의', '동의', '수락', '허용'],
+    reject: ['모두 거부', '거부', '동의 안 함', '거절'],
+    preferences: ['설정', '기본 설정', '맞춤 설정', '관리'],
   },
   zh: {
-    accept: ['accept', 'agree', 'ok', 'continue'],
-    reject: ['reject', 'decline', 'deny'],
-    preferences: ['settings', 'preferences', 'customize'],
+    accept: ['全部接受', '同意', '允许', '接受'],
+    reject: ['全部拒绝', '拒绝', '不同意'],
+    preferences: ['设置', '偏好设置', '自定义', '管理'],
   },
   'zh-hant': {
-    accept: ['accept', 'agree', 'ok', 'continue'],
-    reject: ['reject', 'decline', 'deny'],
-    preferences: ['settings', 'preferences', 'customize'],
+    accept: ['全部接受', '同意', '允許', '接受'],
+    reject: ['全部拒絕', '拒絕', '不同意'],
+    preferences: ['設定', '偏好設定', '自訂', '管理'],
   },
 };
 

@@ -59,7 +59,11 @@ describe('WelcomeApp', () => {
     await waitFor(() => {
       expect(sendMessageMock).toHaveBeenCalledWith({
         type: 'SET_ONBOARDING_STEP',
-        data: { step: 1 },
+        data: expect.objectContaining({
+          step: 1,
+          stepId: 'protection',
+          previousStepId: 'welcome',
+        }),
       });
     });
   });
@@ -115,7 +119,11 @@ describe('WelcomeApp', () => {
     await waitFor(() => {
       expect(sendMessageMock).toHaveBeenCalledWith({
         type: 'SET_ONBOARDING_STEP',
-        data: { step: 0 },
+        data: expect.objectContaining({
+          step: 0,
+          stepId: 'welcome',
+          previousStepId: 'protection',
+        }),
       });
     });
   });
@@ -130,7 +138,7 @@ describe('WelcomeApp', () => {
     await waitFor(() => {
       expect(sendMessageMock).toHaveBeenCalledWith({
         type: 'SKIP_ONBOARDING',
-        data: { atStep: 0 },
+        data: { atStep: 0, reason: 'skipped' },
       });
     });
     expect(window.close).toHaveBeenCalled();
@@ -238,7 +246,7 @@ describe('WelcomeApp', () => {
     expect(screen.getByRole('button', { name: /get started/i })).toBeInTheDocument();
   });
 
-  it('clamps oversized onboarding step to final step and hides skip button', async () => {
+  it('resets oversized onboarding step to first step boundary', async () => {
     sendMessageMock.mockImplementation((message: { type: string }) => {
       if (message?.type === 'GET_ONBOARDING_STATE') {
         return Promise.resolve({
@@ -265,9 +273,9 @@ describe('WelcomeApp', () => {
     });
 
     render(<WelcomeApp />);
-    expect(await screen.findByText(/step 6/i)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /skip tour/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /finish/i })).toBeInTheDocument();
+    expect(await screen.findByText(/step 1/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /skip tour/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /get started/i })).toBeInTheDocument();
   });
 
   it('renders consent scanner step content when onboarding is at consent step', async () => {
