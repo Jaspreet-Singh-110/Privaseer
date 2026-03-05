@@ -382,10 +382,15 @@ export function SettingsPage({
 
     setIsSubmitting(true);
     try {
+      const isHttpProtocol = (protocol: string): boolean => protocol === 'http:' || protocol === 'https:';
+
       const getSanitizedUrl = (url?: string): string | undefined => {
         if (!url) return undefined;
         try {
           const parsed = new URL(url);
+          if (!isHttpProtocol(parsed.protocol)) {
+            return undefined;
+          }
           return `${parsed.protocol}//${parsed.hostname}${parsed.pathname}`;
         } catch {
           return undefined;
@@ -395,7 +400,8 @@ export function SettingsPage({
       const getDomain = (url?: string): string => {
         if (!url) return 'unknown';
         try {
-          return new URL(url).hostname;
+          const parsed = new URL(url);
+          return isHttpProtocol(parsed.protocol) ? parsed.hostname : 'unknown';
         } catch {
           return 'unknown';
         }
