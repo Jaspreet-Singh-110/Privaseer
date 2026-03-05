@@ -20,6 +20,7 @@ export interface SettingsPageProps {
   onBurnerHighlightComplete?: () => void;
   reportContext?: AlertType | null;
   onReportClear?: () => void;
+  standalone?: boolean;
 }
 
 export function SettingsPage({
@@ -32,6 +33,7 @@ export function SettingsPage({
   onBurnerHighlightComplete,
   reportContext = null,
   onReportClear,
+  standalone = false,
 }: SettingsPageProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>('menu');
   const [feedbackText, setFeedbackText] = useState('');
@@ -452,6 +454,9 @@ export function SettingsPage({
   };
 
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (standalone) {
+      return;
+    }
     if (e.target === e.currentTarget) {
       handleClose();
     }
@@ -459,10 +464,14 @@ export function SettingsPage({
 
   return (
     <div
-      className="absolute inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+      className={
+        standalone
+          ? 'relative w-full min-h-screen bg-white dark:bg-gray-900 flex items-start justify-center p-4'
+          : 'absolute inset-0 bg-black/60 flex items-center justify-center z-50 p-4'
+      }
       onClick={handleBackdropClick}
     >
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md" role="dialog" aria-modal="true" aria-label="Extension settings">
+      <div className={`bg-white dark:bg-gray-800 rounded-xl ${standalone ? 'shadow-lg border border-gray-200 dark:border-gray-700 mt-4' : 'shadow-2xl'} w-full max-w-md`} role="dialog" aria-modal="true" aria-label="Extension settings">
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
           <div className="flex items-center gap-2">
             {activeSection !== 'menu' && (

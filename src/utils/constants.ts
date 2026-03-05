@@ -101,6 +101,15 @@ export const ONBOARDING = {
   AUTO_OPEN_DELAY_MS: 500,
   REMINDER_THRESHOLD_DAYS: 7,
   WELCOME_PAGE_PATH: 'src/welcome/welcome.html',
+  ABANDONMENT_TIMEOUT_MS: 30 * 60 * 1000,
+  EVENTS: {
+    STARTED: 'onboarding_started',
+    STEP_VIEWED: 'onboarding_step_viewed',
+    STEP_COMPLETED: 'onboarding_step_completed',
+    SKIPPED: 'onboarding_skipped',
+    COMPLETED: 'onboarding_completed',
+    ABANDONED: 'onboarding_abandoned',
+  },
 } as const;
 
 export const CONSENT_BANNER = {
@@ -131,15 +140,22 @@ export const FALSE_POSITIVE_FEEDBACK = {
   BASE_THRESHOLD: 80,
   MIN_REPORTERS_FOR_OVERRIDE: 3,
   MAX_OVERRIDE_THRESHOLD: 95,
+  REPORT_DECAY_DAYS: 90,
+  LOCAL_REPORT_EXPIRY_DAYS: 30,
   OVERRIDE_REFRESH_INTERVAL_MS: 60 * 60 * 1000,
   OVERRIDES_ENDPOINT: '/functions/v1/get-fp-overrides',
 } as const;
 
 export const SCAN_PHASES = {
-  QUICK_DELAY_MS: 2000,
+  QUICK_DELAY_MS: 0,
   INTERACTION_DELAY_MS: 5000,
   DELAYED_DELAY_MS: 10000,
   MAX_PHASES: 3,
+} as const;
+
+export const CMP_CONFIG = {
+  REFRESH_INTERVAL_MS: 60 * 60 * 1000,
+  ENDPOINT: '/functions/v1/get-cmp-config',
 } as const;
 
 export const ALLOWLIST = {

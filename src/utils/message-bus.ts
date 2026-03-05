@@ -50,6 +50,8 @@ const VALID_MESSAGE_TYPES = new Set<MessageType>([
   'COMPLETE_ONBOARDING',
   'SKIP_ONBOARDING',
   'REPORT_FALSE_POSITIVE',
+  'REFRESH_CMP_CONFIG',
+  'SUGGEST_CMP_PATTERN',
   'GET_ALLOWLIST',
   'ADD_TO_ALLOWLIST',
   'REMOVE_FROM_ALLOWLIST',
@@ -81,22 +83,47 @@ const payloadValidators: Partial<Record<MessageType, (payload: unknown) => boole
   TAB_REMOVED: (data): data is MessageDataMap['TAB_REMOVED'] =>
     isObject(data) && typeof (data as { tabId?: unknown }).tabId === 'number',
   SET_ONBOARDING_STEP: (data): data is MessageDataMap['SET_ONBOARDING_STEP'] =>
-    isObject(data) && typeof (data as { step?: unknown }).step === 'number',
+    isObject(data) &&
+    typeof (data as { step?: unknown }).step === 'number' &&
+    (((data as { stepId?: unknown }).stepId === undefined) ||
+      typeof (data as { stepId?: unknown }).stepId === 'string') &&
+    (((data as { previousStepId?: unknown }).previousStepId === undefined) ||
+      typeof (data as { previousStepId?: unknown }).previousStepId === 'string') &&
+    (((data as { enteredAt?: unknown }).enteredAt === undefined) ||
+      typeof (data as { enteredAt?: unknown }).enteredAt === 'number') &&
+    (((data as { exitedAt?: unknown }).exitedAt === undefined) ||
+      typeof (data as { exitedAt?: unknown }).exitedAt === 'number') &&
+    (((data as { durationMs?: unknown }).durationMs === undefined) ||
+      typeof (data as { durationMs?: unknown }).durationMs === 'number'),
   COMPLETE_ONBOARDING: (data): data is MessageDataMap['COMPLETE_ONBOARDING'] =>
     !data ||
     (isObject(data) &&
       (((data as { emailConfigured?: unknown }).emailConfigured === undefined) ||
         typeof (data as { emailConfigured?: unknown }).emailConfigured === 'boolean')),
   SKIP_ONBOARDING: (data): data is MessageDataMap['SKIP_ONBOARDING'] =>
-    isObject(data) && typeof (data as { atStep?: unknown }).atStep === 'number',
+    isObject(data) &&
+    typeof (data as { atStep?: unknown }).atStep === 'number' &&
+    (((data as { reason?: unknown }).reason === undefined) ||
+      (data as { reason?: unknown }).reason === 'skipped' ||
+      (data as { reason?: unknown }).reason === 'abandoned'),
   REPORT_FALSE_POSITIVE: (data): data is MessageDataMap['REPORT_FALSE_POSITIVE'] =>
     isObject(data) &&
     typeof (data as { domain?: unknown }).domain === 'string' &&
     typeof (data as { url?: unknown }).url === 'string' &&
     Array.isArray((data as { detectedPatterns?: unknown }).detectedPatterns) &&
+    ['banner_compliant', 'no_banner_present', 'wrong_detection', 'other'].includes((data as { reason?: string }).reason ?? '') &&
+    (((data as { userReason?: unknown }).userReason === undefined) ||
+      typeof (data as { userReason?: unknown }).userReason === 'string') &&
     typeof (data as { timestamp?: unknown }).timestamp === 'number' &&
     typeof (data as { installationId?: unknown }).installationId === 'string' &&
     typeof (data as { scanConfidence?: unknown }).scanConfidence === 'number',
+  SUGGEST_CMP_PATTERN: (data): data is MessageDataMap['SUGGEST_CMP_PATTERN'] =>
+    isObject(data) &&
+    typeof (data as { domain?: unknown }).domain === 'string' &&
+    typeof (data as { pageUrl?: unknown }).pageUrl === 'string' &&
+    Array.isArray((data as { cookieNames?: unknown }).cookieNames) &&
+    Array.isArray((data as { bannerSelectors?: unknown }).bannerSelectors) &&
+    typeof (data as { timestamp?: unknown }).timestamp === 'number',
   ADD_TO_ALLOWLIST: (data): data is MessageDataMap['ADD_TO_ALLOWLIST'] =>
     isObject(data) && typeof (data as { domain?: unknown }).domain === 'string',
   REMOVE_FROM_ALLOWLIST: (data): data is MessageDataMap['REMOVE_FROM_ALLOWLIST'] =>

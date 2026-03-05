@@ -4,17 +4,30 @@ import type {
   LocalConsentState,
   DailyMetricsSnapshot,
   OnboardingState,
+  OnboardingStepTiming,
   DailyCreditMetrics,
   AllowlistEntry,
+  ReportedFalsePositive,
+  FalsePositiveReason,
 } from '../types';
 import { logger } from '../utils/logger';
 import { backgroundEvents } from './event-emitter';
 import { toError } from '../utils/type-guards';
-import { TIME, DAILY_RECOVERY, STORAGE_RETRY, ONBOARDING, CREDIT_SCORE, SCORING_CONFIG } from '../utils/constants';
+import {
+  TIME,
+  DAILY_RECOVERY,
+  STORAGE_RETRY,
+  ONBOARDING,
+  CREDIT_SCORE,
+  SCORING_CONFIG,
+  FALSE_POSITIVE_FEEDBACK,
+} from '../utils/constants';
 
 const DEFAULT_ONBOARDING_STATE: OnboardingState = {
   hasCompletedOnboarding: false,
   currentStep: 0,
+  startedAt: undefined,
+  stepTimings: [],
 };
 
 const DEFAULT_STORAGE_DATA: StorageData = {
@@ -54,6 +67,7 @@ const DEFAULT_STORAGE_DATA: StorageData = {
   penalizedDomains: {},
   consentStates: {},
   allowlist: {},
+  reportedFalsePositives: {},
   domainOccurrences: {},
   dailySnapshots: [],
   burnerEmailStats: {
@@ -506,6 +520,60 @@ export class Storage {
     await this.save(data);
   }
 
+  private static normalizeDomain(domain: string): string {
+    const normalized = domain.trim().toLowerCase();
+    return normalized.startsWith('www.') ? normalized.slice(4) : normalized;
+  }
+
+  private static pruneExpiredFalsePositiveReports(data: StorageData): boolean {
+    if (!data.reportedFalsePositives) {
+      data.reportedFalsePositives = {};
+      return false;
+    }
+
+    const expiryMs = FALSE_POSITIVE_FEEDBACK.LOCAL_REPORT_EXPIRY_DAYS * TIME.ONE_DAY_MS;
+    const now = Date.now();
+    let changed = false;
+
+    for (const [domain, entry] of Object.entries(data.reportedFalsePositives)) {
+      if (now - entry.timestamp > expiryMs) {
+        delete data.reportedFalsePositives[domain];
+        changed = true;
+      }
+    }
+
+    return changed;
+  }
+
+  static async getReportedFalsePositives(): Promise<Record<string, ReportedFalsePositive>> {
+    const data = await this.get();
+    const pruned = this.pruneExpiredFalsePositiveReports(data);
+    if (pruned) {
+      await this.save(data);
+    }
+    return data.reportedFalsePositives ?? {};
+  }
+
+  static async getReportedFalsePositive(domain: string): Promise<ReportedFalsePositive | null> {
+    const normalized = this.normalizeDomain(domain);
+    const entries = await this.getReportedFalsePositives();
+    return entries[normalized] ?? null;
+  }
+
+  static async setReportedFalsePositive(domain: string, reason: FalsePositiveReason): Promise<void> {
+    const data = await this.get();
+    if (!data.reportedFalsePositives) {
+      data.reportedFalsePositives = {};
+    }
+
+    const normalized = this.normalizeDomain(domain);
+    data.reportedFalsePositives[normalized] = {
+      timestamp: Date.now(),
+      reason,
+    };
+    await this.save(data);
+  }
+
   static async incrementDomainOccurrence(domain: string): Promise<number> {
     const data = await this.get();
     const currentCount = data.domainOccurrences[domain] || 0;
@@ -781,39 +849,77 @@ export class Storage {
     return { ...data.onboarding };
   }
 
-  static async setOnboardingStep(step: number): Promise<OnboardingState> {
+  static async setOnboardingStep(
+    step: number,
+    timing?: {
+      stepId?: string;
+      previousStepId?: string;
+      enteredAt?: number;
+      exitedAt?: number;
+      durationMs?: number;
+    }
+  ): Promise<OnboardingState> {
     const normalizedStep = Math.max(0, Math.min(ONBOARDING.TOTAL_STEPS - 1, step));
-    return this.updateOnboardingState({
+    const now = Date.now();
+    const enteredAt = typeof timing?.enteredAt === 'number' ? timing.enteredAt : now;
+    const stepId = typeof timing?.stepId === 'string' ? timing.stepId : `step-${normalizedStep + 1}`;
+    const data = await this.get();
+    const current = this.normalizeOnboardingState(data.onboarding);
+
+    const stepTimings = this.closeOpenOnboardingStep(
+      current.stepTimings ?? [],
+      typeof timing?.exitedAt === 'number' ? timing.exitedAt : enteredAt,
+      timing?.durationMs,
+      timing?.previousStepId
+    );
+    stepTimings.push({ stepIndex: normalizedStep, stepId, enteredAt });
+
+    const normalized = this.normalizeOnboardingState({
+      ...current,
       currentStep: normalizedStep,
       hasCompletedOnboarding: false,
+      completedAt: undefined,
+      skippedAt: undefined,
+      startedAt: current.startedAt ?? enteredAt,
+      stepTimings,
     });
+    data.onboarding = normalized;
+    await this.save(data);
+    return normalized;
   }
 
   static async completeOnboarding(emailConfigured?: boolean): Promise<OnboardingState> {
-    return this.updateOnboardingState({
+    const now = Date.now();
+    const data = await this.get();
+    const current = this.normalizeOnboardingState(data.onboarding);
+    const stepTimings = this.closeOpenOnboardingStep(current.stepTimings ?? [], now);
+    const normalized = this.normalizeOnboardingState({
+      ...current,
       hasCompletedOnboarding: true,
       currentStep: ONBOARDING.TOTAL_STEPS - 1,
-      completedAt: Date.now(),
+      completedAt: now,
       emailConfigured: emailConfigured ?? undefined,
+      startedAt: current.startedAt ?? now,
+      stepTimings,
     });
+    data.onboarding = normalized;
+    await this.save(data);
+    return normalized;
   }
 
   static async skipOnboarding(atStep: number): Promise<OnboardingState> {
     const normalizedStep = Math.max(0, Math.min(ONBOARDING.TOTAL_STEPS - 1, atStep));
-    return this.updateOnboardingState({
-      hasCompletedOnboarding: true,
-      skippedAt: Date.now(),
-      currentStep: normalizedStep,
-    });
-  }
-
-  private static async updateOnboardingState(
-    partial: Partial<OnboardingState>
-  ): Promise<OnboardingState> {
+    const now = Date.now();
     const data = await this.get();
+    const current = this.normalizeOnboardingState(data.onboarding);
+    const stepTimings = this.closeOpenOnboardingStep(current.stepTimings ?? [], now);
     const normalized = this.normalizeOnboardingState({
-      ...data.onboarding,
-      ...partial,
+      ...current,
+      hasCompletedOnboarding: true,
+      skippedAt: now,
+      currentStep: normalizedStep,
+      startedAt: current.startedAt ?? now,
+      stepTimings,
     });
     data.onboarding = normalized;
     await this.save(data);
@@ -834,14 +940,71 @@ export class Storage {
       typeof state.currentStep === 'number'
         ? Math.max(0, Math.min(ONBOARDING.TOTAL_STEPS - 1, state.currentStep))
         : 0;
+    const stepTimings = Array.isArray(state.stepTimings)
+      ? state.stepTimings
+          .filter((timing): timing is OnboardingStepTiming =>
+            typeof timing?.stepIndex === 'number' &&
+            typeof timing?.stepId === 'string' &&
+            typeof timing?.enteredAt === 'number'
+          )
+          .map((timing) => ({
+            stepIndex: Math.max(0, Math.min(ONBOARDING.TOTAL_STEPS - 1, timing.stepIndex)),
+            stepId: timing.stepId,
+            enteredAt: timing.enteredAt,
+            exitedAt: typeof timing.exitedAt === 'number' ? timing.exitedAt : undefined,
+            durationMs: typeof timing.durationMs === 'number' ? timing.durationMs : undefined,
+          }))
+      : [];
 
     return {
       hasCompletedOnboarding: Boolean(state.hasCompletedOnboarding),
       currentStep: normalizedStep,
-      completedAt: state.completedAt,
-      skippedAt: state.skippedAt,
+      completedAt: typeof state.completedAt === 'number' ? state.completedAt : undefined,
+      skippedAt: typeof state.skippedAt === 'number' ? state.skippedAt : undefined,
       emailConfigured:
         typeof state.emailConfigured === 'boolean' ? state.emailConfigured : undefined,
+      startedAt: typeof state.startedAt === 'number' ? state.startedAt : undefined,
+      stepTimings,
     };
+  }
+
+  private static closeOpenOnboardingStep(
+    timings: OnboardingStepTiming[],
+    exitedAt: number,
+    durationMs?: number,
+    previousStepId?: string
+  ): OnboardingStepTiming[] {
+    const nextTimings = [...timings];
+    let openIndex = -1;
+
+    for (let idx = nextTimings.length - 1; idx >= 0; idx -= 1) {
+      const timing = nextTimings[idx];
+      if (timing.exitedAt !== undefined) {
+        continue;
+      }
+      if (previousStepId && timing.stepId !== previousStepId) {
+        continue;
+      }
+      openIndex = idx;
+      break;
+    }
+
+    if (openIndex === -1) {
+      return nextTimings;
+    }
+
+    const target = nextTimings[openIndex];
+    const safeExitedAt = Math.max(target.enteredAt, exitedAt);
+    const computedDuration =
+      typeof durationMs === 'number' && durationMs >= 0
+        ? durationMs
+        : Math.max(0, safeExitedAt - target.enteredAt);
+
+    nextTimings[openIndex] = {
+      ...target,
+      exitedAt: safeExitedAt,
+      durationMs: computedDuration,
+    };
+    return nextTimings;
   }
 }

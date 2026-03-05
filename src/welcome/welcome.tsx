@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { AllSettingsResponse } from '../types';
+import { ONBOARDING } from '../utils/constants';
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
 import '../index.css';
@@ -29,6 +30,18 @@ interface StepDefinition {
   Component: (props: StepContentProps) => JSX.Element;
   primaryLabel?: string;
   showSkip?: boolean;
+  condition?: (ctx: OnboardingContext) => boolean;
+}
+
+interface ActiveStepDefinition extends StepDefinition {
+  originalIndex: number;
+}
+
+interface OnboardingContext {
+  protectionEnabled: boolean;
+  burnerEmailEnabled: boolean;
+  hasRealEmail: boolean;
+  hasCreditScore: boolean;
 }
 
 const steps: StepDefinition[] = [
@@ -36,7 +49,12 @@ const steps: StepDefinition[] = [
   { id: 'protection', label: 'Protection', Component: ProtectionStep },
   { id: 'privacy-credit', label: 'Privacy Credit', Component: PrivacyCreditStep },
   { id: 'consent', label: 'Consent Scanner', Component: ConsentScannerStep },
-  { id: 'burner-email', label: 'Burner Email', Component: BurnerEmailStep },
+  {
+    id: 'burner-email',
+    label: 'Burner Email',
+    Component: BurnerEmailStep,
+    condition: ({ burnerEmailEnabled, hasRealEmail }) => !burnerEmailEnabled || !hasRealEmail,
+  },
   {
     id: 'completion',
     label: 'Finish',
@@ -46,6 +64,15 @@ const steps: StepDefinition[] = [
   },
 ];
 
+const POPUP_PAGE_PATH = 'src/popup/popup.html?source=onboarding&section=burner-services';
+const DEMO_SCAN_URL = 'https://www.bbc.com';
+
+function buildActiveSteps(context: OnboardingContext): ActiveStepDefinition[] {
+  return steps
+    .map((step, index) => ({ ...step, originalIndex: index }))
+    .filter((step) => (step.condition ? step.condition(context) : true));
+}
+
 function WelcomeApp(): JSX.Element {
   const [themePreference, setThemePreference] = useState<'light' | 'dark' | 'system'>('system');
   const [resolvedTheme, setResolvedTheme] = useState<Theme>('dark');
@@ -53,8 +80,21 @@ function WelcomeApp(): JSX.Element {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [emailConfigured, setEmailConfigured] = useState(false);
+  const [trackerCount, setTrackerCount] = useState(0);
+  const [creditScore, setCreditScore] = useState<number | null>(null);
+  const [context, setContext] = useState<OnboardingContext>({
+    protectionEnabled: true,
+    burnerEmailEnabled: false,
+    hasRealEmail: false,
+    hasCreditScore: false,
+  });
+  const stepEnteredAtRef = useRef<number>(Date.now());
+  const currentStepRef = useRef(0);
+  const activeStepsRef = useRef<ActiveStepDefinition[]>([]);
+  const hasExitedFlowRef = useRef(false);
 
-  const totalSteps = steps.length;
+  const activeSteps = useMemo(() => buildActiveSteps(context), [context]);
+  const totalSteps = activeSteps.length;
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)');
@@ -81,26 +121,93 @@ function WelcomeApp(): JSX.Element {
     const load = async () => {
       try {
         setLoading(true);
-        const [onboardingResponse, settingsResponse] = await Promise.all([
+        const [onboardingResponse, settingsResponse, stateResponse, creditScoreResponse] = await Promise.all([
           chrome.runtime.sendMessage({ type: 'GET_ONBOARDING_STATE' }),
           chrome.runtime.sendMessage({ type: 'GET_ALL_SETTINGS' }) as Promise<{
             success: boolean;
             settings: AllSettingsResponse;
           }>,
+          chrome.runtime.sendMessage({ type: 'GET_STATE' }) as Promise<{
+            success: boolean;
+            data?: {
+              privacyScore?: { daily?: { trackersBlocked?: number } };
+              settings?: { protectionEnabled?: boolean; burnerEmailEnabled?: boolean };
+              realEmail?: string | null;
+              creditScore?: { score?: number };
+            };
+          }>,
+          chrome.runtime.sendMessage({ type: 'GET_CREDIT_SCORE' }) as Promise<{
+            success: boolean;
+            creditScore?: number | { score?: number };
+          }>,
         ]);
 
+        const settings = settingsResponse?.success ? settingsResponse.settings : undefined;
+        const rawCreditScore = creditScoreResponse?.success
+          ? typeof creditScoreResponse.creditScore === 'number'
+            ? creditScoreResponse.creditScore
+            : creditScoreResponse.creditScore?.score
+          : undefined;
+        const resolvedCreditScore =
+          typeof rawCreditScore === 'number'
+            ? rawCreditScore
+            : stateResponse?.data?.creditScore?.score;
+        const resolvedTrackerCount = stateResponse?.data?.privacyScore?.daily?.trackersBlocked ?? 0;
+        const hasRealEmail = Boolean(settings?.realEmail ?? stateResponse?.data?.realEmail);
+        const protectionEnabled = stateResponse?.data?.settings?.protectionEnabled ?? true;
+        const burnerEmailEnabled =
+          settings?.burnerEmailEnabled ??
+          stateResponse?.data?.settings?.burnerEmailEnabled ??
+          false;
+
+        setTrackerCount(resolvedTrackerCount);
+        setCreditScore(typeof resolvedCreditScore === 'number' ? resolvedCreditScore : null);
+        setContext({
+          protectionEnabled,
+          burnerEmailEnabled,
+          hasRealEmail,
+          hasCreditScore: typeof resolvedCreditScore === 'number',
+        });
+
+        const nextActiveSteps = buildActiveSteps({
+          protectionEnabled,
+          burnerEmailEnabled,
+          hasRealEmail,
+          hasCreditScore: typeof resolvedCreditScore === 'number',
+        });
+
         if (onboardingResponse?.success && onboardingResponse.onboarding) {
-          setCurrentStep(
-            Math.min(
-              totalSteps - 1,
-              Math.max(0, onboardingResponse.onboarding.currentStep ?? 0)
-            )
+          const currentOriginalStep = Math.max(0, onboardingResponse.onboarding.currentStep ?? 0);
+          const resolvedStepIndex = nextActiveSteps.findIndex(
+            (step) => step.originalIndex === currentOriginalStep
           );
-          setEmailConfigured(Boolean(onboardingResponse.onboarding.emailConfigured));
+          const clampedStep = Math.min(
+            Math.max(nextActiveSteps.length - 1, 0),
+            resolvedStepIndex === -1 ? 0 : resolvedStepIndex
+          );
+          setCurrentStep(clampedStep);
+          currentStepRef.current = clampedStep;
+          stepEnteredAtRef.current = Date.now();
+
+          const emailAlreadyConfigured =
+            Boolean(onboardingResponse.onboarding.emailConfigured) || hasRealEmail;
+          setEmailConfigured(emailAlreadyConfigured);
+
+          if (!onboardingResponse.onboarding.startedAt) {
+            void chrome.runtime.sendMessage({
+              type: 'TRACK_EVENT',
+              data: {
+                eventType: ONBOARDING.EVENTS.STARTED,
+                eventData: {
+                  source: 'welcome_flow',
+                  stepId: nextActiveSteps[clampedStep]?.id ?? 'welcome',
+                },
+              },
+            });
+          }
         }
 
-        if (settingsResponse?.success) {
-          const { settings } = settingsResponse;
+        if (settings) {
           setEmailConfigured((prev) => prev || Boolean(settings.realEmail));
           setThemePreference(settings.theme ?? 'system');
         }
@@ -114,31 +221,64 @@ function WelcomeApp(): JSX.Element {
     };
 
     void load();
-  }, [totalSteps]);
+  }, []);
+
+  useEffect(() => {
+    activeStepsRef.current = activeSteps;
+    if (activeSteps.length === 0) {
+      return;
+    }
+    if (currentStep > activeSteps.length - 1) {
+      const clamped = activeSteps.length - 1;
+      setCurrentStep(clamped);
+      currentStepRef.current = clamped;
+    }
+  }, [activeSteps, currentStep]);
+
+  useEffect(() => {
+    currentStepRef.current = currentStep;
+  }, [currentStep]);
 
   const goToStep = useCallback(
     async (nextStep: number) => {
       const clamped = Math.max(0, Math.min(totalSteps - 1, nextStep));
+      const previousStepDefinition = activeSteps[currentStep];
+      const nextStepDefinition = activeSteps[clamped];
+      if (!nextStepDefinition) {
+        return;
+      }
+
+      const exitedAt = Date.now();
+      const durationMs = Math.max(0, exitedAt - stepEnteredAtRef.current);
+      stepEnteredAtRef.current = exitedAt;
       setCurrentStep(clamped);
       try {
         await chrome.runtime.sendMessage({
           type: 'SET_ONBOARDING_STEP',
-          data: { step: clamped },
+          data: {
+            step: nextStepDefinition.originalIndex,
+            stepId: nextStepDefinition.id,
+            previousStepId: previousStepDefinition?.id,
+            enteredAt: exitedAt,
+            exitedAt,
+            durationMs,
+          },
         });
       } catch (err) {
         logger.warn('Welcome', 'Failed to persist onboarding step', toError(err));
       }
     },
-    [totalSteps]
+    [activeSteps, currentStep, totalSteps]
   );
 
   const completeOnboarding = useCallback(
-    async (skip = false) => {
+    async (skip = false, reason: 'skipped' | 'abandoned' = 'skipped') => {
+      const activeStep = activeSteps[currentStep];
       try {
         if (skip) {
           await chrome.runtime.sendMessage({
             type: 'SKIP_ONBOARDING',
-            data: { atStep: currentStep },
+            data: { atStep: activeStep?.originalIndex ?? currentStep, reason },
           });
         } else {
           await chrome.runtime.sendMessage({
@@ -150,12 +290,13 @@ function WelcomeApp(): JSX.Element {
         logger.warn('Welcome', 'Failed to update onboarding completion', toError(err));
       }
     },
-    [currentStep, emailConfigured]
+    [activeSteps, currentStep, emailConfigured]
   );
 
   const handleNext = useCallback(async () => {
     const isLast = currentStep === totalSteps - 1;
     if (isLast) {
+      hasExitedFlowRef.current = true;
       await completeOnboarding(false);
       window.close();
       return;
@@ -168,16 +309,80 @@ function WelcomeApp(): JSX.Element {
   }, [currentStep, goToStep]);
 
   const handleSkip = useCallback(async () => {
-    await completeOnboarding(true);
+    hasExitedFlowRef.current = true;
+    await completeOnboarding(true, 'skipped');
     window.close();
   }, [completeOnboarding]);
 
-  const currentStepDefinition = steps[currentStep];
-  const StepComponent = currentStepDefinition.Component;
-  const labels = useMemo(() => steps.map((step) => step.label), []);
+  const handleToggleProtection = useCallback(async () => {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'TOGGLE_PROTECTION' });
+      if (response?.success) {
+        setContext((prev) => ({
+          ...prev,
+          protectionEnabled: Boolean(response.enabled),
+        }));
+      }
+    } catch (err) {
+      logger.warn('Welcome', 'Failed to toggle protection', toError(err));
+    }
+  }, []);
+
+  const handleConfigureEmail = useCallback(async () => {
+    try {
+      await chrome.runtime.sendMessage({
+        type: 'SET_BURNER_EMAIL_SETTING',
+        data: { enabled: true },
+      });
+
+      setContext((prev) => ({ ...prev, burnerEmailEnabled: true }));
+      const targetUrl = chrome.runtime.getURL(POPUP_PAGE_PATH);
+
+      await chrome.tabs.create({ url: targetUrl, active: true });
+    } catch (err) {
+      logger.warn('Welcome', 'Failed to open email configuration', toError(err));
+    }
+  }, [activeSteps, context.burnerEmailEnabled, context.hasRealEmail, currentStep]);
+
+  const handleRunDemoScan = useCallback(async () => {
+    try {
+      await chrome.tabs.create({ url: DEMO_SCAN_URL, active: true });
+    } catch (err) {
+      logger.warn('Welcome', 'Failed to open demo scan tab', toError(err));
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (hasExitedFlowRef.current) {
+        return;
+      }
+      const stepsSnapshot = activeStepsRef.current;
+      if (stepsSnapshot.length === 0) {
+        return;
+      }
+      void completeOnboarding(true, 'abandoned');
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [completeOnboarding]);
+
+  const currentStepDefinition = activeSteps[currentStep];
+  const StepComponent = currentStepDefinition?.Component ?? CompletionStep;
+  const labels = useMemo(() => activeSteps.map((step) => step.label), [activeSteps]);
 
   const stepProps: StepContentProps = {
     theme: resolvedTheme,
+    trackerCount,
+    creditScore,
+    protectionEnabled: context.protectionEnabled,
+    emailConfigured,
+    onToggleProtection: handleToggleProtection,
+    onConfigureEmail: handleConfigureEmail,
+    onRunDemoScan: handleRunDemoScan,
   };
 
   if (loading) {

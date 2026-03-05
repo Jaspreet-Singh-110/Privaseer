@@ -21,6 +21,7 @@ interface FalsePositiveRequest {
   domain: string;
   url?: string;
   detectedPatterns?: string[];
+  reason?: "banner_compliant" | "no_banner_present" | "wrong_detection" | "other";
   userReason?: string;
   scanConfidence?: number;
   timestamp?: number;
@@ -79,6 +80,19 @@ function validateConfidence(value: unknown): ValidationResult<number | null> {
   return { valid: true, sanitized };
 }
 
+function validateReason(value: unknown): ValidationResult<"banner_compliant" | "no_banner_present" | "wrong_detection" | "other"> {
+  if (
+    value === "banner_compliant" ||
+    value === "no_banner_present" ||
+    value === "wrong_detection" ||
+    value === "other"
+  ) {
+    return { valid: true, sanitized: value };
+  }
+
+  return { valid: false, error: "reason must be one of: banner_compliant, no_banner_present, wrong_detection, other" };
+}
+
 denoRuntime.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -128,6 +142,13 @@ denoRuntime.serve(async (req: Request) => {
     }
 
     const detectedPatterns = validatePatterns(body.detectedPatterns);
+    const reason = validateReason(body.reason);
+    if (!reason.valid) {
+      return new Response(
+        JSON.stringify({ error: reason.error }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     const userReason = validateOptionalString(body.userReason, "userReason", 1000);
     if (!userReason.valid) {
@@ -146,6 +167,7 @@ denoRuntime.serve(async (req: Request) => {
         domain: domain.sanitized,
         url: url.sanitized,
         detected_patterns: detectedPatterns.sanitized,
+        reason: reason.sanitized,
         user_reason: userReason.sanitized,
         scan_confidence: scanConfidence.sanitized,
       });

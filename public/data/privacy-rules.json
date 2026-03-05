@@ -152,6 +152,27 @@
       "description": "Rejecting consent requires significantly more effort than accepting",
       "severity": "medium",
       "penalty": 25
+    },
+    {
+      "id": "colorManipulation",
+      "name": "Color Manipulation",
+      "description": "Reject button is visually de-emphasized through low-contrast or muted styling",
+      "severity": "medium",
+      "penalty": 20
+    },
+    {
+      "id": "misdirection",
+      "name": "Misdirection",
+      "description": "Rejecting routes users to a settings detour instead of a direct decline action",
+      "severity": "high",
+      "penalty": 30
+    },
+    {
+      "id": "countdownTimer",
+      "name": "Countdown Pressure",
+      "description": "Banner uses urgency timers to pressure users into quick acceptance",
+      "severity": "medium",
+      "penalty": 20
     }
   ]
 }

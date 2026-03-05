@@ -11,7 +11,7 @@ import { BurnerEmailStep } from '@/welcome/steps/BurnerEmailStep';
 
 describe('BurnerEmailStep', () => {
   it('renders the feature cards and helper text', () => {
-    const { container } = render(<BurnerEmailStep theme="light" />);
+    const { container } = render(<BurnerEmailStep theme="light" emailConfigured={false} />);
 
     expect(
       screen.getByRole('heading', {
@@ -26,9 +26,8 @@ describe('BurnerEmailStep', () => {
     const cards = container.querySelectorAll('article');
     expect(cards).toHaveLength(3);
 
-    expect(
-      screen.getByText(/burner email setup happens inside settings/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/set your forwarding email now/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /configure email now/i })).toBeInTheDocument();
   });
 
   it('applies dark theme container styles', () => {
@@ -36,5 +35,11 @@ describe('BurnerEmailStep', () => {
     const section = container.querySelector('section');
     expect(section?.className).toContain('bg-gray-800');
     expect(section?.className).toContain('border-gray-700');
+  });
+
+  it('shows configured state when email is already set', () => {
+    render(<BurnerEmailStep theme="light" emailConfigured={true} />);
+    expect(screen.getByText(/forwarding email is configured/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /configure email now/i })).not.toBeInTheDocument();
   });
 });

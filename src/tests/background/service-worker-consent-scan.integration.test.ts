@@ -93,7 +93,10 @@ vi.mock('@/utils/allowlist-manager', () => ({
 
 vi.mock('@/background/false-positive-service', () => ({
   FalsePositiveService: {
-    reportFalsePositive: vi.fn().mockResolvedValue(true),
+    reportFalsePositive: vi.fn().mockResolvedValue({
+      success: true,
+      aggregation: { reportCount: 3, overrideThreshold: 86, shouldOverride: true },
+    }),
   },
 }));
 

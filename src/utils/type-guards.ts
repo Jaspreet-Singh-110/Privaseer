@@ -79,9 +79,14 @@ export function isConsentScanResult(data: unknown): data is {
   hasRejectButton: boolean;
   isCompliant: boolean;
   deceptivePatterns: string[];
+  confidence: {
+    overall: number;
+    shouldAlert: boolean;
+  };
+  scanPhase: 'quick' | 'interaction' | 'delayed';
   timestamp: number;
 } {
-  return (
+  const hasValidBaseShape = (
     isObject(data) &&
     hasProperty(data, 'url') &&
     typeof data.url === 'string' &&
@@ -95,6 +100,26 @@ export function isConsentScanResult(data: unknown): data is {
     Array.isArray(data.deceptivePatterns) &&
     hasProperty(data, 'timestamp') &&
     typeof data.timestamp === 'number'
+  );
+
+  if (!hasValidBaseShape) {
+    return false;
+  }
+
+  const hasV2Field = hasProperty(data, 'confidence') || hasProperty(data, 'scanPhase');
+  if (!hasV2Field) {
+    return true;
+  }
+
+  return (
+    hasProperty(data, 'confidence') &&
+    isObject(data.confidence) &&
+    hasProperty(data.confidence, 'overall') &&
+    typeof data.confidence.overall === 'number' &&
+    hasProperty(data.confidence, 'shouldAlert') &&
+    typeof data.confidence.shouldAlert === 'boolean' &&
+    hasProperty(data, 'scanPhase') &&
+    ['quick', 'interaction', 'delayed'].includes(String(data.scanPhase))
   );
 }
 

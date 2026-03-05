@@ -18,6 +18,7 @@ class ConsentScanner {
   private scanTimeout: NodeJS.Timeout | null = null;
   private bannerScanHistory = new Map<string, { confidence: number; phase: 'quick' | 'interaction' | 'delayed' }>();
   private scanTimers = new Map<'quick' | 'interaction' | 'delayed', number>();
+  private cmpSuggestionCache = new Set<string>();
 
   async initialize(): Promise<void> {
     try {
@@ -129,13 +130,18 @@ class ConsentScanner {
       const rejectButtons = this.findButtonsByPatterns(banner, localizedPatterns.reject);
       const preferenceButtons = this.findButtonsByPatterns(banner, localizedPatterns.preferences);
 
+      if (!cmpDetection.detected && phase === 'delayed') {
+        void this.submitCmpSuggestion(window.location.hostname, banner, pageLanguage);
+      }
+
       const hasRejectButton = rejectButtons.length > 0;
       const isCompliant = this.checkCompliance(hasRejectButton, acceptButtons, rejectButtons);
       const deceptivePatterns = this.detectDeceptivePatterns(
         banner,
         hasRejectButton,
         acceptButtons,
-        rejectButtons
+        rejectButtons,
+        preferenceButtons
       );
       const violations = this.getViolationDetails(deceptivePatterns);
       const complianceScore = this.calculateComplianceScore(violations);
@@ -465,7 +471,8 @@ class ConsentScanner {
     banner: Element,
     hasRejectButton: boolean,
     acceptButtons: Element[] = [],
-    rejectButtons: Element[] = []
+    rejectButtons: Element[] = [],
+    preferenceButtons: Element[] = []
   ): string[] {
     const patterns: string[] = [];
 
@@ -506,7 +513,124 @@ class ConsentScanner {
       }
     }
 
+    if (this.detectConfusingLanguage(banner)) {
+      patterns.push('confusingLanguage');
+    }
+
+    if (this.detectObstaclePattern(acceptButtons, rejectButtons, preferenceButtons)) {
+      patterns.push('obstaclePattern');
+    }
+
+    if (this.detectColorManipulation(acceptButtons, rejectButtons)) {
+      patterns.push('colorManipulation');
+    }
+
+    if (this.detectMisdirection(rejectButtons, preferenceButtons)) {
+      patterns.push('misdirection');
+    }
+
+    if (this.detectCountdownTimer(banner)) {
+      patterns.push('countdownTimer');
+    }
+
     return patterns;
+  }
+
+  private detectConfusingLanguage(banner: Element): boolean {
+    const text = this.getElementText(banner).toLowerCase();
+    const confusingPatterns = [
+      /don['’]t\s+reject/,
+      /not\s+decline/,
+      /without\s+accepting\s+you\s+cannot/,
+      /rejecting\s+may\s+break/,
+    ];
+    return confusingPatterns.some((pattern) => pattern.test(text));
+  }
+
+  private detectObstaclePattern(
+    acceptButtons: Element[],
+    rejectButtons: Element[],
+    preferenceButtons: Element[]
+  ): boolean {
+    if (acceptButtons.length === 0) {
+      return false;
+    }
+    if (rejectButtons.length > 0) {
+      return false;
+    }
+    // A common obstacle pattern: only "accept" + "manage/preferences" without direct reject.
+    return preferenceButtons.length > 0;
+  }
+
+  private detectColorManipulation(acceptButtons: Element[], rejectButtons: Element[]): boolean {
+    if (acceptButtons.length === 0 || rejectButtons.length === 0) {
+      return false;
+    }
+
+    const acceptStyle = window.getComputedStyle(acceptButtons[0]);
+    const rejectStyle = window.getComputedStyle(rejectButtons[0]);
+    const sameBackground = acceptStyle.backgroundColor === rejectStyle.backgroundColor;
+    const sameText = acceptStyle.color === rejectStyle.color;
+
+    return !(sameBackground && sameText) && rejectStyle.opacity !== '1';
+  }
+
+  private detectMisdirection(rejectButtons: Element[], preferenceButtons: Element[]): boolean {
+    if (rejectButtons.length > 0 || preferenceButtons.length === 0) {
+      return false;
+    }
+
+    return preferenceButtons.some((button) => {
+      const href = (button as HTMLAnchorElement).href ?? '';
+      return /settings|preferences|privacy/i.test(href);
+    });
+  }
+
+  private detectCountdownTimer(banner: Element): boolean {
+    const timerElement = banner.querySelector('[class*="timer"], [class*="countdown"], [id*="timer"], [id*="countdown"]');
+    if (timerElement) {
+      return true;
+    }
+
+    const text = this.getElementText(banner);
+    return /\b\d{1,2}:\d{2}\b/.test(text) || /\b\d+\s*seconds?\b/i.test(text);
+  }
+
+  private async submitCmpSuggestion(domain: string, banner: Element, language: string): Promise<void> {
+    const key = `${domain}-${language}`;
+    if (this.cmpSuggestionCache.has(key)) {
+      return;
+    }
+    this.cmpSuggestionCache.add(key);
+
+    const className = banner.getAttribute('class') || '';
+    const bannerSelectors = [
+      banner.id ? `#${banner.id}` : null,
+      ...className.split(' ').filter(Boolean).slice(0, 4).map((name) => `.${name}`),
+    ].filter((selector): selector is string => Boolean(selector));
+
+    const cookieNames = document.cookie
+      .split(';')
+      .map((cookie) => cookie.trim().split('=')[0])
+      .filter((name) => /consent|cookie|privacy|gdpr|cmp/i.test(name))
+      .slice(0, 10);
+
+    try {
+      await this.sendMessageWithRetry({
+        type: 'SUGGEST_CMP_PATTERN',
+        data: {
+          domain,
+          pageUrl: sanitizeUrl(window.location.href) || '',
+          cookieNames,
+          bannerSelectors,
+          bannerTextSnippet: this.getElementText(banner).slice(0, 250),
+          language,
+          timestamp: Date.now(),
+        },
+      });
+    } catch {
+      // Best-effort signal only.
+    }
   }
 
   private isNecessaryOnlyCheckbox(checkbox: Element): boolean {
@@ -563,6 +687,7 @@ class ConsentScanner {
    */
   reset(): void {
     this.bannerScanHistory.clear();
+    this.cmpSuggestionCache.clear();
     this.clearScanTimers();
     if (this.scanTimeout) {
       clearTimeout(this.scanTimeout);

@@ -1,7 +1,15 @@
 import { useEffect, useState, useRef, type KeyboardEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Shield, ShieldOff, Activity, AlertTriangle, CheckCircle2, XCircle, Info, Mail, Settings, TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import type { StorageData, Alert as AlertType, Message, OnboardingState, CreditScoreResult } from '../types';
+import type {
+  StorageData,
+  Alert as AlertType,
+  Message,
+  OnboardingState,
+  CreditScoreResult,
+  FalsePositiveReason,
+  FalsePositiveStatus,
+} from '../types';
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
 import { BurnerEmailsSection } from './burner-emails-section';
@@ -16,6 +24,11 @@ type ReportableSettingsPageProps = SettingsPageProps & {
 };
 
 const ReportableSettingsPage = SettingsPage as (props: ReportableSettingsPageProps) => JSX.Element;
+
+function normalizeDomain(domain: string): string {
+  const normalized = domain.trim().toLowerCase();
+  return normalized.startsWith('www.') ? normalized.slice(4) : normalized;
+}
 
 function CreditScoreMeter({ creditScore }: { creditScore: CreditScoreResult | null }) {
   const [animatedScore, setAnimatedScore] = useState<number>(CREDIT_SCORE.BASE);
@@ -197,6 +210,7 @@ function CreditScoreMeter({ creditScore }: { creditScore: CreditScoreResult | nu
 
 export function Popup() {
   const [data, setData] = useState<StorageData | null>(null);
+  const [falsePositiveStatuses, setFalsePositiveStatuses] = useState<Record<string, FalsePositiveStatus>>({});
   const [loading, setLoading] = useState(true);
   const [expandedAlerts, setExpandedAlerts] = useState<Set<string>>(new Set());
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
@@ -211,7 +225,17 @@ export function Popup() {
   const [highlightBurnerToggle, setHighlightBurnerToggle] = useState(false);
   const [reportingAlert, setReportingAlert] = useState<AlertType | null>(null);
   const [onboardingState, setOnboardingState] = useState<OnboardingState | null>(null);
+  const dataRef = useRef<StorageData | null>(null);
   const tabs: Array<'dashboard' | 'burner'> = ['dashboard', 'burner'];
+  const queryParams = new URLSearchParams(window.location.search);
+  const querySource = queryParams.get('source');
+  const querySection = queryParams.get('section');
+  const isOnboardingBurnerRedirect =
+    querySource === 'onboarding' && querySection === 'burner-services';
+
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
 
   useEffect(() => {
     checkCurrentTab();
@@ -233,7 +257,7 @@ export function Popup() {
     chrome.runtime.onMessage.addListener(listener);
 
     const interval = setInterval(() => {
-      if (!data) {
+      if (!dataRef.current) {
         loadData();
       }
     }, 2000);
@@ -278,9 +302,16 @@ export function Popup() {
 
   const loadData = async () => {
     try {
-      const response = await chrome.runtime.sendMessage({ type: 'GET_STATE' });
+      const response = await chrome.runtime.sendMessage({ type: 'GET_STATE' }) as {
+        success?: boolean;
+        data?: StorageData;
+        falsePositiveStatuses?: Record<string, FalsePositiveStatus>;
+      };
       if (response && response.success) {
-        setData(response.data);
+        if (response.data) {
+          setData(response.data);
+        }
+        setFalsePositiveStatuses(response.falsePositiveStatuses ?? {});
       }
     } catch (error) {
       const err = toError(error);
@@ -428,6 +459,37 @@ export function Popup() {
     setShowSettings(true);
   };
 
+  const isValidWebPage = currentTab?.url &&
+    (currentTab.url.startsWith('http://') || currentTab.url.startsWith('https://'));
+  const isPopupExtensionPage =
+    Boolean(currentTab?.url) && Boolean(currentTab?.url?.startsWith(chrome.runtime.getURL('src/popup/popup.html')));
+  const shouldAllowStandaloneSettings = isOnboardingBurnerRedirect && isPopupExtensionPage;
+
+  useEffect(() => {
+    if (!shouldAllowStandaloneSettings) {
+      return;
+    }
+
+    const previousInlineStyles = {
+      width: document.body.style.width,
+      minHeight: document.body.style.minHeight,
+      maxHeight: document.body.style.maxHeight,
+      overflow: document.body.style.overflow,
+    };
+
+    document.body.style.width = '100%';
+    document.body.style.minHeight = '100vh';
+    document.body.style.maxHeight = 'none';
+    document.body.style.overflow = 'auto';
+
+    return () => {
+      document.body.style.width = previousInlineStyles.width;
+      document.body.style.minHeight = previousInlineStyles.minHeight;
+      document.body.style.maxHeight = previousInlineStyles.maxHeight;
+      document.body.style.overflow = previousInlineStyles.overflow;
+    };
+  }, [shouldAllowStandaloneSettings]);
+
   if (loading || !data) {
     return (
       <div className="w-full h-[500px] flex items-center justify-center bg-gray-50 dark:bg-gray-900">
@@ -436,10 +498,26 @@ export function Popup() {
     );
   }
 
-  const isValidWebPage = currentTab?.url &&
-    (currentTab.url.startsWith('http://') || currentTab.url.startsWith('https://'));
+  if (shouldAllowStandaloneSettings) {
+    return (
+      <div className="w-full min-h-screen bg-gray-100 dark:bg-gray-900">
+        <ReportableSettingsPage
+          isOpen={true}
+          onClose={() => window.close()}
+          currentTab={currentTab}
+          onFeedbackSuccess={handleFeedbackSuccess}
+          deepLinkSection="burner-services"
+          highlightBurnerToggle={true}
+          onBurnerHighlightComplete={undefined}
+          reportContext={null}
+          onReportClear={undefined}
+          standalone={true}
+        />
+      </div>
+    );
+  }
 
-  if (!isValidWebPage) {
+  if (!isValidWebPage && !shouldAllowStandaloneSettings) {
     return (
       <div className="w-full h-[500px] flex flex-col bg-white dark:bg-gray-900">
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex items-center justify-between">
@@ -678,6 +756,7 @@ export function Popup() {
                 isExpanded={expandedAlerts.has(alert.id)}
                   onToggleExpanded={() => toggleExpanded(alert.id)}
                   onReport={openReportDialog}
+                  falsePositiveStatus={falsePositiveStatuses[normalizeDomain(alert.domain)]}
               />
             ))
           )}
@@ -746,15 +825,20 @@ export function AlertItem({
   isExpanded,
   onToggleExpanded,
   onReport,
+  falsePositiveStatus,
 }: {
   alert: AlertType;
   isExpanded: boolean;
   onToggleExpanded: () => void;
   onReport: (alert: AlertType) => void;
+  falsePositiveStatus?: FalsePositiveStatus;
 }) {
   const [trackerInfo, setTrackerInfo] = useState<{ description: string; alternative: string } | null>(null);
   const [loadingInfo, setLoadingInfo] = useState(false);
-  const [reportStatus, setReportStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [reportStatus, setReportStatus] = useState<'idle' | 'sending' | 'sent' | 'already_reported' | 'error'>('idle');
+  const [reportReason, setReportReason] = useState<FalsePositiveReason>('wrong_detection');
+  const [customReason, setCustomReason] = useState('');
+  const [reportCount, setReportCount] = useState<number>(falsePositiveStatus?.reportCount ?? 0);
 
   const getSeverityIcon = () => {
     switch (alert.severity) {
@@ -838,25 +922,60 @@ export function AlertItem({
 
   const hasExpandableInfo = isTrackerAlert || hasBannerDetails || hasViolationDetails;
   const alertToggleLabel = isExpanded ? 'Collapse alert details' : 'Expand alert details';
+  const userAlreadyReported = reportStatus === 'already_reported' || reportStatus === 'sent' || Boolean(falsePositiveStatus?.userReported);
+  const communityCount = Math.max(reportCount, falsePositiveStatus?.reportCount ?? 0);
+  const communityLabel = userAlreadyReported && communityCount > 1
+    ? `You and ${communityCount - 1} others reported this`
+    : userAlreadyReported
+      ? 'You reported this'
+      : communityCount > 0
+        ? `Reported by ${communityCount} users`
+        : null;
+
+  useEffect(() => {
+    if (falsePositiveStatus?.userReported) {
+      setReportStatus('already_reported');
+    }
+    if (typeof falsePositiveStatus?.reportCount === 'number') {
+      setReportCount(falsePositiveStatus.reportCount);
+    }
+  }, [falsePositiveStatus]);
 
   const handleFalsePositiveReport = async () => {
-    if (reportStatus === 'sending' || reportStatus === 'sent') return;
+    if (reportStatus === 'sending' || reportStatus === 'sent' || reportStatus === 'already_reported') return;
     setReportStatus('sending');
 
     try {
-      await chrome.runtime.sendMessage({
+      const response = await chrome.runtime.sendMessage({
         type: 'REPORT_FALSE_POSITIVE',
         data: {
           domain: alert.domain,
           url: alert.url || '',
           detectedPatterns: alert.deceptivePatterns || [],
-          userReason: 'Reported from popup',
+          reason: reportReason,
+          userReason: reportReason === 'other' ? customReason.trim() : undefined,
           timestamp: Date.now(),
           installationId: '',
           scanConfidence: alert.scanConfidence ?? 0,
         },
       });
-      setReportStatus('sent');
+
+      if (response?.alreadyReported) {
+        setReportStatus('already_reported');
+        if (typeof response.reportCount === 'number') {
+          setReportCount(response.reportCount);
+        }
+        return;
+      }
+
+      if (response?.success) {
+        setReportStatus('sent');
+        if (typeof response.reportCount === 'number') {
+          setReportCount(response.reportCount);
+        }
+      } else {
+        setReportStatus('error');
+      }
     } catch (error) {
       logger.error('Popup', 'Failed to report false positive', toError(error));
       setReportStatus('error');
@@ -919,18 +1038,60 @@ export function AlertItem({
                 </button>
               )}
               {isFalsePositiveReportable && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void handleFalsePositiveReport();
-                  }}
-                  className="text-xs text-amber-700 dark:text-amber-400 hover:underline font-medium ml-2"
-                  aria-label="Report false positive"
-                >
-                  {reportStatus === 'sent' ? 'Reported' : reportStatus === 'sending' ? 'Reporting...' : 'Report incorrect'}
-                </button>
+                <div className="ml-2 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                  {(reportStatus === 'sent' || reportStatus === 'already_reported') ? (
+                    <span className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">
+                      {reportStatus === 'already_reported' ? 'Already reported' : 'Reported'}
+                    </span>
+                  ) : (
+                    <>
+                      <select
+                        value={reportReason}
+                        onChange={(event) => setReportReason(event.target.value as FalsePositiveReason)}
+                        className="text-xs rounded border border-amber-200 dark:border-amber-700 bg-white dark:bg-gray-800 text-amber-800 dark:text-amber-300 px-1.5 py-0.5"
+                        aria-label="False positive reason"
+                      >
+                        <option value="wrong_detection">Wrong detection</option>
+                        <option value="banner_compliant">Banner is compliant</option>
+                        <option value="no_banner_present">No banner present</option>
+                        <option value="other">Other</option>
+                      </select>
+                      <button
+                        onClick={() => {
+                          void handleFalsePositiveReport();
+                        }}
+                        className="text-xs text-amber-700 dark:text-amber-400 hover:underline font-medium"
+                        aria-label="Report false positive"
+                        disabled={reportStatus === 'sending' || (reportReason === 'other' && !customReason.trim())}
+                      >
+                        {reportStatus === 'sending' ? 'Reporting...' : 'Report'}
+                      </button>
+                    </>
+                  )}
+                </div>
               )}
             </div>
+            {isFalsePositiveReportable && reportReason === 'other' && reportStatus !== 'sent' && reportStatus !== 'already_reported' && (
+              <div className="mt-2">
+                <input
+                  type="text"
+                  value={customReason}
+                  onChange={(event) => setCustomReason(event.target.value)}
+                  onClick={(event) => event.stopPropagation()}
+                  className="w-full text-xs rounded border border-amber-200 dark:border-amber-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 px-2 py-1"
+                  placeholder="Tell us what was incorrect"
+                  maxLength={200}
+                  aria-label="Custom false positive reason"
+                />
+              </div>
+            )}
+            {isFalsePositiveReportable && communityLabel && (
+              <div className="mt-1">
+                <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:text-amber-300">
+                  {communityLabel}
+                </span>
+              </div>
+            )}
             <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
               <span className="truncate">{alert.domain}</span>
               <span className="ml-2 whitespace-nowrap">{timeAgo(alert.timestamp)}</span>

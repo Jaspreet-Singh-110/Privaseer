@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { detectCMP, hasValidPersistedConsent, type CMPDetectionResult } from '@/utils/cmp-detector';
+import { detectCMP, hasValidPersistedConsent } from '@/utils/cmp-detector';
+import type { CMPDetectionResult } from '@/types';
 
 const loggerMock = vi.hoisted(() => ({
   info: vi.fn(),

@@ -36,12 +36,21 @@ describe('FalsePositiveService', () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       status: 200,
+      json: vi.fn().mockResolvedValue({
+        success: true,
+        aggregation: {
+          reportCount: 4,
+          overrideThreshold: 88,
+          shouldOverride: true,
+        },
+      }),
     });
 
     const report: FalsePositiveReport = {
       domain: 'example.com',
       url: 'https://example.com/page',
       detectedPatterns: ['pattern1'],
+      reason: 'wrong_detection',
       timestamp: Date.now(),
       installationId: 'install-123',
       scanConfidence: 0.8,
@@ -49,7 +58,14 @@ describe('FalsePositiveService', () => {
 
     const result = await FalsePositiveService.reportFalsePositive(report);
 
-    expect(result).toBe(true);
+    expect(result).toEqual({
+      success: true,
+      aggregation: {
+        reportCount: 4,
+        overrideThreshold: 88,
+        shouldOverride: true,
+      },
+    });
     expect(mockFetch).toHaveBeenCalledWith(
       `${SUPABASE.URL}/functions/v1/report-false-positive`,
       expect.objectContaining({
@@ -66,12 +82,14 @@ describe('FalsePositiveService', () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       status: 200,
+      json: vi.fn().mockResolvedValue({ success: true }),
     });
 
     const report: FalsePositiveReport = {
       domain: 'example.com',
       url: 'https://example.com/page?tracking=123#hash',
       detectedPatterns: [],
+      reason: 'wrong_detection',
       timestamp: Date.now(),
       installationId: 'install-123',
       scanConfidence: 0.5,
@@ -94,6 +112,7 @@ describe('FalsePositiveService', () => {
       domain: 'example.com',
       url: 'https://example.com',
       detectedPatterns: [],
+      reason: 'wrong_detection',
       timestamp: Date.now(),
       installationId: 'install-123',
       scanConfidence: 0.5,
@@ -101,7 +120,7 @@ describe('FalsePositiveService', () => {
 
     const result = await FalsePositiveService.reportFalsePositive(report);
 
-    expect(result).toBe(false);
+    expect(result).toEqual({ success: false });
     expect(loggerWarnMock).toHaveBeenCalledWith(
       'FalsePositiveService',
       'Failed to report false positive',
@@ -119,6 +138,7 @@ describe('FalsePositiveService', () => {
       domain: 'example.com',
       url: 'https://example.com',
       detectedPatterns: [],
+      reason: 'wrong_detection',
       timestamp: Date.now(),
       installationId: 'install-123',
       scanConfidence: 0.5,
@@ -126,7 +146,7 @@ describe('FalsePositiveService', () => {
 
     const result = await FalsePositiveService.reportFalsePositive(report);
 
-    expect(result).toBe(false);
+    expect(result).toEqual({ success: false });
     expect(loggerErrorMock).toHaveBeenCalledWith(
       'FalsePositiveService',
       'Error reporting false positive',

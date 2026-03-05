@@ -60,7 +60,26 @@ const getFactorStyles = (theme: 'light' | 'dark', tone: 'green' | 'red') => {
     : 'border-red-200 bg-red-50 text-red-700';
 };
 
-export function PrivacyCreditStep({ theme }: StepContentProps): JSX.Element {
+const getScoreLabel = (score: number | null): string => {
+  if (score === null) {
+    return 'No data yet';
+  }
+  if (score >= 750) {
+    return 'Excellent';
+  }
+  if (score >= 650) {
+    return 'Good';
+  }
+  if (score >= 550) {
+    return 'Fair';
+  }
+  if (score >= 400) {
+    return 'Poor';
+  }
+  return 'Very Poor';
+};
+
+export function PrivacyCreditStep({ theme, creditScore = null }: StepContentProps): JSX.Element {
   const isDark = theme === 'dark';
   const sectionBackground = isDark
     ? 'border-gray-700 bg-gray-800 text-white'
@@ -71,6 +90,16 @@ export function PrivacyCreditStep({ theme }: StepContentProps): JSX.Element {
   const statsBorder = isDark
     ? 'border-gray-700 bg-gray-800 text-white'
     : 'border-gray-200 bg-gray-50 text-gray-900';
+  const scoreLabel = getScoreLabel(creditScore);
+  const scoreDisplay = creditScore === null ? '--' : String(creditScore);
+  const scoreTone =
+    creditScore === null
+      ? isDark
+        ? 'text-gray-300'
+        : 'text-gray-500'
+      : isDark
+        ? 'text-emerald-200'
+        : 'text-emerald-600';
 
   return (
     <section className={`rounded-3xl border bg-gradient-to-br p-8 backdrop-blur ${sectionBackground}`}>
@@ -88,17 +117,13 @@ export function PrivacyCreditStep({ theme }: StepContentProps): JSX.Element {
       <div className="mt-8 grid gap-6 md:grid-cols-[1.1fr_0.9fr]">
         <div className={`flex flex-col gap-5 rounded-2xl border p-6 ${panelBorder}`}>
           <div className="flex items-baseline gap-3">
-            <span className="text-6xl font-black">720</span>
-            <span
-              className={`text-lg uppercase tracking-[0.3em] ${
-                isDark ? 'text-emerald-200' : 'text-emerald-600'
-              }`}
-            >
-              Good
-            </span>
+            <span className="text-6xl font-black" aria-live="polite">{scoreDisplay}</span>
+            <span className={`text-lg uppercase tracking-[0.3em] ${scoreTone}`}>{scoreLabel}</span>
           </div>
           <p className={`text-sm ${secondary}`}>
-            Your score reflects 30 days of browsing. Good habits compound over time.
+            {creditScore === null
+              ? 'Browse a few sites with Privaseer enabled to generate your first Privacy Credit score.'
+              : 'Your score reflects 30 days of browsing. Good habits compound over time.'}
           </p>
 
           <div className="rounded-2xl border border-dashed p-4 text-sm">

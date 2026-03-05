@@ -123,10 +123,37 @@ export interface AllowlistEntry {
   expiresAt?: number;
 }
 
+export type FalsePositiveReason =
+  | 'banner_compliant'
+  | 'no_banner_present'
+  | 'wrong_detection'
+  | 'other';
+
+export interface ReportedFalsePositive {
+  timestamp: number;
+  reason: FalsePositiveReason;
+}
+
+export interface FalsePositiveStatus {
+  threshold: number;
+  reportCount: number;
+  hasOverride: boolean;
+  userReported: boolean;
+  userReason?: FalsePositiveReason;
+  reportedAt?: number;
+}
+
+export interface FalsePositiveAggregation {
+  reportCount: number;
+  overrideThreshold: number | null;
+  shouldOverride: boolean;
+}
+
 export interface FalsePositiveReport {
   domain: string;
   url: string;
   detectedPatterns: string[];
+  reason: FalsePositiveReason;
   userReason?: string;
   timestamp: number;
   installationId: string;
@@ -176,6 +203,26 @@ export interface CMPDetectionResult {
   cookieNames: string[];
   tcfVersion?: string;
   hasRejectButton?: boolean;
+}
+
+export interface RemoteCMPConfig {
+  name: string;
+  cookiePatterns: string[];
+  bannerSelectors: string[];
+  consentParsers: Record<string, 'generic' | 'onetrust' | 'cookiebot'>;
+  version: string;
+  lastUpdated: string;
+}
+
+export interface CMPSuggestion {
+  domain: string;
+  pageUrl: string;
+  cookieNames: string[];
+  bannerSelectors: string[];
+  bannerTextSnippet?: string;
+  language?: string;
+  installationId?: string;
+  timestamp: number;
 }
 
 export interface ConsentState {
@@ -253,6 +300,7 @@ export interface StorageData {
   penalizedDomains?: Record<string, number>;
   consentStates: Record<string, LocalConsentState>;
   allowlist?: Record<string, AllowlistEntry>;
+  reportedFalsePositives?: Record<string, ReportedFalsePositive>;
   domainOccurrences: Record<string, number>;
   dailySnapshots?: DailyMetricsSnapshot[];
   burnerEmailStats?: {
@@ -277,12 +325,30 @@ export interface DomainConfidenceOverride {
   lastUpdated: string;
 }
 
+export type OnboardingEventType =
+  | 'onboarding_started'
+  | 'onboarding_step_viewed'
+  | 'onboarding_step_completed'
+  | 'onboarding_skipped'
+  | 'onboarding_completed'
+  | 'onboarding_abandoned';
+
+export interface OnboardingStepTiming {
+  stepIndex: number;
+  stepId: string;
+  enteredAt: number;
+  exitedAt?: number;
+  durationMs?: number;
+}
+
 export interface OnboardingState {
   hasCompletedOnboarding: boolean;
   currentStep: number;
   completedAt?: number;
   skippedAt?: number;
   emailConfigured?: boolean;
+  startedAt?: number;
+  stepTimings?: OnboardingStepTiming[];
 }
 
 export type MessageType =
@@ -326,6 +392,8 @@ export type MessageType =
   | 'COMPLETE_ONBOARDING'
   | 'SKIP_ONBOARDING'
   | 'REPORT_FALSE_POSITIVE'
+  | 'REFRESH_CMP_CONFIG'
+  | 'SUGGEST_CMP_PATTERN'
   | 'GET_ALLOWLIST'
   | 'ADD_TO_ALLOWLIST'
   | 'REMOVE_FROM_ALLOWLIST';
@@ -388,7 +456,7 @@ export interface MessageDataMap {
   GET_CREDIT_SCORE: undefined;
   GET_SCORING_CONFIG: undefined;
   CREDIT_SCORE_UPDATED: { creditScore: CreditScoreResult };
-  CONSENT_SCAN_RESULT: ConsentScanResult;
+  CONSENT_SCAN_RESULT: ConsentScanResultV2;
   GET_TRACKER_INFO: GetTrackerInfoData;
   TRACKER_BLOCKED: undefined;
   POST_CONSENT_VIOLATION: { domain: string; count: number; trackers: string[] };
@@ -417,10 +485,19 @@ export interface MessageDataMap {
   TRACK_EVENT: { eventType: string; eventData?: Record<string, unknown> };
   RECORD_COMPLIANCE_SCORE: { score: number };
   GET_ONBOARDING_STATE: undefined;
-  SET_ONBOARDING_STEP: { step: number };
+  SET_ONBOARDING_STEP: {
+    step: number;
+    stepId?: string;
+    previousStepId?: string;
+    enteredAt?: number;
+    exitedAt?: number;
+    durationMs?: number;
+  };
   COMPLETE_ONBOARDING: { emailConfigured?: boolean };
-  SKIP_ONBOARDING: { atStep: number };
+  SKIP_ONBOARDING: { atStep: number; reason?: 'skipped' | 'abandoned' };
   REPORT_FALSE_POSITIVE: FalsePositiveReport;
+  REFRESH_CMP_CONFIG: undefined;
+  SUGGEST_CMP_PATTERN: CMPSuggestion;
   GET_ALLOWLIST: undefined;
   ADD_TO_ALLOWLIST: { domain: string; source?: 'user' };
   REMOVE_FROM_ALLOWLIST: { domain: string };

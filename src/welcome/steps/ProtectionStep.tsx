@@ -1,7 +1,12 @@
 import { ShieldCheck, WifiOff } from 'lucide-react';
 import type { StepContentProps } from './types';
 
-export function ProtectionStep({ theme }: StepContentProps): JSX.Element {
+export function ProtectionStep({
+  theme,
+  trackerCount = 0,
+  protectionEnabled = true,
+  onToggleProtection,
+}: StepContentProps): JSX.Element {
   const isDark = theme === 'dark';
   const containerBg = isDark
     ? 'bg-gray-800 text-white border border-gray-700'
@@ -12,7 +17,19 @@ export function ProtectionStep({ theme }: StepContentProps): JSX.Element {
   const cardBgPrimary = isDark ? 'bg-gray-700' : 'bg-gray-50';
   const cardBgSecondary = isDark ? 'bg-gray-800' : 'bg-white shadow';
   const chipText = isDark ? 'text-gray-400' : 'text-gray-600';
-  const blockedText = isDark ? 'text-green-400' : 'text-green-600';
+  const blockedText = protectionEnabled
+    ? isDark
+      ? 'text-green-400'
+      : 'text-green-600'
+    : isDark
+      ? 'text-gray-300'
+      : 'text-gray-500';
+  const handleToggle = () => {
+    if (!onToggleProtection) {
+      return;
+    }
+    void onToggleProtection();
+  };
 
   return (
     <section className={`flex flex-col gap-6 rounded-3xl p-8 backdrop-blur ${containerBg}`}>
@@ -51,24 +68,45 @@ export function ProtectionStep({ theme }: StepContentProps): JSX.Element {
         </article>
 
         <article className={`rounded-2xl border ${cardBorder} ${cardBgSecondary} p-5`}>
-          <p className={`text-xs uppercase tracking-[0.2em] ${chipText}`}>Live simulation</p>
-          <div className="mt-4 space-y-3">
-            {['analytics-beacon.js', 'fingerprint-pro.js', 'pixel-ads.js'].map((script) => (
-              <div
-                key={script}
-                className={`flex items-center justify-between rounded-2xl border ${
-                  isDark
-                    ? 'border-white/10 bg-black/20 text-white/80'
-                    : 'border-slate-200 bg-slate-50 text-slate-700'
-                } px-4 py-3 text-sm font-mono`}
-              >
-                <span>{script}</span>
-                <span className={`inline-flex items-center gap-1 ${blockedText}`}>
-                  <WifiOff className="h-3.5 w-3.5" />
-                  blocked
-                </span>
-              </div>
-            ))}
+          <p className={`text-xs uppercase tracking-[0.2em] ${chipText}`}>Live protection</p>
+          <div className="mt-4 space-y-4">
+            <div
+              className={`rounded-2xl border ${
+                isDark ? 'border-white/10 bg-black/20 text-white/80' : 'border-slate-200 bg-slate-50 text-slate-700'
+              } px-4 py-3`}
+            >
+              <p className="text-sm font-semibold">Trackers blocked so far</p>
+              <p className="mt-1 text-2xl font-black" aria-live="polite">
+                {trackerCount}
+              </p>
+              <p className="mt-1 text-xs">
+                {protectionEnabled
+                  ? 'Protection is active and blocking in real time.'
+                  : 'Protection is paused. Turn it on to resume blocking.'}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              role="switch"
+              aria-checked={protectionEnabled}
+              onClick={handleToggle}
+              className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
+                protectionEnabled
+                  ? isDark
+                    ? 'border-emerald-500/50 bg-emerald-500/10'
+                    : 'border-emerald-200 bg-emerald-50'
+                  : isDark
+                    ? 'border-gray-700 bg-gray-900'
+                    : 'border-gray-200 bg-white'
+              }`}
+            >
+              <span>{protectionEnabled ? 'Protection enabled' : 'Protection disabled'}</span>
+              <span className={`inline-flex items-center gap-1 ${blockedText}`}>
+                <WifiOff className="h-3.5 w-3.5" />
+                {protectionEnabled ? 'blocking on' : 'blocking off'}
+              </span>
+            </button>
           </div>
         </article>
       </div>

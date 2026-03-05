@@ -7,7 +7,7 @@ const patterns = [
   { title: 'Pre-checked boxes', description: 'Vendors pre-enabled despite GDPR.' },
 ];
 
-export function ConsentScannerStep({ theme }: StepContentProps): JSX.Element {
+export function ConsentScannerStep({ theme, onRunDemoScan }: StepContentProps): JSX.Element {
   const isDark = theme === 'dark';
   const containerBg = isDark ? 'border-gray-700 bg-gray-800 text-white' : 'border-gray-200 bg-white text-gray-900 shadow';
   const subtitle = isDark ? 'text-gray-400' : 'text-gray-600';
@@ -66,6 +66,25 @@ export function ConsentScannerStep({ theme }: StepContentProps): JSX.Element {
             <li>• CMP persists consent without interaction</li>
           </ul>
         </article>
+      </div>
+
+      <div className="mt-6">
+        <button
+          type="button"
+          onClick={() => {
+            if (!onRunDemoScan) {
+              return;
+            }
+            void onRunDemoScan();
+          }}
+          className={`rounded-2xl border px-5 py-3 text-sm font-semibold transition ${
+            isDark
+              ? 'border-sky-400/60 bg-sky-500/10 text-sky-100 hover:bg-sky-500/20'
+              : 'border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100'
+          }`}
+        >
+          Try a demo scan on a real website
+        </button>
       </div>
     </section>
   );

@@ -1,4 +1,4 @@
-import type { FalsePositiveReport } from '../types';
+import type { FalsePositiveAggregation, FalsePositiveReport } from '../types';
 import { SUPABASE } from '../utils/constants';
 import { logger } from '../utils/logger';
 import { sanitizeUrl } from '../utils/sanitizer';
@@ -6,8 +6,13 @@ import { toError } from '../utils/type-guards';
 
 const REPORT_FALSE_POSITIVE_ENDPOINT = `${SUPABASE.URL}/functions/v1/report-false-positive`;
 
+interface FalsePositiveServiceResult {
+  success: boolean;
+  aggregation?: FalsePositiveAggregation;
+}
+
 export class FalsePositiveService {
-  static async reportFalsePositive(report: FalsePositiveReport): Promise<boolean> {
+  static async reportFalsePositive(report: FalsePositiveReport): Promise<FalsePositiveServiceResult> {
     try {
       const payload: FalsePositiveReport = {
         ...report,
@@ -30,13 +35,30 @@ export class FalsePositiveService {
           status: response.status,
           error: errorText,
         });
-        return false;
+        return { success: false };
       }
 
-      return true;
+      const responseData = (await response.json()) as {
+        success?: boolean;
+        aggregation?: Partial<FalsePositiveAggregation>;
+      };
+
+      return {
+        success: Boolean(responseData.success),
+        aggregation: responseData.aggregation
+          ? {
+              reportCount: typeof responseData.aggregation.reportCount === 'number' ? responseData.aggregation.reportCount : 0,
+              overrideThreshold:
+                typeof responseData.aggregation.overrideThreshold === 'number'
+                  ? responseData.aggregation.overrideThreshold
+                  : null,
+              shouldOverride: Boolean(responseData.aggregation.shouldOverride),
+            }
+          : undefined,
+      };
     } catch (error) {
       logger.error('FalsePositiveService', 'Error reporting false positive', toError(error));
-      return false;
+      return { success: false };
     }
   }
 }

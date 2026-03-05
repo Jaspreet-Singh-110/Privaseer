@@ -3,7 +3,15 @@ import { FirewallEngine } from './firewall-engine';
 import { PrivacyScoreManager } from './privacy-score';
 import { burnerEmailService } from './burner-email-service';
 import { feedbackTelemetryService } from './feedback-telemetry-service';
-import type { ConsentScanResultV2, FalsePositiveReport } from '../types';
+import type {
+  CMPSuggestion,
+  ConsentScanResultV2,
+  FalsePositiveStatus,
+  FalsePositiveReport,
+  MessageDataMap,
+  RemoteCMPConfig,
+  StorageData,
+} from '../types';
 import { logger } from '../utils/logger';
 import { messageBus } from '../utils/message-bus';
 import { tabManager } from '../utils/tab-manager';
@@ -18,6 +26,7 @@ import {
   ONBOARDING,
   FALSE_POSITIVE_FEEDBACK,
   SCORING_CONFIG,
+  CMP_CONFIG,
 } from '../utils/constants';
 import { validateComplianceScore, validateEventPayload, validateFeedbackPayload } from '../utils/validation';
 import { AllowlistManager } from '../utils/allowlist-manager';
@@ -32,6 +41,9 @@ const fpOverridesCache = new Map<string, { threshold: number; reportCount: numbe
 
 const CONSENT_PERSIST_ENDPOINT = `${SUPABASE.URL}/functions/v1/persist-consent-state`;
 const FP_OVERRIDES_ENDPOINT = `${SUPABASE.URL}${FALSE_POSITIVE_FEEDBACK.OVERRIDES_ENDPOINT}`;
+const CMP_CONFIG_ENDPOINT = `${SUPABASE.URL}${CMP_CONFIG.ENDPOINT}`;
+const CMP_SUGGESTION_ENDPOINT = `${SUPABASE.URL}/functions/v1/suggest-cmp-pattern`;
+const CMP_CONFIG_STORAGE_KEY = 'cmpConfigCache';
 
 export function getConsentRejection(domain: string): { timestamp: number; tabId?: number } | null {
   const entry = consentRejectionCache.get(domain);
@@ -107,6 +119,106 @@ async function fetchFalsePositiveOverrides(): Promise<void> {
   }
 }
 
+function buildFalsePositiveStatuses(data: StorageData): Record<string, FalsePositiveStatus> {
+  const statuses: Record<string, FalsePositiveStatus> = {};
+  const reported = data.reportedFalsePositives ?? {};
+  const domains = new Set<string>(Object.keys(reported));
+
+  for (const alert of data.alerts) {
+    if (alert.type !== 'non_compliant_site') {
+      continue;
+    }
+    domains.add(normalizeDomain(alert.domain));
+  }
+
+  for (const domain of domains) {
+    const override = fpOverridesCache.get(domain);
+    const report = reported[domain];
+    statuses[domain] = {
+      threshold: override?.threshold ?? FALSE_POSITIVE_FEEDBACK.BASE_THRESHOLD,
+      reportCount: override?.reportCount ?? 0,
+      hasOverride: Boolean(override),
+      userReported: Boolean(report),
+      userReason: report?.reason,
+      reportedAt: report?.timestamp,
+    };
+  }
+
+  return statuses;
+}
+
+function isRemoteCmpConfig(value: unknown): value is RemoteCMPConfig {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { name?: unknown }).name === 'string' &&
+    Array.isArray((value as { cookiePatterns?: unknown }).cookiePatterns) &&
+    Array.isArray((value as { bannerSelectors?: unknown }).bannerSelectors)
+  );
+}
+
+async function fetchCmpConfig(): Promise<void> {
+  try {
+    const response = await fetch(CMP_CONFIG_ENDPOINT, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE.ANON_KEY}`,
+      },
+    });
+
+    if (!response.ok) {
+      logger.warn('ServiceWorker', 'Failed to fetch CMP config', {
+        status: response.status,
+      });
+      return;
+    }
+
+    const payload = (await response.json()) as { configs?: unknown };
+    const configs = Array.isArray(payload.configs) ? payload.configs.filter(isRemoteCmpConfig) : [];
+
+    await new Promise<void>((resolve, reject) => {
+      chrome.storage.local.set({ [CMP_CONFIG_STORAGE_KEY]: configs }, () => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        resolve();
+      });
+    });
+
+    logger.debug('ServiceWorker', 'CMP config refreshed', { configCount: configs.length });
+  } catch (error) {
+    logger.error('ServiceWorker', 'Error fetching CMP config', toError(error));
+  }
+}
+
+async function submitCmpSuggestion(suggestion: CMPSuggestion): Promise<boolean> {
+  try {
+    const installationId = suggestion.installationId || await feedbackTelemetryService.getInstallationId();
+    const response = await fetch(CMP_SUGGESTION_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE.ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        ...suggestion,
+        installationId,
+        pageUrl: sanitizeUrl(suggestion.pageUrl) || '',
+      }),
+    });
+
+    return response.ok;
+  } catch (error) {
+    logger.error('ServiceWorker', 'Failed to submit CMP suggestion', toError(error), {
+      domain: suggestion.domain,
+      pageUrl: sanitizeUrl(suggestion.pageUrl),
+    });
+    return false;
+  }
+}
+
 async function initializeExtension(): Promise<void> {
   // If already initialized, skip
   if (isInitialized) {
@@ -135,6 +247,7 @@ async function initializeExtension(): Promise<void> {
       await burnerEmailService.initialize();
       await feedbackTelemetryService.initialize();
       void fetchFalsePositiveOverrides();
+      void fetchCmpConfig();
       void fetchScoringConfig();
 
       await chrome.action.setBadgeBackgroundColor({ color: BADGE.BACKGROUND_COLOR });
@@ -157,7 +270,8 @@ async function initializeExtension(): Promise<void> {
 function setupMessageHandlers(): void {
   messageBus.on('GET_STATE', async () => {
     const data = await Storage.getFresh();
-    return { success: true, data };
+    const falsePositiveStatuses = buildFalsePositiveStatuses(data);
+    return { success: true, data, falsePositiveStatuses };
   });
 
   messageBus.on('GET_CREDIT_SCORE', async () => {
@@ -207,20 +321,62 @@ function setupMessageHandlers(): void {
     return { success: true };
   });
 
+  messageBus.on('REFRESH_CMP_CONFIG', async () => {
+    await fetchCmpConfig();
+    return { success: true };
+  });
+
+  messageBus.on('SUGGEST_CMP_PATTERN', async (data: unknown) => {
+    const payload = data as CMPSuggestion;
+    if (!payload?.domain || !payload?.pageUrl) {
+      return { success: false, error: 'Invalid CMP suggestion payload' };
+    }
+
+    const success = await submitCmpSuggestion(payload);
+    return success ? { success: true } : { success: false, error: 'Failed to submit CMP suggestion' };
+  });
+
   messageBus.on('REPORT_FALSE_POSITIVE', async (data: unknown) => {
     const payload = data as FalsePositiveReport;
     try {
+      const normalizedDomain = normalizeDomain(payload.domain);
+      const existingReport = await Storage.getReportedFalsePositive(normalizedDomain);
+      if (existingReport) {
+        return {
+          success: false,
+          alreadyReported: true,
+          reportCount: fpOverridesCache.get(normalizedDomain)?.reportCount ?? 0,
+        };
+      }
+
       const installationId = payload.installationId || await feedbackTelemetryService.getInstallationId();
       const report: FalsePositiveReport = {
         ...payload,
+        domain: normalizedDomain,
         installationId,
       };
-      const success = await FalsePositiveService.reportFalsePositive(report);
-      await AllowlistManager.addEntry(payload.domain, 'user');
-      if (success) {
-        await fetchFalsePositiveOverrides();
+      const result = await FalsePositiveService.reportFalsePositive(report);
+      if (!result.success) {
+        return { success: false, error: 'Failed to report false positive' };
       }
-      return { success };
+
+      await Storage.setReportedFalsePositive(normalizedDomain, payload.reason);
+      await AllowlistManager.addEntry(payload.domain, 'user');
+      if (result.aggregation?.shouldOverride && typeof result.aggregation.overrideThreshold === 'number') {
+        fpOverridesCache.set(normalizedDomain, {
+          threshold: result.aggregation.overrideThreshold,
+          reportCount: result.aggregation.reportCount,
+          lastUpdated: new Date().toISOString(),
+        });
+      }
+
+      return {
+        success: true,
+        reportCount: result.aggregation?.reportCount ?? (fpOverridesCache.get(normalizedDomain)?.reportCount ?? 0),
+        alreadyOverridden: Boolean(
+          result.aggregation?.shouldOverride || fpOverridesCache.get(normalizedDomain)
+        ),
+      };
     } catch (error) {
       logger.error('ServiceWorker', 'Failed to report false positive', toError(error));
       return { success: false, error: 'Failed to report false positive' };
@@ -766,8 +922,32 @@ function setupMessageHandlers(): void {
 
   messageBus.on('SET_ONBOARDING_STEP', async (data: unknown) => {
     try {
-      const { step } = data as { step: number };
-      const onboarding = await Storage.setOnboardingStep(step);
+      const payload = data as MessageDataMap['SET_ONBOARDING_STEP'];
+      const onboarding = await Storage.setOnboardingStep(payload.step, {
+        stepId: payload.stepId,
+        previousStepId: payload.previousStepId,
+        enteredAt: payload.enteredAt,
+        exitedAt: payload.exitedAt,
+        durationMs: payload.durationMs,
+      });
+
+      if (payload.previousStepId) {
+        feedbackTelemetryService.trackEvent({
+          eventType: ONBOARDING.EVENTS.STEP_COMPLETED,
+          eventData: {
+            stepId: payload.previousStepId,
+            durationMs: payload.durationMs ?? null,
+          },
+        }).catch(err => logger.debug('ServiceWorker', 'Onboarding telemetry failed', err));
+      }
+
+      feedbackTelemetryService.trackEvent({
+        eventType: ONBOARDING.EVENTS.STEP_VIEWED,
+        eventData: {
+          stepIndex: payload.step,
+          stepId: payload.stepId ?? `step-${payload.step + 1}`,
+        },
+      }).catch(err => logger.debug('ServiceWorker', 'Onboarding telemetry failed', err));
       return { success: true, onboarding };
     } catch (error) {
       logger.error('ServiceWorker', 'Failed to set onboarding step', toError(error));
@@ -779,6 +959,19 @@ function setupMessageHandlers(): void {
     try {
       const { emailConfigured } = (data || {}) as { emailConfigured?: boolean };
       const onboarding = await Storage.completeOnboarding(emailConfigured);
+
+      feedbackTelemetryService.trackEvent({
+        eventType: ONBOARDING.EVENTS.COMPLETED,
+        eventData: {
+          completedAt: onboarding.completedAt ?? null,
+          totalDurationMs:
+            onboarding.startedAt && onboarding.completedAt
+              ? Math.max(0, onboarding.completedAt - onboarding.startedAt)
+              : null,
+          stepsTracked: onboarding.stepTimings?.length ?? 0,
+          emailConfigured: onboarding.emailConfigured ?? false,
+        },
+      }).catch(err => logger.debug('ServiceWorker', 'Onboarding telemetry failed', err));
       return { success: true, onboarding };
     } catch (error) {
       logger.error('ServiceWorker', 'Failed to complete onboarding', toError(error));
@@ -788,8 +981,25 @@ function setupMessageHandlers(): void {
 
   messageBus.on('SKIP_ONBOARDING', async (data: unknown) => {
     try {
-      const { atStep } = data as { atStep: number };
+      const { atStep, reason } = data as MessageDataMap['SKIP_ONBOARDING'];
       const onboarding = await Storage.skipOnboarding(atStep);
+
+      const telemetryEvent =
+        reason === 'abandoned' ? ONBOARDING.EVENTS.ABANDONED : ONBOARDING.EVENTS.SKIPPED;
+      const timestamp = onboarding.skippedAt ?? Date.now();
+
+      feedbackTelemetryService.trackEvent({
+        eventType: telemetryEvent,
+        eventData: {
+          atStep,
+          reason: reason ?? 'skipped',
+          totalDurationMs:
+            onboarding.startedAt
+              ? Math.max(0, timestamp - onboarding.startedAt)
+              : null,
+          stepsTracked: onboarding.stepTimings?.length ?? 0,
+        },
+      }).catch(err => logger.debug('ServiceWorker', 'Onboarding telemetry failed', err));
       return { success: true, onboarding };
     } catch (error) {
       logger.error('ServiceWorker', 'Failed to skip onboarding', toError(error));
@@ -887,6 +1097,10 @@ function setupCleanupInterval(): void {
   setInterval(() => {
     void fetchScoringConfig();
   }, SCORING_CONFIG.REFRESH_INTERVAL_MS);
+
+  setInterval(() => {
+    void fetchCmpConfig();
+  }, CMP_CONFIG.REFRESH_INTERVAL_MS);
 }
 
 chrome.runtime.onInstalled.addListener(async (details) => {

@@ -11,7 +11,7 @@ import { PrivacyCreditStep } from '@/welcome/steps/PrivacyCreditStep';
 
 describe('PrivacyCreditStep', () => {
   it('renders the score summary, scale, and factors', () => {
-    render(<PrivacyCreditStep theme="light" />);
+    render(<PrivacyCreditStep theme="light" creditScore={720} />);
 
     expect(screen.getAllByText('720').length).toBeGreaterThan(0);
     expect(screen.getAllByText(/good/i).length).toBeGreaterThan(0);
@@ -36,6 +36,13 @@ describe('PrivacyCreditStep', () => {
     const negative = screen.getByText('High-Risk Exposure').closest('li');
     expect(positive?.className).toContain('border-emerald-200');
     expect(negative?.className).toContain('border-red-200');
+  });
+
+  it('renders placeholder state when score is unavailable', () => {
+    render(<PrivacyCreditStep theme="light" creditScore={null} />);
+    expect(screen.getByText('--')).toBeInTheDocument();
+    expect(screen.getByText(/browse a few sites/i)).toBeInTheDocument();
+    expect(screen.getByText(/no data yet/i)).toBeInTheDocument();
   });
 
   it('applies dark theme factor styles', () => {

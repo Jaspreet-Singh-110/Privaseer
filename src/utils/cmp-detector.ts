@@ -1,6 +1,7 @@
 import { logger } from './logger';
 import { toError } from './type-guards';
 import { detectPageLanguage, getLocalizedPatterns, matchesAnyPattern } from './i18n-patterns';
+import type { CMPDetectionResult, RemoteCMPConfig } from '../types';
 
 // Type definitions for CMP APIs on window object
 interface OneTrustAPI {
@@ -32,68 +33,123 @@ interface WindowWithCMP extends Window {
 
 declare const window: WindowWithCMP;
 
-export interface CMPDetectionResult {
-  detected: boolean;
-  cmpType: string;
-  detectionMethod: 'cookie' | 'api' | 'banner' | 'hybrid';
-  confidenceScore: number;
-  consentStatus?: 'accepted' | 'rejected' | 'partial' | 'unknown';
-  cookieNames: string[];
-  tcfVersion?: string;
-  hasRejectButton?: boolean;
-}
-
 interface CMPConfig {
   name: string;
   cookiePatterns: string[];
-  apiDetectors: (() => Promise<CMPDetectionResult | null>)[];
   bannerSelectors: string[];
+  consentParsers: Record<string, 'generic' | 'onetrust' | 'cookiebot'>;
 }
 
-const CMP_CONFIGS: Record<string, CMPConfig> = {
+const CMP_CONFIG_STORAGE_KEY = 'cmpConfigCache';
+
+const LOCAL_CMP_CONFIGS: Record<string, CMPConfig> = {
   onetrust: {
     name: 'OneTrust',
     cookiePatterns: ['OptanonConsent', 'OptanonAlertBoxClosed', 'eupubconsent-v2'],
-    apiDetectors: [detectOneTrustAPI],
     bannerSelectors: ['#onetrust-banner-sdk', '.onetrust-banner', '[data-onetrust]'],
+    consentParsers: { OptanonConsent: 'onetrust', OptanonAlertBoxClosed: 'onetrust' },
   },
   cookiebot: {
     name: 'Cookiebot',
     cookiePatterns: ['CookieConsent', 'CookiebotConsent', 'CookieConsentBulkSetting'],
-    apiDetectors: [detectCookiebotAPI],
     bannerSelectors: ['#CybotCookiebotDialog', '[data-cookieconsent]'],
+    consentParsers: { CookieConsent: 'cookiebot', CookiebotConsent: 'cookiebot' },
   },
   termly: {
     name: 'Termly',
     cookiePatterns: ['termly-consent', 't_privacy_consent', 't_cookie_consent'],
-    apiDetectors: [detectTermlyAPI],
     bannerSelectors: ['[data-termly]', '#termly-code-snippet-support'],
+    consentParsers: { 'termly-consent': 'generic' },
   },
   gdprcompliant: {
     name: 'GDPRCompliant',
     cookiePatterns: ['gdpr_consent', 'gdpr-consent'],
-    apiDetectors: [],
     bannerSelectors: ['[data-gdpr]', '.gdpr-banner'],
+    consentParsers: { gdpr_consent: 'generic', 'gdpr-consent': 'generic' },
   },
   custom: {
     name: 'Custom',
     cookiePatterns: ['cookie_consent', 'consent_status', 'user_consent'],
-    apiDetectors: [],
     bannerSelectors: [],
+    consentParsers: {},
   },
   cookiecontrol: {
     name: 'CookieControl',
     cookiePatterns: ['CookieControl'],
-    apiDetectors: [],
     bannerSelectors: ['[data-cc-banner]', '.ccc-widget'],
+    consentParsers: { CookieControl: 'generic' },
   },
   quantcast: {
     name: 'Quantcast',
     cookiePatterns: ['__qca', 'euconsent-v2'],
-    apiDetectors: [detectTCFv2API],
     bannerSelectors: ['[data-qc-cmp]'],
+    consentParsers: { 'euconsent-v2': 'generic' },
   },
 };
+
+const API_DETECTORS: Record<string, Array<() => Promise<CMPDetectionResult | null>>> = {
+  onetrust: [detectOneTrustAPI],
+  cookiebot: [detectCookiebotAPI],
+  termly: [detectTermlyAPI],
+  quantcast: [detectTCFv2API],
+};
+
+function isRemoteCmpConfig(value: unknown): value is RemoteCMPConfig {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { name?: unknown }).name === 'string' &&
+    Array.isArray((value as { cookiePatterns?: unknown }).cookiePatterns) &&
+    Array.isArray((value as { bannerSelectors?: unknown }).bannerSelectors) &&
+    typeof (value as { consentParsers?: unknown }).consentParsers === 'object'
+  );
+}
+
+async function getRemoteCmpConfigs(): Promise<RemoteCMPConfig[]> {
+  try {
+    const raw = await new Promise<unknown>((resolve, reject) => {
+      chrome.storage.local.get(CMP_CONFIG_STORAGE_KEY, (result) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        resolve((result as Record<string, unknown>)[CMP_CONFIG_STORAGE_KEY]);
+      });
+    });
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+    return raw.filter(isRemoteCmpConfig);
+  } catch (error) {
+    logger.debug('CMPDetector', 'Failed to load remote CMP configs, using defaults', {
+      error: toError(error).message,
+    });
+    return [];
+  }
+}
+
+async function getCmpConfigs(): Promise<Record<string, CMPConfig>> {
+  const remoteConfigs = await getRemoteCmpConfigs();
+  const merged: Record<string, CMPConfig> = { ...LOCAL_CMP_CONFIGS };
+
+  for (const remote of remoteConfigs) {
+    const key = remote.name.toLowerCase().trim();
+    if (!key) {
+      continue;
+    }
+    const existing = merged[key];
+    merged[key] = {
+      name: remote.name,
+      cookiePatterns: remote.cookiePatterns.length > 0 ? remote.cookiePatterns : (existing?.cookiePatterns ?? []),
+      bannerSelectors: remote.bannerSelectors.length > 0 ? remote.bannerSelectors : (existing?.bannerSelectors ?? []),
+      consentParsers: Object.keys(remote.consentParsers ?? {}).length > 0
+        ? remote.consentParsers
+        : (existing?.consentParsers ?? {}),
+    };
+  }
+
+  return merged;
+}
 
 async function detectOneTrustAPI(): Promise<CMPDetectionResult | null> {
   try {
@@ -121,7 +177,7 @@ async function detectOneTrustAPI(): Promise<CMPDetectionResult | null> {
       detectionMethod: 'api',
       confidenceScore: 1.0,
       consentStatus,
-      cookieNames: getCookiesByPattern(CMP_CONFIGS.onetrust.cookiePatterns),
+      cookieNames: getCookiesByPattern(LOCAL_CMP_CONFIGS.onetrust.cookiePatterns),
     };
   } catch (error) {
     logger.debug('CMPDetector', 'OneTrust API detection failed', { error: toError(error).message });
@@ -152,7 +208,7 @@ async function detectCookiebotAPI(): Promise<CMPDetectionResult | null> {
       detectionMethod: 'api',
       confidenceScore: 1.0,
       consentStatus,
-      cookieNames: getCookiesByPattern(CMP_CONFIGS.cookiebot.cookiePatterns),
+      cookieNames: getCookiesByPattern(LOCAL_CMP_CONFIGS.cookiebot.cookiePatterns),
     };
   } catch (error) {
     logger.debug('CMPDetector', 'Cookiebot API detection failed', { error: toError(error).message });
@@ -172,7 +228,7 @@ async function detectTermlyAPI(): Promise<CMPDetectionResult | null> {
       detectionMethod: 'api',
       confidenceScore: 0.9,
       consentStatus: 'unknown',
-      cookieNames: getCookiesByPattern(CMP_CONFIGS.termly.cookiePatterns),
+      cookieNames: getCookiesByPattern(LOCAL_CMP_CONFIGS.termly.cookiePatterns),
     };
   } catch (error) {
     logger.debug('CMPDetector', 'Termly API detection failed', { error: toError(error).message });
@@ -337,6 +393,20 @@ function parseGenericConsent(cookieValue: string): 'accepted' | 'rejected' | 'pa
   }
 }
 
+function parseConsentByParser(
+  parser: 'generic' | 'onetrust' | 'cookiebot',
+  cookieValue: string
+): 'accepted' | 'rejected' | 'partial' | 'unknown' {
+  switch (parser) {
+    case 'onetrust':
+      return parseOneTrustConsent(cookieValue);
+    case 'cookiebot':
+      return parseCookiebotConsent(cookieValue);
+    default:
+      return parseGenericConsent(cookieValue);
+  }
+}
+
 function detectCMPByBanner(cmpType: string, config: CMPConfig): CMPDetectionResult | null {
   const pageLanguage = detectPageLanguage();
   const localizedPatterns = getLocalizedPatterns(pageLanguage);
@@ -384,15 +454,13 @@ function detectCMPByCookie(cmpType: string, config: CMPConfig): CMPDetectionResu
       const cookieValue = getCookieValue(cookieName);
       if (!cookieValue) continue;
 
-      if (cmpType === 'onetrust' && (cookieName.includes('OptanonConsent') || cookieName.includes('OptanonAlertBoxClosed'))) {
-        consentStatus = parseOneTrustConsent(cookieValue);
-        if (consentStatus !== 'unknown') break;
-      } else if (cmpType === 'cookiebot' && cookieName.includes('Cookie')) {
-        consentStatus = parseCookiebotConsent(cookieValue);
-        if (consentStatus !== 'unknown') break;
-      } else if (cmpType === 'termly' || cmpType === 'gdprcompliant' || cmpType === 'custom') {
-        consentStatus = parseGenericConsent(cookieValue);
-        if (consentStatus !== 'unknown') break;
+      const parserEntry = Object.entries(config.consentParsers).find(([cookiePattern]) =>
+        cookieName.toLowerCase().includes(cookiePattern.toLowerCase())
+      );
+      const parser = parserEntry?.[1] ?? (cmpType === 'onetrust' ? 'onetrust' : cmpType === 'cookiebot' ? 'cookiebot' : 'generic');
+      consentStatus = parseConsentByParser(parser, cookieValue);
+      if (consentStatus !== 'unknown') {
+        break;
       }
     }
 
@@ -420,8 +488,9 @@ export async function detectCMP(): Promise<CMPDetectionResult> {
   };
 
   try {
-    for (const [cmpType, config] of Object.entries(CMP_CONFIGS)) {
-      for (const apiDetector of config.apiDetectors) {
+    const cmpConfigs = await getCmpConfigs();
+    for (const [cmpType, config] of Object.entries(cmpConfigs)) {
+      for (const apiDetector of API_DETECTORS[cmpType] ?? []) {
         const apiResult = await apiDetector();
         if (apiResult) {
           logger.info('CMPDetector', 'CMP detected via API', { cmpType, confidenceScore: apiResult.confidenceScore });

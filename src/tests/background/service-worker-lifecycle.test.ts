@@ -45,6 +45,8 @@ const storageMock = vi.hoisted(() => ({
   getRealEmail: vi.fn().mockResolvedValue(''),
   addAlert: vi.fn().mockResolvedValue(undefined),
   clearAlerts: vi.fn().mockResolvedValue(undefined),
+  getReportedFalsePositive: vi.fn().mockResolvedValue(null),
+  setReportedFalsePositive: vi.fn().mockResolvedValue(undefined),
   recordComplianceScore: vi.fn().mockResolvedValue(undefined),
   ensureSaved: vi.fn().mockResolvedValue(undefined),
   setOnboardingStep: vi.fn().mockResolvedValue({}),
@@ -115,7 +117,14 @@ const allowlistMock = vi.hoisted(() => ({
 }));
 
 const falsePositiveServiceMock = vi.hoisted(() => ({
-  reportFalsePositive: vi.fn().mockResolvedValue(true),
+  reportFalsePositive: vi.fn().mockResolvedValue({
+    success: true,
+    aggregation: {
+      reportCount: 3,
+      overrideThreshold: 86,
+      shouldOverride: true,
+    },
+  }),
 }));
 
 const chromeMockFactory = () =>
@@ -294,7 +303,14 @@ const resetHoistedState = () => {
   firewallMock.cleanup.mockClear();
   allowlistMock.isAllowlisted.mockResolvedValue(false);
   allowlistMock.addEntry.mockResolvedValue(undefined);
-  falsePositiveServiceMock.reportFalsePositive.mockResolvedValue(true);
+  falsePositiveServiceMock.reportFalsePositive.mockResolvedValue({
+    success: true,
+    aggregation: {
+      reportCount: 3,
+      overrideThreshold: 86,
+      shouldOverride: true,
+    },
+  });
   messageBusMock.initialize.mockResolvedValue(undefined);
 };
 
@@ -569,6 +585,7 @@ describe('Service Worker Lifecycle', () => {
       domain: 'example.com',
       url: 'https://example.com/path?utm=1',
       detectedPatterns: ['forcedConsent'],
+      reason: 'wrong_detection',
       timestamp: Date.now(),
       installationId: '',
       scanConfidence: 0.91,
@@ -582,8 +599,12 @@ describe('Service Worker Lifecycle', () => {
       })
     );
     expect(allowlistMock.addEntry).toHaveBeenCalledWith('example.com', 'user');
-    expect(getOverrideFetchCalls().length).toBeGreaterThan(initialOverrideFetchCalls);
-    expect(response).toEqual({ success: true });
+    expect(getOverrideFetchCalls().length).toBe(initialOverrideFetchCalls);
+    expect(response).toEqual({
+      success: true,
+      reportCount: 3,
+      alreadyOverridden: true,
+    });
   });
 
   it('skips alert creation when confidence is below fetched override threshold', async () => {
@@ -613,6 +634,14 @@ describe('Service Worker Lifecycle', () => {
     });
 
     await loadServiceWorker();
+    falsePositiveServiceMock.reportFalsePositive.mockResolvedValueOnce({
+      success: true,
+      aggregation: {
+        reportCount: 3,
+        overrideThreshold: 95,
+        shouldOverride: true,
+      },
+    });
     const reportHandler = messageHandlers.get('REPORT_FALSE_POSITIVE');
     const consentHandler = messageHandlers.get('CONSENT_SCAN_RESULT');
 
@@ -620,6 +649,7 @@ describe('Service Worker Lifecycle', () => {
       domain: 'consent.example.com',
       url: 'https://consent.example.com/path?utm=1',
       detectedPatterns: ['forcedConsent'],
+      reason: 'wrong_detection',
       timestamp: Date.now(),
       installationId: '',
       scanConfidence: 0.9,
