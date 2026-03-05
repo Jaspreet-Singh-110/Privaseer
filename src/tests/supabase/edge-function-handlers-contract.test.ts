@@ -53,15 +53,32 @@ describe('Supabase edge function handler contracts', () => {
     });
   });
 
+  it('submit-feedback handler validates routes and required payload fields', async () => {
+    await assertEdgeFunctionContract({
+      functionPath: 'submit-feedback/index.ts',
+      requiredPatterns: [
+        /Deno\.serve\(/,
+        /if\s*\(req\.method\s*===\s*"OPTIONS"\)/,
+        /endpoint\s*===\s*"feedback"/,
+        /endpoint\s*===\s*"telemetry"/,
+        /Missing required fields: installationId, feedbackText/,
+        /feedbackText exceeds \$\{MAX_FEEDBACK_LENGTH\} characters/,
+        /Missing required fields: installationId, eventType, extensionVersion/,
+      ],
+    });
+  });
+
   it('each handler declares CORS headers', async () => {
-    const [authSource, generateSource, inboundSource] = await Promise.all([
+    const [authSource, generateSource, inboundSource, submitFeedbackSource] = await Promise.all([
       loadEdgeFunctionSource('auth-token/index.ts'),
       loadEdgeFunctionSource('generate-burner-email/index.ts'),
       loadEdgeFunctionSource('inbound-email/index.ts'),
+      loadEdgeFunctionSource('submit-feedback/index.ts'),
     ]);
 
     expect(authSource).toContain('Access-Control-Allow-Origin');
     expect(generateSource).toContain('Access-Control-Allow-Origin');
     expect(inboundSource).toContain('Access-Control-Allow-Origin');
+    expect(submitFeedbackSource).toContain('Access-Control-Allow-Origin');
   });
 });

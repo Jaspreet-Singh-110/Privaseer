@@ -34,7 +34,6 @@ const VALID_MESSAGE_TYPES = new Set<MessageType>([
   'BURNER_EMAIL_SETTING_CHANGED',
   'GET_TELEMETRY_SETTING',
   'SET_TELEMETRY_SETTING',
-  'TELEMETRY_SETTING_CHANGED',
   'SUBMIT_FEEDBACK',
   'TRACK_EVENT',
   'RECORD_COMPLIANCE_SCORE',
@@ -68,6 +67,8 @@ const payloadValidators: Partial<Record<MessageType, (payload: unknown) => boole
     isObject(data) && typeof (data as { enabled?: unknown }).enabled === 'boolean',
   SET_TELEMETRY_SETTING: (data): data is MessageDataMap['SET_TELEMETRY_SETTING'] =>
     isObject(data) && typeof (data as { enabled?: unknown }).enabled === 'boolean',
+  SUBMIT_FEEDBACK: (data): data is MessageDataMap['SUBMIT_FEEDBACK'] =>
+    isObject(data) && typeof (data as { feedbackText?: unknown }).feedbackText === 'string',
   SET_REAL_EMAIL: (data): data is MessageDataMap['SET_REAL_EMAIL'] =>
     isObject(data) && typeof (data as { email?: unknown }).email === 'string' && Boolean((data as { email: string }).email.trim()),
   SET_THEME: (data): data is MessageDataMap['SET_THEME'] =>

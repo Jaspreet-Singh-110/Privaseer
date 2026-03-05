@@ -382,6 +382,16 @@ export function SettingsPage({
 
     setIsSubmitting(true);
     try {
+      const getSanitizedUrl = (url?: string): string | undefined => {
+        if (!url) return undefined;
+        try {
+          const parsed = new URL(url);
+          return `${parsed.protocol}//${parsed.hostname}${parsed.pathname}`;
+        } catch {
+          return undefined;
+        }
+      };
+
       const getDomain = (url?: string): string => {
         if (!url) return 'unknown';
         try {
@@ -395,7 +405,7 @@ export function SettingsPage({
         type: 'SUBMIT_FEEDBACK',
         data: {
           feedbackText,
-          url: currentTab?.url || 'unknown',
+          url: getSanitizedUrl(currentTab?.url),
           domain: getDomain(currentTab?.url),
         },
       });

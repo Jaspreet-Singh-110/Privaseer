@@ -111,7 +111,7 @@ describe('SettingsPage', () => {
         type: 'SUBMIT_FEEDBACK',
         data: {
           feedbackText: 'Great extension!',
-          url: 'https://example.com',
+          url: 'https://example.com/',
           domain: 'example.com',
         },
       });
@@ -192,7 +192,7 @@ describe('SettingsPage', () => {
         type: 'SUBMIT_FEEDBACK',
         data: {
           feedbackText: 'Please fix this issue',
-          url: 'https://example.com',
+          url: 'https://example.com/',
           domain: 'example.com',
         },
       });
@@ -249,7 +249,7 @@ describe('SettingsPage', () => {
         type: 'SUBMIT_FEEDBACK',
         data: {
           feedbackText: 'Error handling case',
-          url: 'not-a-valid-url',
+          url: undefined,
           domain: 'unknown',
         },
       });

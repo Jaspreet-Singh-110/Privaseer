@@ -244,6 +244,9 @@ function sanitizeOptionalUrl(value: string): { valid: true; url?: string } | { v
 
   try {
     const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return { valid: false, error: 'url protocol must be http or https' };
+    }
     const sanitized = sanitizeUrl(parsed.toString());
     if (!sanitized || sanitized === '[invalid-url]') {
       return { valid: false, error: 'url is invalid' };

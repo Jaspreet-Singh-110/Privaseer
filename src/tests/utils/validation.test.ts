@@ -97,6 +97,15 @@ describe('validateFeedbackPayload', () => {
     expect(result.valid).toBe(true);
     expect(result.sanitized?.domain).toBeUndefined();
   });
+
+  it('rejects unsafe url protocols for feedback payloads', () => {
+    const result = validateFeedbackPayload({
+      feedbackText: 'protocol test',
+      url: 'javascript:alert(1)',
+    });
+    expect(result.valid).toBe(false);
+    expect(result.error).toBe('url protocol must be http or https');
+  });
 });
 
 describe('validateEventPayload', () => {
@@ -169,6 +178,18 @@ describe('validateEventPayload', () => {
     });
     expect(result.valid).toBe(false);
     expect(result.error).toBe('eventData must be serializable');
+  });
+
+  it('returns a deep-cloned serializable eventData payload', () => {
+    const sourceData = { nested: { count: 1 }, tags: ['a', 'b'] };
+    const result = validateEventPayload({
+      eventType: 'clone_check',
+      eventData: sourceData,
+    });
+
+    expect(result.valid).toBe(true);
+    expect(result.sanitized?.eventData).toEqual(sourceData);
+    expect(result.sanitized?.eventData).not.toBe(sourceData);
   });
 });
 
