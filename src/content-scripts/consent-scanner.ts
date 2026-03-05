@@ -478,7 +478,6 @@ class ConsentScanner {
 
     if (!hasRejectButton) {
       patterns.push('forcedConsent');
-      return patterns;
     }
 
     if (acceptButtons.length > 0 && rejectButtons.length > 0) {

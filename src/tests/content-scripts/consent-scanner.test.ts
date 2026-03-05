@@ -785,6 +785,75 @@ describe('ConsentScanner Integration', () => {
       expect(consentScanCall![0].data.complianceScore).toBe(50); // 100 - 50 penalty
     });
 
+    it('detects obstacle and misdirection patterns in no-reject flow', async () => {
+      const banner = document.createElement('div');
+      banner.className = 'cookie-banner';
+      banner.style.display = 'block';
+      banner.style.visibility = 'visible';
+      banner.style.opacity = '1';
+      banner.getBoundingClientRect = vi.fn(() => ({
+        width: 300,
+        height: 120,
+        top: 0,
+        left: 0,
+        bottom: 120,
+        right: 300,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }));
+
+      const text = document.createElement('p');
+      text.textContent = 'We use cookies to personalize your experience.';
+      banner.appendChild(text);
+
+      const acceptButton = document.createElement('button');
+      acceptButton.textContent = 'Accept All';
+      acceptButton.getBoundingClientRect = vi.fn(() => ({
+        width: 100,
+        height: 40,
+        top: 0,
+        left: 0,
+        bottom: 40,
+        right: 100,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }));
+      banner.appendChild(acceptButton);
+
+      const preferenceLink = document.createElement('a');
+      preferenceLink.textContent = 'Manage Preferences';
+      preferenceLink.href = 'https://example.com/privacy/settings';
+      preferenceLink.getBoundingClientRect = vi.fn(() => ({
+        width: 100,
+        height: 20,
+        top: 45,
+        left: 0,
+        bottom: 65,
+        right: 100,
+        x: 0,
+        y: 45,
+        toJSON: () => ({}),
+      }));
+      banner.appendChild(preferenceLink);
+
+      document.body.appendChild(banner);
+
+      await scanner.initialize();
+      await scanner.scanPage('quick');
+
+      const sendMessageCalls = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
+      const consentScanCall = sendMessageCalls.find(
+        (call) => call[0]?.type === 'CONSENT_SCAN_RESULT'
+      );
+
+      expect(consentScanCall).toBeDefined();
+      expect(consentScanCall![0].data.deceptivePatterns).toContain('forcedConsent');
+      expect(consentScanCall![0].data.deceptivePatterns).toContain('obstaclePattern');
+      expect(consentScanCall![0].data.deceptivePatterns).toContain('misdirection');
+    });
+
     it('should mark non-compliant when accept button > 1.5x larger (acceptButtonProminence)', async () => {
       setupBannerDOM({
         hasRejectButton: true,
