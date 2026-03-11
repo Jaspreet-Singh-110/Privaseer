@@ -9,6 +9,7 @@ import type {
   CreditScoreResult,
   FalsePositiveReason,
   FalsePositiveStatus,
+  MetricsAggregation,
 } from '../types';
 import { logger } from '../utils/logger';
 import { toError } from '../utils/type-guards';
@@ -225,6 +226,9 @@ export function Popup() {
   const [highlightBurnerToggle, setHighlightBurnerToggle] = useState(false);
   const [reportingAlert, setReportingAlert] = useState<AlertType | null>(null);
   const [onboardingState, setOnboardingState] = useState<OnboardingState | null>(null);
+  const [metricsPeriod, setMetricsPeriod] = useState<'week' | 'month' | 'all-time'>('week');
+  const [metricsAggregation, setMetricsAggregation] = useState<MetricsAggregation | null>(null);
+  const [isLoadingAggregation, setIsLoadingAggregation] = useState(false);
   const dataRef = useRef<StorageData | null>(null);
   const tabs: Array<'dashboard' | 'burner'> = ['dashboard', 'burner'];
   const queryParams = new URLSearchParams(window.location.search);
@@ -338,6 +342,38 @@ export function Popup() {
       logger.error('Popup', 'Failed to load onboarding state', toError(error));
     }
   };
+
+  const loadMetricsAggregation = async (period: 'week' | 'month' | 'all-time') => {
+    setIsLoadingAggregation(true);
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'GET_METRICS_AGGREGATION',
+        data: { period },
+      }) as {
+        success?: boolean;
+        aggregation?: MetricsAggregation;
+      };
+
+      if (response?.success && response.aggregation) {
+        setMetricsAggregation(response.aggregation);
+      } else {
+        setMetricsAggregation(null);
+      }
+    } catch (error) {
+      logger.error('Popup', 'Failed to load aggregated metrics', toError(error));
+      setMetricsAggregation(null);
+    } finally {
+      setIsLoadingAggregation(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab !== 'dashboard') {
+      return;
+    }
+    void loadMetricsAggregation(metricsPeriod);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, metricsPeriod]);
 
   const openWelcomeGuide = () => {
     chrome.tabs.create(
@@ -716,6 +752,62 @@ export function Popup() {
               <span className="font-semibold text-gray-900 dark:text-white">{data.privacyScore.daily.cleanSitesVisited}</span>
               <span className="text-gray-600 dark:text-gray-400">clean sites</span>
             </div>
+          )}
+        </div>
+
+        <div className="mt-4 rounded-xl border border-white/70 dark:border-gray-700 bg-white/70 dark:bg-gray-900/40 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">Aggregated Analytics</p>
+            <div className="flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-800 p-1">
+              {(['week', 'month', 'all-time'] as const).map((period) => (
+                <button
+                  key={period}
+                  onClick={() => setMetricsPeriod(period)}
+                  className={`px-2 py-1 text-[11px] rounded-md transition-colors ${
+                    metricsPeriod === period
+                      ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400'
+                      : 'text-gray-600 dark:text-gray-400'
+                  }`}
+                >
+                  {period === 'week' ? 'Week' : period === 'month' ? 'Month' : 'All-time'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {isLoadingAggregation ? (
+            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Loading analytics...</p>
+          ) : metricsAggregation ? (
+            <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+              <div className="rounded-lg bg-gray-50 dark:bg-gray-800 p-2">
+                <p className="text-gray-500 dark:text-gray-400">Trackers blocked</p>
+                <p className="font-semibold text-gray-900 dark:text-white">{metricsAggregation.totalTrackersBlocked}</p>
+              </div>
+              <div className="rounded-lg bg-gray-50 dark:bg-gray-800 p-2">
+                <p className="text-gray-500 dark:text-gray-400">Avg privacy score</p>
+                <p className="font-semibold text-gray-900 dark:text-white">{metricsAggregation.averagePrivacyScore}</p>
+              </div>
+              <div className="rounded-lg bg-gray-50 dark:bg-gray-800 p-2">
+                <p className="text-gray-500 dark:text-gray-400">Clean vs non-compliant</p>
+                <p className="font-semibold text-gray-900 dark:text-white">
+                  {metricsAggregation.cleanSitesVisited} / {metricsAggregation.nonCompliantSites}
+                </p>
+              </div>
+              <div className="rounded-lg bg-gray-50 dark:bg-gray-800 p-2">
+                <p className="text-gray-500 dark:text-gray-400">Top categories</p>
+                <p className="font-semibold text-gray-900 dark:text-white">
+                  {Object.entries(metricsAggregation.trackersByCategory)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 2)
+                    .map(([category]) => category)
+                    .join(', ') || 'No data'}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              Aggregated analytics are not available yet.
+            </p>
           )}
         </div>
       </div>

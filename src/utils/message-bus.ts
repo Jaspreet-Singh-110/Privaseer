@@ -39,6 +39,8 @@ const VALID_MESSAGE_TYPES = new Set<MessageType>([
   'RECORD_COMPLIANCE_SCORE',
   'GET_METRICS_AGGREGATION',
   'GET_PRIVACY_SCORE_TREND',
+  'EXPORT_USER_DATA',
+  'DELETE_ALL_DATA',
   'SET_THEME',
   'GET_THEME',
   'THEME_CHANGED',
@@ -77,6 +79,14 @@ const payloadValidators: Partial<Record<MessageType, (payload: unknown) => boole
     isObject(data) && typeof (data as { eventType?: unknown }).eventType === 'string',
   RECORD_COMPLIANCE_SCORE: (data): data is MessageDataMap['RECORD_COMPLIANCE_SCORE'] =>
     isObject(data) && typeof (data as { score?: unknown }).score === 'number',
+  EXPORT_USER_DATA: (data): data is MessageDataMap['EXPORT_USER_DATA'] =>
+    !data ||
+    (isObject(data) &&
+      (((data as { format?: unknown }).format === undefined) ||
+        (data as { format?: unknown }).format === 'json' ||
+        (data as { format?: unknown }).format === 'csv') &&
+      (((data as { includeEmail?: unknown }).includeEmail === undefined) ||
+        typeof (data as { includeEmail?: unknown }).includeEmail === 'boolean')),
   TAB_ACTIVATED: (data): data is MessageDataMap['TAB_ACTIVATED'] =>
     isObject(data) && typeof (data as { tabId?: unknown }).tabId === 'number',
   TAB_UPDATED: (data): data is MessageDataMap['TAB_UPDATED'] =>

@@ -52,7 +52,9 @@ describe('constants', () => {
 
   it('keeps export/onboarding/allowlist constants unchanged', () => {
     expect(DATA_EXPORT.FORMAT).toBe('privaseer-data-export');
-    expect(DATA_EXPORT.VERSION).toBe('1.0');
+    expect(DATA_EXPORT.VERSION).toBe('2.0');
+    expect(DATA_EXPORT.MAX_SNAPSHOT_DAYS).toBe(30);
+    expect(DATA_EXPORT.GDPR.DATA_CATEGORIES.length).toBeGreaterThan(0);
     expect(ONBOARDING.TOTAL_STEPS).toBe(6);
     expect(ONBOARDING.WELCOME_PAGE_PATH).toContain('welcome.html');
     expect(ALLOWLIST.USER_ENTRY_EXPIRY_DAYS).toBe(90);

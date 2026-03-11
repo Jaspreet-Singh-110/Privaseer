@@ -739,4 +739,91 @@ describe('SettingsPage', () => {
     await vi.advanceTimersByTimeAsync(2600);
     expect(onBurnerHighlightComplete).toHaveBeenCalledTimes(1);
   });
+
+  it('exports user data via EXPORT_USER_DATA with selected options', async () => {
+    const user = userEvent.setup({ delay: null });
+    const createObjectURLSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock-url');
+    const revokeObjectURLSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+
+    mockSendMessage.mockImplementation((message: { type: string; data?: unknown }) => {
+      if (message.type === 'GET_ALL_SETTINGS') {
+        return Promise.resolve({
+          success: true,
+          settings: {
+            theme: 'system',
+            burnerEmailEnabled: false,
+            telemetryEnabled: false,
+            realEmail: '',
+          },
+        });
+      }
+      if (message.type === 'EXPORT_USER_DATA') {
+        return Promise.resolve({
+          success: true,
+          exportData: {
+            filename: 'privaseer-data-export-2026-03-05.csv',
+            mimeType: 'text/csv;charset=utf-8',
+            content: 'section,metric,value',
+          },
+        });
+      }
+      return Promise.resolve({ success: true });
+    });
+
+    render(<SettingsPage {...baseProps} deepLinkSection="about" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('About')).toBeInTheDocument();
+    });
+
+    await user.selectOptions(screen.getByLabelText(/select export format/i), 'csv');
+    await user.click(screen.getByRole('checkbox', { name: /include forwarding email address/i }));
+    await user.click(screen.getByRole('button', { name: /export my data/i }));
+
+    await waitFor(() => {
+      expect(mockSendMessage).toHaveBeenCalledWith({
+        type: 'EXPORT_USER_DATA',
+        data: {
+          format: 'csv',
+          includeEmail: true,
+        },
+      });
+    });
+
+    createObjectURLSpy.mockRestore();
+    revokeObjectURLSpy.mockRestore();
+  });
+
+  it('deletes local data after confirmation', async () => {
+    const user = userEvent.setup({ delay: null });
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    mockSendMessage.mockImplementation((message: { type: string }) => {
+      if (message.type === 'GET_ALL_SETTINGS') {
+        return Promise.resolve({
+          success: true,
+          settings: {
+            theme: 'system',
+            burnerEmailEnabled: false,
+            telemetryEnabled: false,
+            realEmail: '',
+          },
+        });
+      }
+      if (message.type === 'DELETE_ALL_DATA') {
+        return Promise.resolve({ success: true });
+      }
+      return Promise.resolve({ success: true });
+    });
+
+    render(<SettingsPage {...baseProps} deepLinkSection="about" />);
+    await user.click(screen.getByRole('button', { name: /delete all local extension data/i }));
+
+    await waitFor(() => {
+      expect(confirmSpy).toHaveBeenCalledTimes(1);
+      expect(mockSendMessage).toHaveBeenCalledWith({ type: 'DELETE_ALL_DATA' });
+    });
+
+    confirmSpy.mockRestore();
+  });
 });

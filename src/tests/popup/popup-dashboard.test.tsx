@@ -109,6 +109,23 @@ describe('Popup Dashboard Component', () => {
       if (message.type === 'CLEAR_ALERTS') {
         return Promise.resolve({ success: true });
       }
+      if (message.type === 'GET_METRICS_AGGREGATION') {
+        return Promise.resolve({
+          success: true,
+          aggregation: {
+            period: message.data?.period ?? 'week',
+            totalTrackersBlocked: 25,
+            trackersByCategory: { advertising: 12, analytics: 8, social: 5 },
+            averagePrivacyScore: 87,
+            averageComplianceScore: 90,
+            cleanSitesVisited: 7,
+            nonCompliantSites: 2,
+            burnerEmailsGenerated: 1,
+            burnerEmailsForwarded: 1,
+            topBlockedDomains: [{ domain: 'tracker.com', count: 10 }],
+          },
+        });
+      }
       return Promise.resolve({ success: true });
     });
   };
@@ -176,6 +193,23 @@ describe('Popup Dashboard Component', () => {
       }
       if (message.type === 'GET_REAL_EMAIL') {
         return Promise.resolve({ success: true, email: null });
+      }
+      if (message.type === 'GET_METRICS_AGGREGATION') {
+        return Promise.resolve({
+          success: true,
+          aggregation: {
+            period: message.data?.period ?? 'week',
+            totalTrackersBlocked: 25,
+            trackersByCategory: { advertising: 12, analytics: 8, social: 5 },
+            averagePrivacyScore: 87,
+            averageComplianceScore: 90,
+            cleanSitesVisited: 7,
+            nonCompliantSites: 2,
+            burnerEmailsGenerated: 1,
+            burnerEmailsForwarded: 1,
+            topBlockedDomains: [{ domain: 'tracker.com', count: 10 }],
+          },
+        });
       }
       return Promise.resolve({ success: true });
     });
@@ -557,6 +591,26 @@ describe('Popup Dashboard Component', () => {
       await waitFor(() => {
         expect(screen.getByText('42')).toBeInTheDocument();
         expect(screen.getByText('blocked today')).toBeInTheDocument();
+      }, { timeout: 500 });
+    });
+
+    it('renders aggregated analytics card and switches period', async () => {
+      const user = userEvent.setup({ delay: null });
+      render(<Popup />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Aggregated Analytics')).toBeInTheDocument();
+        expect(screen.getByText('Trackers blocked')).toBeInTheDocument();
+        expect(screen.getByText('25')).toBeInTheDocument();
+      }, { timeout: 500 });
+
+      await user.click(screen.getByRole('button', { name: /month/i }));
+
+      await waitFor(() => {
+        expect(mockSendMessage).toHaveBeenCalledWith({
+          type: 'GET_METRICS_AGGREGATION',
+          data: { period: 'month' },
+        });
       }, { timeout: 500 });
     });
   });

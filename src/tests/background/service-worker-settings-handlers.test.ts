@@ -41,6 +41,7 @@ const storageMock = vi.hoisted(() => ({
   skipOnboarding: vi.fn().mockResolvedValue({ hasCompletedOnboarding: false, currentStep: 3 }),
   addAlert: vi.fn().mockResolvedValue(undefined),
   clearAlerts: vi.fn().mockResolvedValue(undefined),
+  clear: vi.fn().mockResolvedValue(undefined),
   ensureSaved: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -49,6 +50,31 @@ const telemetryMock = vi.hoisted(() => ({
   getInstallationId: vi.fn().mockResolvedValue('install-123'),
   trackEvent: vi.fn().mockResolvedValue(undefined),
   submitFeedback: vi.fn().mockResolvedValue({ success: true }),
+}));
+
+const metricsAggregationMock = vi.hoisted(() => ({
+  aggregateMetrics: vi.fn().mockResolvedValue({
+    period: 'week',
+    totalTrackersBlocked: 10,
+    trackersByCategory: { advertising: 6, analytics: 4 },
+    averagePrivacyScore: 88,
+    averageComplianceScore: 91,
+    cleanSitesVisited: 5,
+    nonCompliantSites: 1,
+    burnerEmailsGenerated: 2,
+    burnerEmailsForwarded: 1,
+    topBlockedDomains: [{ domain: 'tracker.com', count: 5 }],
+  }),
+  getPrivacyScoreTrend: vi.fn().mockResolvedValue([{ date: '2026-03-01', score: 88 }]),
+}));
+
+const dataExportMock = vi.hoisted(() => ({
+  exportData: vi.fn().mockResolvedValue({
+    format: 'json',
+    filename: 'privaseer-data-export-2026-03-05.json',
+    mimeType: 'application/json',
+    content: '{"ok":true}',
+  }),
 }));
 
 const resetHoistedMocks = (): void => {
@@ -87,12 +113,32 @@ const resetHoistedMocks = (): void => {
   storageMock.skipOnboarding.mockResolvedValue({ hasCompletedOnboarding: false, currentStep: 3 });
   storageMock.addAlert.mockResolvedValue(undefined);
   storageMock.clearAlerts.mockResolvedValue(undefined);
+  storageMock.clear.mockResolvedValue(undefined);
   storageMock.ensureSaved.mockResolvedValue(undefined);
 
   telemetryMock.initialize.mockResolvedValue(undefined);
   telemetryMock.getInstallationId.mockResolvedValue('install-123');
   telemetryMock.trackEvent.mockResolvedValue(undefined);
   telemetryMock.submitFeedback.mockResolvedValue({ success: true });
+  metricsAggregationMock.aggregateMetrics.mockResolvedValue({
+    period: 'week',
+    totalTrackersBlocked: 10,
+    trackersByCategory: { advertising: 6, analytics: 4 },
+    averagePrivacyScore: 88,
+    averageComplianceScore: 91,
+    cleanSitesVisited: 5,
+    nonCompliantSites: 1,
+    burnerEmailsGenerated: 2,
+    burnerEmailsForwarded: 1,
+    topBlockedDomains: [{ domain: 'tracker.com', count: 5 }],
+  });
+  metricsAggregationMock.getPrivacyScoreTrend.mockResolvedValue([{ date: '2026-03-01', score: 88 }]);
+  dataExportMock.exportData.mockResolvedValue({
+    format: 'json',
+    filename: 'privaseer-data-export-2026-03-05.json',
+    mimeType: 'application/json',
+    content: '{"ok":true}',
+  });
 };
 
 vi.mock('@/utils/logger', () => ({
@@ -173,6 +219,14 @@ vi.mock('@/background/firewall-engine', () => ({
     handleBlockedRequest: vi.fn().mockResolvedValue(undefined),
     cleanup: vi.fn(),
   },
+}));
+
+vi.mock('@/background/metrics-aggregation', () => ({
+  MetricsAggregationService: metricsAggregationMock,
+}));
+
+vi.mock('@/background/data-export-service', () => ({
+  DataExportService: dataExportMock,
 }));
 
 vi.mock('@/utils/message-bus', () => ({
@@ -365,6 +419,55 @@ describe('Service worker settings handlers', () => {
       success: true,
       onboarding: { hasCompletedOnboarding: false, currentStep: 1 },
     });
+  });
+
+  it('GET_METRICS_AGGREGATION returns aggregated data for a requested period', async () => {
+    const handler = getHandler('GET_METRICS_AGGREGATION');
+    const result = await handler({ period: 'month' });
+
+    expect(result).toEqual({
+      success: true,
+      aggregation: expect.objectContaining({
+        totalTrackersBlocked: 10,
+      }),
+    });
+    expect(metricsAggregationMock.aggregateMetrics).toHaveBeenCalledWith('month');
+  });
+
+  it('GET_PRIVACY_SCORE_TREND returns trend points', async () => {
+    const handler = getHandler('GET_PRIVACY_SCORE_TREND');
+    const result = await handler({});
+
+    expect(result).toEqual({
+      success: true,
+      trend: [{ date: '2026-03-01', score: 88 }],
+    });
+    expect(metricsAggregationMock.getPrivacyScoreTrend).toHaveBeenCalledTimes(1);
+  });
+
+  it('EXPORT_USER_DATA forwards requested format and includeEmail flag', async () => {
+    const handler = getHandler('EXPORT_USER_DATA');
+    const result = await handler({ format: 'csv', includeEmail: true });
+
+    expect(dataExportMock.exportData).toHaveBeenCalledWith('csv', true);
+    expect(result).toEqual({
+      success: true,
+      exportData: {
+        format: 'json',
+        filename: 'privaseer-data-export-2026-03-05.json',
+        mimeType: 'application/json',
+        content: '{"ok":true}',
+      },
+    });
+  });
+
+  it('DELETE_ALL_DATA clears storage and broadcasts state update', async () => {
+    const handler = getHandler('DELETE_ALL_DATA');
+    const result = await handler({});
+
+    expect(result).toEqual({ success: true });
+    expect(Storage.clear).toHaveBeenCalledTimes(1);
+    expect(messageBus.broadcast).toHaveBeenCalledWith('STATE_UPDATE');
   });
 
   it('SET_ONBOARDING_STEP returns failure when storage write throws', async () => {
