@@ -486,11 +486,6 @@ export class Storage {
     await this.initialize();
   }
 
-  static async clearAll(): Promise<void> {
-    await this.clear();
-    logger.info('Storage', 'All local extension data cleared');
-  }
-
   static async getConsentState(domain: string): Promise<LocalConsentState | null> {
     const data = await this.get();
     return data.consentStates[domain] || null;

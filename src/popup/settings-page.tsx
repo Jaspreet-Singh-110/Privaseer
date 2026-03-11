@@ -967,7 +967,7 @@ export function SettingsPage({
                     {isExportingData ? 'Exporting...' : `Export My Data (${exportFormat.toUpperCase()})`}
                   </button>
                   <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-center">
-                    GDPR Article 20 portability export. URLs are sanitized and email is excluded unless explicitly selected.
+                    GDPR Article 20 portability export. URLs are sanitized; when enabled, forwarding email is included in JSON and as a CSV summary row.
                   </p>
                   <button
                     onClick={handleDeleteAllData}

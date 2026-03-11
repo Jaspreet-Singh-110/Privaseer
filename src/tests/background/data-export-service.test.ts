@@ -154,6 +154,13 @@ describe('DataExportService', () => {
     expect(result.content).toContain('section,metric,value');
     expect(result.content).toContain('"aggregation_week","totalTrackersBlocked","10"');
     expect(result.content).toContain('date,privacyScore,trackersBlocked');
+    expect(result.content).not.toContain('"summary","forwardingEmail","person@example.com"');
     expect(aggregateMetricsMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('includes forwarding email in CSV summary only when requested', async () => {
+    const result = await DataExportService.buildExport(createStorageData(), 'csv', true);
+
+    expect(result.content).toContain('"summary","forwardingEmail","person@example.com"');
   });
 });

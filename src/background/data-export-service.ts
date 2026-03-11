@@ -110,6 +110,9 @@ export class DataExportService {
     lines.push(this.toCsvRow('summary', 'exportedAt', exportedAt));
     lines.push(this.toCsvRow('summary', 'format', DATA_EXPORT.FORMAT));
     lines.push(this.toCsvRow('summary', 'version', DATA_EXPORT.VERSION));
+    if (data.realEmail) {
+      lines.push(this.toCsvRow('summary', 'forwardingEmail', data.realEmail));
+    }
     lines.push(this.toCsvRow('summary', 'snapshotCount', String(data.dailySnapshots?.length ?? 0)));
 
     this.appendAggregationRows(lines, 'week', weekly);

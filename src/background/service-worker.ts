@@ -960,7 +960,8 @@ function setupMessageHandlers(): void {
 
   messageBus.on('DELETE_ALL_DATA', async () => {
     try {
-      await Storage.clearAll();
+      await Storage.clear();
+      logger.info('ServiceWorker', 'All local extension data cleared');
       messageBus.broadcast('STATE_UPDATE');
       return { success: true };
     } catch (error) {

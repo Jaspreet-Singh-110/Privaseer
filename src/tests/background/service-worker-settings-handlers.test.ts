@@ -41,7 +41,7 @@ const storageMock = vi.hoisted(() => ({
   skipOnboarding: vi.fn().mockResolvedValue({ hasCompletedOnboarding: false, currentStep: 3 }),
   addAlert: vi.fn().mockResolvedValue(undefined),
   clearAlerts: vi.fn().mockResolvedValue(undefined),
-  clearAll: vi.fn().mockResolvedValue(undefined),
+  clear: vi.fn().mockResolvedValue(undefined),
   ensureSaved: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -113,7 +113,7 @@ const resetHoistedMocks = (): void => {
   storageMock.skipOnboarding.mockResolvedValue({ hasCompletedOnboarding: false, currentStep: 3 });
   storageMock.addAlert.mockResolvedValue(undefined);
   storageMock.clearAlerts.mockResolvedValue(undefined);
-  storageMock.clearAll.mockResolvedValue(undefined);
+  storageMock.clear.mockResolvedValue(undefined);
   storageMock.ensureSaved.mockResolvedValue(undefined);
 
   telemetryMock.initialize.mockResolvedValue(undefined);
@@ -466,7 +466,7 @@ describe('Service worker settings handlers', () => {
     const result = await handler({});
 
     expect(result).toEqual({ success: true });
-    expect(Storage.clearAll).toHaveBeenCalledTimes(1);
+    expect(Storage.clear).toHaveBeenCalledTimes(1);
     expect(messageBus.broadcast).toHaveBeenCalledWith('STATE_UPDATE');
   });
 
