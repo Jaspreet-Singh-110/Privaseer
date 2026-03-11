@@ -2,125 +2,137 @@
 
 ## Project Overview
 
-Privaseer is a Manifest V3 browser extension built for Chrome and Chromium-based browsers. The project couples strict, local-first privacy controls with Supabase-powered edge functions for optional services such as burner-email generation, inbound email sanitization, telemetric insights, and feedback collection. The current codebase (TypeScript 5.5 strict + React 18.3 + Vite 7.2) ships two content scripts (consent scanner + burner email autofill), an event-driven service worker, and a Tailwind-powered popup UI that exposes privacy scoring, CMP compliance monitoring, and identity-protection workflows.
+Privaseer is a Manifest V3 Chrome extension focused on local-first privacy protection. It combines declarative tracker blocking, consent-banner analysis, privacy scoring, burner-email workflows, and optional feedback/telemetry integrations backed by Supabase edge functions.
+
+Current stack:
+
+- TypeScript 5.5 (strict mode)
+- React 18.3 + Tailwind CSS
+- Vite 7.2 + `vite-plugin-web-extension`
+- Vitest + Testing Library + Happy DOM
+- Playwright E2E tests
 
 ## Core Capabilities
 
-### Privacy Protection Suite
-- **Tracker Blocking**: DeclarativeNetRequest ruleset (`public/data/blocking-rules.json`) contains 30 curated rules covering analytics, advertising, social, fingerprinting, heatmap, beacons, and affiliate trackers (124 domains across 7 categories in `tracker-lists.json`)
-- **Adaptive Risk Scoring**: `FirewallEngine` attaches weighted severity (1–20) per tracker, debounces badge updates, and prevents duplicate alerts per tab/site pair
-- **Badge + Alerting**: Per-tab badge counts, in-popup alert feed, and event-emitter hooks keep popup/content scripts synchronized via the shared message bus
+### 1) Tracking Protection
 
-### Consent Intelligence & CMP Enforcement
-- **CMP Scanner**: `content-scripts/consent-scanner.ts` inspects banners using the selectors, button patterns, and six deceptive-pattern definitions in `privacy-rules.json`
-- **Persistent Compliance**: Consent outcomes and penalties are stored via `Storage.consentStates`, deduplicated for five minutes, and surfaced as non-compliant site alerts with severity multipliers
-- **Cookie Persistence Tracking**: Local consent cache plus Supabase migration `20251114_create_consent_persistence.sql` keep CMP state auditable
+- DeclarativeNetRequest rules in `public/data/blocking-rules.json`
+- Tracker catalog and categories in `public/data/tracker-lists.json`
+- Service worker orchestration through `src/background/firewall-engine.ts`
+- Badge + alert updates via `src/utils/tab-manager.ts` and `src/utils/message-bus.ts`
 
-### Identity Protection
-- **Burner Email Platform**: `burner-email-service.ts` calls the Supabase `generate-burner-email` edge function, enforces forwarding-email validation, and keeps installation IDs scoped per device
-- **Email Autofill Content Script**: `email-autofill.ts` injects a burner button into any detected email input, retries when the service worker is asleep, and respects the burner toggle persisted in storage
-- **Popup Management**: `popup/burner-emails-section.tsx` shows generated aliases, usage stats, and deletion controls even when generation is disabled
+### 2) Consent and CMP Analysis
 
-### Telemetry & Feedback Controls
-- **Opt-In Telemetry**: Defaults to disabled (`Storage.settings.telemetryEnabled`); toggled from the Settings page and enforced before events reach Supabase
-- **Feedback Workflows**: `feedback-telemetry-service.ts` submits sanitized reports to the `submit-feedback` edge function, tagging installation IDs + extension versions while respecting local privacy toggles
-- **Metrics Dashboards**: `metrics-aggregation.ts` exposes week/month/all-time snapshots, tracker category breakdowns, and compliance score distributions for the popup Insights view
+- Consent scanning via `src/content-scripts/consent-scanner.ts`
+- Rule and pattern definitions in `public/data/privacy-rules.json`
+- Persistence and alerting through `src/background/storage.ts`
+- False-positive reporting and override support through:
+  - `src/background/false-positive-service.ts`
+  - `supabase/functions/report-false-positive/index.ts`
+  - `supabase/functions/get-fp-overrides/index.ts`
+
+### 3) Privacy Scoring and Insights
+
+- Core score lifecycle in `src/background/privacy-score.ts`
+- Aggregated analytics in `src/background/metrics-aggregation.ts`
+- Remote scoring config integration in `src/background/scoring-config.ts`
+- Dashboard period summaries (week/month/all-time) exposed via service-worker message handlers
+
+### 4) Burner Email Workflows
+
+- Background logic in `src/background/burner-email-service.ts`
+- Autofill integration in `src/content-scripts/email-autofill.ts`
+- UI management in `src/popup/burner-emails-section.tsx`
+- Supabase support functions:
+  - `supabase/functions/generate-burner-email/index.ts`
+  - `supabase/functions/inbound-email/index.ts`
+  - `supabase/functions/auth-token/index.ts`
+
+### 5) Data Portability and Local Data Control
+
+- GDPR-oriented export generation in `src/background/data-export-service.ts`
+- JSON and CSV export modes
+- URL sanitization before export using `src/utils/sanitizer.ts`
+- Optional forwarding-email inclusion (explicit opt-in)
+- Local data deletion flow via `DELETE_ALL_DATA` service-worker handler
+
+### 6) UI Surfaces
+
+- Popup UI in `src/popup/popup.tsx`
+- Settings modal in `src/popup/settings-page.tsx`
+- Welcome/onboarding flow in `src/welcome/welcome.tsx` and `src/welcome/steps/*`
 
 ## Technical Architecture
 
-**Foundation**
-- Manifest V3 service worker (`src/background/service-worker.ts`) orchestrates storage, firewall, burner email, telemetry, and tab lifecycles
-- TypeScript 5.5 strict mode, React 18.3.1, Vite 7.2.2, vite-plugin-web-extension for ergonomics, Tailwind 3.4 for styling, Lucide React for icons
-- Supabase Edge Functions (`supabase/functions/*`) and Postgres migrations provide burner-email, inbound-email, and feedback APIs secured via RLS + audit triggers (`supabase/security_enhancements.sql`)
-- Event-driven architecture: custom `event-emitter`, type-safe `message-bus`, and shared constants/type guards to keep contexts loosely coupled
-- Testing stack: Vitest + @testing-library/react (unit/integration suites under `src/tests`), Happy DOM, ESLint 9.x for linting, TypeScript project references for build-time safety
-
-**Performance Characteristics**
-- Declarative rules only (no background webRequest), keeping service-worker resume times sub-second and memory footprint minimal
-- Tracker catalog: 124 domains across 7 categories + 11 high-risk overrides; `FirewallEngine` caches per-site alerts and cleans timers hourly (`TIME.ONE_HOUR_MS`)
-- CMP scanner: 20 selectors, 10 accept/reject patterns, and 6 deceptive-pattern penalties; consent alerts deduplicated for five minutes
-- Storage guardrails: max 100 alerts, 30-day privacy-score history, daily snapshots for metrics, and exponential backoff when writing (`STORAGE_RETRY`)
-- Badge updates debounced to 300 ms per tab; cleanup scheduled hourly to release timers when tabs close
-
-## Implementation Details
-
-### Blocking Mechanism
-- `FirewallEngine` loads the declarative ruleset at start-up, toggles it in sync with `Storage.settings.protectionEnabled`, and emits `TRACKER_INCREMENT` / `TRACKER_BLOCKED` events
-- Risk weighting (analytics, advertising, fingerprinting, cryptomining, etc.) drives severity messaging, popup alerts, and privacy-score deltas
-- Tab badge counts are tracked via `tabManager` with dedicated cleanup/lifecycle hooks (`TAB_REMOVED` listener + hourly sweeper)
-
-### Privacy Scoring Algorithm
-- Constants in `PRIVACY_SCORE` and `DAILY_RECOVERY` govern +/- deltas: −1 per tracker, +2 for tracker-free visits, −5 for deceptive banners, automatic recovery on “clean” days
-- `Storage` maintains daily aggregates, 30-entry history, and daily snapshots (trackers per category, clean sites, CMP scores, burner email stats) used by `MetricsAggregationService`
-- Rolling trends (7/30/all-time), compliance score distributions, and tracker-category breakdowns are computed serverlessly in the service worker and rendered in the popup
-
-### Consent Scanner & Persistence
-- `consent-scanner.ts` runs at `document_idle`, analyzes DOM mutations, and forwards CMP verdicts via `messageBus` (`CONSENT_SCAN_RESULT`) for storage + alerting
-- Storage caches the last consent alert per domain, ensuring users get actionable—but not noisy—warnings about deceptive banners
-- Migrations (`20251112_create_feedback_system.sql`, `20251114_create_consent_persistence.sql`) lay down the persistent schema for consent telemetry + feedback auditability
-
-### Burner Email Platform
-- `burner-email-service.ts` enforces feature toggles, forwarding-email validation (`utils/validation.ts`), request sanitization, Supabase auth headers, and resilient retries
-- Supabase edge functions:
-  - `generate-burner-email`: validated Deno function that assembles adjective–noun aliases, enforces rate limits, and persists to Postgres with audit trails
-  - `inbound-email`: sanitizes inbound payloads, applies rate limiting (`rate-limiter.ts`), and logs tracker removal metadata
-  - `submit-feedback`: stores optional feedback + telemetry events with browser/extension metadata
-- Content script (`email-autofill.ts`) positions a burner button near active email inputs, handles SW sleep retries, and provides in-page toast notifications for success/error
-
-### Metrics & Insights
-- `metrics-aggregation.ts` rolls up snapshots for week/month/all-time, top blocked domains, category percentages, burner email stats, and compliance averages
-- Popup surfaces these insights in dashboard cards, while Settings deep links (e.g., highlight burner toggle) reuse shared state hooks
-
-### Feedback & Telemetry Service
-- `feedback-telemetry-service.ts` reuses the installation ID, extension version, and optional URL/domain context to send sanitized payloads to Supabase functions
-- Telemetry respects `SET_TELEMETRY_SETTING`/`GET_TELEMETRY_SETTING` message handlers; when disabled the service short-circuits tracking calls
-
-### User Interface
-- React popup (`popup.tsx`) renders real-time score, tracker feed, CMP alerts, and burner email controls
-- Settings modal (`settings-page.tsx`) handles theme switching (light/dark/system via `ThemeManager`), telemetry and burner toggles (with race-condition guards), forwarding-email persistence, and in-popup feedback submission
-- `burner-emails-section.tsx` + `BurnerEmailDisabled.tsx` manage alias lists, copy/delete actions, and highlight flows when the feature is disabled
+- **Background layer**: Service worker and background modules in `src/background/`
+- **Content-script layer**: Runtime page scanning and autofill in `src/content-scripts/`
+- **Popup layer**: User-facing controls and analytics in `src/popup/`
+- **Onboarding layer**: Multi-step welcome experience in `src/welcome/`
+- **Shared utilities/types**: Guards, validation, constants, logging, and contracts under `src/utils/` and `src/types/`
+- **Backend integration**: Supabase edge functions and SQL migrations in `supabase/`
 
 ## Project Structure
 
-```
+```text
 privaseer/
 ├── src/
-│   ├── background/
+│   ├── background/                         # 11 modules
 │   │   ├── burner-email-service.ts
+│   │   ├── data-export-service.ts
 │   │   ├── event-emitter.ts
+│   │   ├── false-positive-service.ts
 │   │   ├── feedback-telemetry-service.ts
 │   │   ├── firewall-engine.ts
 │   │   ├── metrics-aggregation.ts
 │   │   ├── privacy-score.ts
+│   │   ├── scoring-config.ts
 │   │   ├── service-worker.ts
 │   │   └── storage.ts
 │   ├── content-scripts/
 │   │   ├── consent-scanner.ts
 │   │   └── email-autofill.ts
-│   ├── popup/
+│   ├── popup/                              # 4 components
 │   │   ├── BurnerEmailDisabled.tsx
 │   │   ├── burner-emails-section.tsx
-│   │   ├── popup.html
 │   │   ├── popup.tsx
 │   │   └── settings-page.tsx
-│   ├── utils/
+│   ├── welcome/
+│   │   ├── welcome.tsx
+│   │   ├── welcome.html
+│   │   ├── components/
+│   │   │   ├── NavigationButtons.tsx
+│   │   │   └── StepIndicator.tsx
+│   │   └── steps/
+│   │       ├── WelcomeStep.tsx
+│   │       ├── ProtectionStep.tsx
+│   │       ├── ConsentScannerStep.tsx
+│   │       ├── BurnerEmailStep.tsx
+│   │       ├── PrivacyCreditStep.tsx
+│   │       ├── CompletionStep.tsx
+│   │       └── types.ts
+│   ├── utils/                              # 16 utility modules
+│   │   ├── allowlist-manager.ts
 │   │   ├── cmp-detector.ts
 │   │   ├── consent-validator.ts
 │   │   ├── constants.ts
+│   │   ├── i18n-patterns.ts
 │   │   ├── logger.ts
 │   │   ├── message-bus.ts
 │   │   ├── penalty-decay.ts
+│   │   ├── privacy-credit-engine.ts
 │   │   ├── sanitizer.ts
+│   │   ├── scan-confidence.ts
 │   │   ├── tab-manager.ts
 │   │   ├── theme-helper.ts
 │   │   ├── theme-manager.ts
 │   │   ├── type-guards.ts
 │   │   └── validation.ts
-│   ├── tests/ (Vitest suites mirroring background, content scripts, popup, utils, Supabase helpers)
 │   ├── types/
 │   │   └── index.ts
+│   ├── tests/                              # 80+ Vitest suites
 │   ├── index.css
 │   └── manifest.json
+├── tests/e2e/                              # Playwright E2E suites
 ├── public/
 │   ├── data/
 │   │   ├── blocking-rules.json
@@ -128,153 +140,190 @@ privaseer/
 │   │   └── tracker-lists.json
 │   └── icons/
 ├── supabase/
-│   ├── functions/
+│   ├── functions/                          # 10 edge functions
+│   │   ├── auth-token/
 │   │   ├── generate-burner-email/
+│   │   ├── get-cmp-config/
+│   │   ├── get-fp-overrides/
+│   │   ├── get-scoring-config/
 │   │   ├── inbound-email/
-│   │   └── submit-feedback/
-│   ├── migrations/
+│   │   ├── persist-consent-state/
+│   │   ├── report-false-positive/
+│   │   ├── submit-feedback/
+│   │   └── suggest-cmp-pattern/
+│   ├── migrations/                         # 22 SQL migrations
 │   │   ├── 20251112_create_feedback_system.sql
 │   │   ├── 20251114_create_consent_persistence.sql
 │   │   ├── 20251119_create_burner_email_system.sql
 │   │   ├── 20251205_add_expires_at_column.sql
-│   │   └── 20251205_fix_function_search_paths.sql
+│   │   ├── 20251205_fix_function_search_paths.sql
+│   │   ├── 20251211_fix_email_column_name.sql
+│   │   ├── 20251215_add_email_logs_and_rate_limit.sql
+│   │   ├── 20251216_add_jwt_auth_system.sql
+│   │   ├── 20251216_enable_rls_jwt_tables.sql
+│   │   ├── 20260120_create_false_positives.sql
+│   │   ├── 20260129_fix_burner_emails_rls_policies.sql
+│   │   ├── 20260129_fix_consent_state_rls_policies.sql
+│   │   ├── 20260129_fix_jwt_tables_rls_policies.sql
+│   │   ├── 20260129_fix_telemetry_rls_policies.sql
+│   │   ├── 20260216_create_domain_confidence_overrides.sql
+│   │   ├── 20260216_create_fp_aggregation_function.sql
+│   │   ├── 20260216_drop_duplicate_telemetry_index.sql
+│   │   ├── 20260224_create_scoring_config.sql
+│   │   ├── 20260225_create_cmp_configs.sql
+│   │   ├── 20260225_create_cmp_suggestions.sql
+│   │   ├── 20260305_add_false_positive_reason.sql
+│   │   └── 20260305_update_fp_aggregation_decay.sql
 │   └── security_enhancements.sql
+├── .github/workflows/ci.yml
+├── .husky/pre-commit
 ├── eslint.config.js
-├── vite.config.ts / vitest.config.ts / tailwind.config.js / tsconfig*.json
-└── .github/workflows/ci.yml
+├── postcss.config.js
+├── playwright.config.ts
+├── stryker.config.json
+├── tailwind.config.js
+├── vite.config.ts
+├── vitest.config.ts
+└── tsconfig*.json
 ```
 
-## Development Guide
+## Development Setup
 
 ### Prerequisites
+
 - Node.js 18+
 - npm 9+
-- Chrome 115+ recommended (Manifest V3 stable channel)
+- Chrome or Chromium (Manifest V3 capable)
+- Python 3 (for local static server used by Playwright config)
 
-### Building, Testing, and Tooling
+### Install
 
 ```bash
-# Install dependencies
 npm install
-
-# Development server with hot reload + extension reloader
-npm run dev
-
-# Production build (outputs to dist/)
-npm run build
-
-# Preview the production build
-npm run preview
-
-# Type-only compilation check
-npm run typecheck
-
-# ESLint 9.x flat config
-npm run lint
-
-# Vitest suites (watch mode / UI / coverage)
-npm run test
-npm run test:ui
-npm run test:coverage
 ```
 
-### Loading in Browser
-1. Run `npm run build` to populate `dist/`
+### Main Commands
+
+```bash
+# Local dev
+npm run dev
+npm run build
+npm run preview
+
+# Quality gates
+npm run typecheck
+npm run lint
+
+# Unit/integration tests (Vitest)
+npm run test
+npm run test:run
+npm run test:ui
+npm run test:coverage
+
+# Mutation tests
+npm run test:mutation
+npm run test:mutation:changed
+
+# End-to-end tests
+npm run test:e2e
+npm run test:e2e:ui
+npm run test:e2e:debug
+```
+
+### Load the Extension in Chrome
+
+1. Build with `npm run build`
 2. Open `chrome://extensions`
-3. Enable “Developer mode”
-4. Click “Load unpacked” and select the `dist` directory
+3. Enable Developer mode
+4. Click **Load unpacked** and select `dist/`
 
-### Testing & CI
-- Vitest suites live under `src/tests/` (background, content-scripts, popup, utils, Supabase edge helpers, and Supabase inbound-email sanitizers/rate limiters)
-- `.github/workflows/ci.yml` runs lint + test pipelines on every push
-- Use `npm run test:coverage` to generate V8 coverage for popup components and background services
+### Pre-commit Hook
 
-## Privacy and Security Considerations
+Husky runs `lint-staged` on commit:
 
-### Data Handling
-- Core privacy telemetry, tracker stats, CMP verdicts, and settings stay in `chrome.storage.local` (`Storage` enforces 30-day retention and async flush with retries)
-- Supabase is only used for burner-email aliases, inbound-email forwarding, and optional telemetry/feedback; requests carry installation IDs + hashed emails and route through access-controlled edge functions with strict validation
-- Telemetry defaults to disabled; toggling it on simply allows anonymized event envelopes to hit the Supabase endpoint
+- `*.{ts,tsx}`: `eslint --fix` and `vitest related --run`
+- `*.{json,md}`: `prettier --write`
 
-### Permission Justification
-- `storage`: Persist privacy metrics, CMP states, and burner-email settings locally
-- `activeTab` + `tabs`: Required for badge management, per-tab tracker counts, and popup context
-- `declarativeNetRequest` + `declarativeNetRequestFeedback`: Foundation of tracker blocking and statistics
-- `<all_urls>` host permission: Required for consent scanning + burner email autofill content scripts
+## Service Worker Message API Highlights
 
-### Supabase Security
-- `supabase/security_enhancements.sql` hardens RLS policies, adds audit logging (`security_audit_log`), enforces email formatting, positive counters, and rate limits for burner-email tables
-- Migrations add consent persistence, feedback tables, burner email schema, and search-path fixes for edge functions
+The service worker in `src/background/service-worker.ts` currently includes handlers for:
 
-### JWT Signing Keys (ES256)
-The burner email authentication flow now mandates asymmetric signing keys. Provision them outside of version control and store the private key only in secure secret managers:
+- Settings/state retrieval and updates
+- Consent-scan reporting and persistence
+- Metrics aggregation and privacy trend retrieval
+- User data export (`EXPORT_USER_DATA`)
+- Local data deletion (`DELETE_ALL_DATA`)
 
-1. Generate a fresh ES256 key pair via the Supabase CLI:
+Refer to `src/utils/message-bus.ts` and `src/types/index.ts` for message contracts.
 
-   ```bash
-   npx supabase gen signing-key --algorithm ES256
-   ```
+## Privacy and Security
 
-2. Copy the PEM-formatted outputs somewhere secure (do **not** commit them):
+### Privacy Defaults
 
-   - `-----BEGIN PRIVATE KEY----- ... -----END PRIVATE KEY-----`
-   - `-----BEGIN PUBLIC KEY----- ... -----END PUBLIC KEY-----`
+- `telemetryEnabled: false`
+- `burnerEmailEnabled: false`
+- `protectionEnabled: true`
 
-3. Load the keys (and optional metadata) into your Supabase project secrets:
+### Storage and Retention
 
-   ```bash
-   supabase secrets set JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
-   supabase secrets set JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
-   supabase secrets set JWT_ISSUER="privaseer-burner-auth"     # optional override
-   supabase secrets set JWT_KEY_ID="burner-v1"                 # optional, helps with rotation
-   ```
+- Extension data is stored in `chrome.storage.local`
+- Snapshot retention for export/reporting is controlled by `DATA_EXPORT.MAX_SNAPSHOT_DAYS`
+- Alert and history retention constraints are enforced in storage and constants layers
 
-4. Remove the legacy shared secret once deployment succeeds:
+### Manifest Permissions (Current)
 
-   ```bash
-   supabase secrets unset JWT_SECRET
-   ```
+- `storage`
+- `declarativeNetRequest`
+- `declarativeNetRequestFeedback`
+- `tabs`
 
-> ⚠️ Never check PEM files or raw key strings into Git. If you need to regenerate keys, rotate by setting a new `JWT_KEY_ID`, updating both keys, then unsetting the old secrets.
+Host permissions:
 
-## Maintenance and Extension
+- `https://llffqxdhpgsqnpzeznaq.supabase.co/*`
 
-### Enhancement Opportunities
-1. **Tracker Catalog Expansion**: Update `tracker-lists.json` and `blocking-rules.json` with additional domains/categories or per-region rules
-2. **CMP Detection Coverage**: Extend selectors/deceptive-pattern definitions and add ML-backed heuristics to `privacy-rules.json`
-3. **Internationalization**: Localize popup + settings copy, CMP detectors, and toast notifications
-4. **Supabase Observability**: Add dashboards for rate-limiter triggers, inbound-email audit logs, and burner-email lifecycle analytics
-5. **Automation**: Integrate browser-based end-to-end tests (Playwright) to validate popup flows and content-script injections
+Content scripts match:
 
-### Troubleshooting Guidelines
+- `http://*/*`
+- `https://*/*`
 
-**Extension Loading Issues**
-- Confirm Chrome is up to date and Developer Mode is enabled
-- If manifest validation fails, run `npm run build` again to regenerate `dist/`
+### Supabase Security Notes
 
-**Tracking & CMP Issues**
-- Ensure “Protection” is enabled from the popup (badge will be empty if disabled)
-- Reload the target page so content scripts can rescan banners
-- Check if the tracker domain is listed under exceptions/never-block lists
+- RLS hardening and audit policies are maintained in `supabase/security_enhancements.sql`
+- JWT and auth-related tables/functions are introduced through migrations under `supabase/migrations/`
+- Sensitive keys must be managed via secret stores and never committed
 
-**Burner Email / Supabase Connectivity**
-- Burner generation requires the feature toggle + a saved forwarding email in Settings
-- Errors mentioning Supabase typically indicate missing network access or expired anon key; regenerate the anon key if running against a different project
-- Inbound email throttling is enforced server-side; see `rate-limiter.ts` for limits
+## Operational Notes for New Developers
 
-## License and Attribution
+- Start with `src/background/service-worker.ts`, `src/background/storage.ts`, and `src/utils/message-bus.ts` to understand runtime flow.
+- Review `src/types/index.ts` before adding or changing message payloads.
+- If adding privacy-impacting logic, update tests in `src/tests/background/` and relevant contract tests in `src/tests/contracts/`.
+- For UI work, update both popup tests (`src/tests/popup/`) and onboarding tests (`src/tests/welcome/`).
 
-Privaseer is distributed under the MIT License. Key dependencies include React, React DOM, TypeScript, Vite, Tailwind CSS, Lucide React, Supabase JS client, and Vitest + Testing Library.
+## Troubleshooting
 
-## Version Information
+### Build or Load Failures
 
-**Current Release**: 1.0.0  
-**Release Date**: December 2025  
-**Browser Target**: Chrome/Chromium (Manifest V3)  
-**Primary Technologies**: TypeScript 5.5.3, React 18.3.1, Vite 7.2.2, Tailwind CSS 3.4.1, vite-plugin-web-extension 4.5.0  
-**Backend Services**: Supabase Edge Functions (`generate-burner-email`, `inbound-email`, `submit-feedback`) + five migrations + security hardening script  
-**Code Metrics**: 8 background modules, 2 content scripts, 5 popup components, 11 shared utilities, 3 Supabase edge functions, 5 migrations, 30 declarative rules, 124 tracked domains
+- Re-run `npm run build` and reload unpacked extension
+- Verify Manifest V3-compatible Chrome/Chromium version
 
----
+### Missing or Stale Popup Data
 
-*This document summarizes the current implementation of Privaseer. For finer details, reference inline TypeScript documentation, Vitest specs, and Supabase migration files.*
+- Confirm the service worker is running
+- Check message handler types and payload validation
+- Validate local storage state via extension devtools
+
+### Supabase Integration Issues
+
+- Verify environment configuration and project keys
+- Ensure migration state is current for your target Supabase project
+- Check edge function logs for auth or payload validation errors
+
+## Version Snapshot
+
+- Package version: `1.0.0`
+- Browser target: Manifest V3 Chrome/Chromium
+- Codebase counts: 11 background modules, 2 content scripts, 4 popup components, 16 utilities, 10 edge functions, 22 migrations
+
+## License
+
+Privaseer is distributed under the MIT License.
